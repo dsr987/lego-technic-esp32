@@ -275,9 +275,7 @@ $$V_{batt} = ADC_{avg} \times BATT\_DIVIDER\_FACTOR \quad (BATT\_DIVIDER\_FACTOR
 
 | Ключ | Тип | Описание |
 | --- | --- | --- |
-| `mode` | `uint8_t` | Сохраненный режим управления (`0` или `1`)
-
- |
+| `mode` | `uint8_t` | Сохраненный режим управления (`0` или `1`) |
 | `steer_c` | `int32_t` | Значение калибровки центра $Trim$<br> |
 | `steer_a` | `int32_t` | Значение калибровки угла $MaxDeg$<br> |
 
