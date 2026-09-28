@@ -1,5 +1,4 @@
-#include <Arduino.h>
-// ESP32 Lego Technic motorization — Версия: 0.0.6
+// ESP32 Lego Technic motorization — Версия: 0.0.7 (GUI Update)
 // Библиотеки: ESPAsyncWebServer 3.1.0 (форк lacamera из Library Manager), AsyncTCP 1.1.4, ArduinoJson,
 // Adafruit_SSD1306, Adafruit_GFX, Adafruit_BusIO, ESP32Servo, ElegantOTA (ayushsharma82)
 // ESP32 core: 2.0.9 — зафиксирован сознательно (конфликт ledc API и веб-сервера на core 3.x).
@@ -32,19 +31,29 @@
  *
  * GPIO ESP32 (сигнальные, тонкие провода) — см. комментарии на каждой строке ниже.
  */
-// Что исправлено и улучшено в 0.0.6:
-// - OLED: предупреждение "LOW BATTERY" на весь экран при напряжении ниже 6.0В (2S, 3.0В/банка —
-//   безопасный минимум для 18650). Если напряжение <0.5В — считаем, что батарея физически не
-//   подключена (стенд на USB) и предупреждение не показываем, это не разряд, а отладка.
-// - Предупреждение с антидребезгом: включается после 3 замеров подряд (~3 с) ниже порога и
-//   гаснет только выше 6.3В — просадка под нагрузкой мотора не даёт ложных срабатываний.
-// - OLED: справа появилась иконка текущего режима (танк/машинка), рисуется примитивами
-//   Adafruit_GFX, без внешних битмапов.
-// - Дубль блока со схемой подключения убран, в списке библиотек указаны реальные версии.
-// (альфа-тест по 0.0.5 подтвердил: калибровка батареи точная, серво без дребезга после переноса
-//  LEDC-каналов на 4/5, кнопки калибровки руля в GUI работают без нареканий)
+// Что исправлено и улучшено в 0.0.7 (GUI Update):
+// - Танковый режим: ползунки толще (68 px) и придвинуты к центру; иконка танка перерисована —
+//   широкие гусеницы с протектором, башня со стволом; гусеницы подсвечиваются при движении.
+// - Классический режим: ползунок газа толще и ближе к центру; руль — такой же толщины, внизу
+//   справа; над ним компактный блок "доп. мотор + калибровка руля"; иконка машины крупнее.
+// - Кнопки "СТОП" и "СБРОСИТЬ ВСЕ" убраны (остановка — отпусканием ползунка), вместо них
+//   заглушки 1-4 без функций (auxBtn() в скрипте — точка подключения).
+// - Шапка: уровень Wi-Fi (RSSI клиента, измеряется на плате) и статус аккумулятора
+//   (иконка, %, вольты; при питании по USB — надпись USB). Бейдж связи: ESP32 / Нет связи.
+// - Баннеры о заряде: жёлтый при <=10% (закрывается касанием), красный при <=1% (не закрывается).
+//   Уровни переключаются с гистерезисом, чтобы не мигать на границе.
+// - Плата раз в секунду шлёт статус по WebSocket: {"st":1,"v":В,"p":%,"r":dBm,"m":режим,"c":клиенты}.
+// - Процент заряда считается плавно (интерполяция по точкам 6.0/6.8/7.0/7.4/7.8/8.2 В),
+//   а не ступенями: иначе значений 1% и 10% просто не существует.
+// - Страница сама переподключается к плате (после OTA/перезагрузки), при подключении сбрасывает
+//   слайдеры в ноль и подхватывает режим, сохранённый на плате.
+// - Добавлен #include <Arduino.h> — файл собирается и как .ino, и как app.cpp.
+// (альфа-тест по 0.0.6 подтвердил: OTA работает, иконки режимов и LOW BATTERY отображаются,
+//  ложных срабатываний нет)
 
+#include <Arduino.h>
 #include <WiFi.h>
+#include <esp_wifi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
@@ -137,7 +146,17 @@ void stopAll() {
   motorAVal = motorBVal = servoVal = 0;
 }
 
-// ---------- Батарея ----------
+// ---------- Батарея и статус ----------
+// Пороги предупреждения о разряде: 18650 безопасный минимум ~3.0В/банка, 2 банки последовательно = 6.0В.
+// Ниже 0.5В — батарея физически не подключена (стенд на USB), это не разряд, предупреждение не нужно.
+#define LOW_BATTERY_THRESHOLD_V 6.0
+#define BATTERY_DISCONNECTED_V  0.5
+
+float battV = 0.0;    // напряжение батареи, В (обновляется раз в секунду в updateStatus)
+int   battPct = 0;    // заряд, % (0..100)
+int   wifiRssi = 0;   // RSSI лучшего клиента точки доступа, dBm; 0 = клиентов нет
+int   lowBattCount = 0; // сколько замеров подряд ниже порога (антидребезг предупреждения)
+
 float readBatteryVoltage() {
   // усреднение по 8 выборкам — ADC ESP32 шумит
   long sum = 0;
@@ -150,21 +169,52 @@ float readBatteryVoltage() {
   // необходимости скорректировать BATT_DIVIDER_FACTOR.
 }
 
+// Плавный процент заряда: линейная интерполяция между точками кривой 2S.
+// 6.0В = 0%, ~6.08В = 1%, 6.8В = 10%, 7.0В = 25%, 7.4В = 50%, 7.8В = 75%, 8.2В+ = 100%.
 int batteryPercent(float v) {
-  if (v >= 8.2) return 100;
-  if (v >= 7.8) return 75;
-  if (v >= 7.4) return 50;
-  if (v >= 7.0) return 25;
-  if (v >= 6.8) return 10;
-  return 0;
+  static const float PV[] = {6.0, 6.8, 7.0, 7.4, 7.8, 8.2};
+  static const float PP[] = {0,   10,  25,  50,  75,  100};
+  if (v <= PV[0]) return 0;
+  if (v >= PV[5]) return 100;
+  for (int i = 0; i < 5; i++) {
+    if (v < PV[i + 1]) {
+      return (int)(PP[i] + (PP[i + 1] - PP[i]) * (v - PV[i]) / (PV[i + 1] - PV[i]) + 0.5);
+    }
+  }
+  return 100;
+}
+
+// RSSI клиента, как его видит сама плата (режим точки доступа). Если клиентов несколько — лучший.
+int getBestRssi() {
+  wifi_sta_list_t list;
+  if (esp_wifi_ap_get_sta_list(&list) != ESP_OK || list.num == 0) return 0;
+  int best = -127;
+  for (int i = 0; i < list.num; i++) {
+    if (list.sta[i].rssi > best) best = list.sta[i].rssi;
+  }
+  return best;
+}
+
+// Раз в секунду: обновляет напряжение, процент, RSSI и счётчик предупреждения о разряде.
+void updateStatus() {
+  battV = readBatteryVoltage();
+  battPct = batteryPercent(battV);
+  wifiRssi = getBestRssi();
+
+  // Антидребезг: тревога — после 3 замеров подряд ниже порога,
+  // сброс — только выше порога +0.3В (или когда батарея отключена).
+  bool below = (battV > BATTERY_DISCONNECTED_V && battV < LOW_BATTERY_THRESHOLD_V);
+  if (below) { if (lowBattCount < 3) lowBattCount++; }
+  else if (battV > LOW_BATTERY_THRESHOLD_V + 0.3 || battV <= BATTERY_DISCONNECTED_V) lowBattCount = 0;
+}
+
+// Статус для веб-страницы: v — вольты, p — %, r — RSSI (0 = нет), m — режим, c — WS-клиенты
+void buildStatus(char *buf, size_t n) {
+  snprintf(buf, n, "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,\"m\":%d,\"c\":%d}",
+           battV, battPct, wifiRssi, (int)currentMode, (int)ws.count());
 }
 
 // ---------- OLED ----------
-// Пороги предупреждения о разряде: 18650 безопасный минимум ~3.0В/банка, 2 банки последовательно = 6.0В.
-// Ниже 0.5В — батарея физически не подключена (стенд на USB), это не разряд, предупреждение не нужно.
-#define LOW_BATTERY_THRESHOLD_V 6.0
-#define BATTERY_DISCONNECTED_V  0.5
-
 void drawModeIcon() {
   int x0 = 96, y0 = 4;
   if (currentMode == MODE_TANK) {
@@ -181,17 +231,8 @@ void drawModeIcon() {
 }
 
 void updateDisplay(int clients) {
-  float v = readBatteryVoltage();
-  int pct = batteryPercent(v);
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
-
-  // Антидребезг: вызывается раз в секунду, тревога — после 3 замеров подряд ниже порога,
-  // сброс — только выше порога +0.3В (или когда батарея отключена).
-  static int lowBattCount = 0;
-  bool below = (v > BATTERY_DISCONNECTED_V && v < LOW_BATTERY_THRESHOLD_V);
-  if (below) { if (lowBattCount < 3) lowBattCount++; }
-  else if (v > LOW_BATTERY_THRESHOLD_V + 0.3 || v <= BATTERY_DISCONNECTED_V) lowBattCount = 0;
 
   // Предупреждение о разряде — перекрывает всё остальное на экране
   if (lowBattCount >= 3) {
@@ -203,7 +244,7 @@ void updateDisplay(int clients) {
     display.print("BATTERY");
     display.setTextSize(1);
     display.setCursor(46, 54);
-    display.printf("%.2fV\n", v);
+    display.printf("%.2fV\n", battV);
     display.display();
     return;
   }
@@ -213,12 +254,12 @@ void updateDisplay(int clients) {
   display.setCursor(0, 0);
   display.print(currentMode == MODE_TANK ? "TANK" : "CAR");
   display.setCursor(0, 20);
-  display.printf("%d%%\n", pct);
+  display.printf("%d%%\n", battPct);
 
   // Мелко — техническая информация для отладки
   display.setTextSize(1);
   display.setCursor(0, 44);
-  display.printf("%.2fV\n", v);
+  display.printf("%.2fV\n", battV);
   display.setCursor(0, 54);
   display.printf("Clients: %d\n", clients);
 
@@ -280,7 +321,14 @@ void handleWsMessage(uint8_t *data, size_t len) {
 
 void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
                AwsEventType type, void *arg, uint8_t *data, size_t len) {
-  if (type == WS_EVT_DATA) handleWsMessage(data, len);
+  if (type == WS_EVT_CONNECT) {
+    // сразу отдаём статус новому клиенту, не дожидаясь секундного таймера
+    char buf[96];
+    buildStatus(buf, sizeof(buf));
+    client->text(buf);
+  } else if (type == WS_EVT_DATA) {
+    handleWsMessage(data, len);
+  }
 }
 
 // ---------- HTML страница ----------
@@ -294,19 +342,21 @@ const char PAGE_HTML[] = R"HTML(
 <style>
 :root{
   --bg:#0d0f12; --panel:#141820; --panel2:#1b2029; --border:#2a3140;
-  --blue:#3b82f6; --blue-dk:#2563eb; --emerald:#10b981; --rose:#f43f5e; --cyan:#22d3ee;
+  --blue:#3b82f6; --blue-dk:#2563eb; --emerald:#10b981; --rose:#f43f5e; --amber:#f59e0b; --cyan:#22d3ee;
   --text:#e2e8f0; --muted:#94a3b8;
+  --sh:200px;  /* длина вертикальных ползунков — подгоняется скриптом под высоту экрана */
+  --T:68px;    /* толщина ползунков газа и руля */
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none;touch-action:none;
   background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
   user-select:none;-webkit-user-select:none}
-body{display:flex;flex-direction:column;align-items:center;justify-content:space-between;
-  padding:env(safe-area-inset-top,10px) 10px env(safe-area-inset-bottom,10px)}
-.wrap{width:100%;max-width:900px}
+body{padding:max(env(safe-area-inset-top,0px),6px) 10px max(env(safe-area-inset-bottom,0px),6px);
+  display:flex;justify-content:center}
+.wrap{width:100%;max-width:1000px;height:100%;display:flex;flex-direction:column;gap:8px}
 
 /* ---- шапка ---- */
-.header{display:flex;justify-content:space-between;align-items:center;gap:8px;
+.header{flex:none;display:flex;justify-content:space-between;align-items:center;gap:8px;
   background:rgba(20,24,32,.85);border:1px solid var(--border);padding:8px 12px;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.3)}
 .brand{display:flex;align-items:center;gap:10px}
 .brand-icon{width:32px;height:32px;border-radius:10px;background:rgba(59,130,246,.15);
@@ -319,44 +369,88 @@ body{display:flex;flex-direction:column;align-items:center;justify-content:space
 .mode-btn{border:none;background:transparent;color:var(--muted);font-size:12px;font-weight:600;
   padding:7px 12px;border-radius:9px;cursor:pointer}
 .mode-btn.active{background:var(--blue-dk);color:#fff;box-shadow:0 0 14px rgba(59,130,246,.5)}
-.badge{font-size:10px;font-weight:700;padding:4px 8px;border-radius:8px;
+.badge{font-size:10px;font-weight:700;padding:4px 8px;border-radius:8px;white-space:nowrap;
   background:rgba(16,185,129,.1);color:var(--emerald);border:1px solid rgba(16,185,129,.25)}
+.badge.bad{background:rgba(244,63,94,.12);color:var(--rose);border-color:rgba(244,63,94,.3)}
 .icon-btn{width:32px;height:32px;border-radius:10px;background:var(--panel2);border:1px solid var(--border);
   color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px}
 
+/* статус в шапке: Wi-Fi и батарея */
+.hstats{display:flex;align-items:center;gap:12px;transition:opacity .2s}
+.hstats.stale{opacity:.35}
+.stat{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;white-space:nowrap}
+.bars{display:flex;align-items:flex-end;gap:2px;height:16px}
+.bars i{display:block;width:4px;border-radius:1px;background:#2a3140}
+.bars i:nth-child(1){height:5px}.bars i:nth-child(2){height:9px}
+.bars i:nth-child(3){height:13px}.bars i:nth-child(4){height:16px}
+.bars.w1 i.on{background:var(--rose)}
+.bars.w2 i.on{background:var(--amber)}
+.bars.w3 i.on,.bars.w4 i.on{background:var(--emerald)}
+.bat{position:relative;width:26px;height:13px;border:2px solid var(--muted);border-radius:3px;padding:1px}
+.bat::after{content:"";position:absolute;right:-5px;top:2px;width:3px;height:5px;background:var(--muted);border-radius:0 2px 2px 0}
+.bat-fill{height:100%;width:0;background:var(--emerald);border-radius:1px}
+.bat.warn .bat-fill{background:var(--amber)}
+.bat.crit .bat-fill{background:var(--rose)}
+
+/* баннер о заряде */
+.banner{flex:none;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:7px 12px;border-radius:12px;font-size:12px;font-weight:600}
+.banner.lvl1{background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.5);color:#fbbf24}
+.banner.lvl2{background:rgba(244,63,94,.16);border:1px solid rgba(244,63,94,.55);color:#fb7185}
+.banner-x{font-size:14px;opacity:.8;cursor:pointer}
+
 /* ---- панели ---- */
-.panel{background:rgba(20,24,32,.6);border:1px solid var(--border);border-radius:22px;
-  padding:14px;box-shadow:0 20px 40px rgba(0,0,0,.35)}
+.panel{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(20,24,32,.6);border:1px solid var(--border);border-radius:22px;
+  padding:14px;box-shadow:0 20px 40px rgba(0,0,0,.35);overflow:hidden}
+.cluster{display:flex;align-items:center;justify-content:center;gap:clamp(24px,7vw,70px)}
 .row{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .col{display:flex;flex-direction:column;align-items:center;gap:4px}
-.lbl{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.lbl{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
 .val{font-size:12px;font-weight:700;font-family:monospace;color:var(--blue)}
 .val.g{color:var(--emerald)} .val.c{color:var(--cyan)}
 
-.slider-v-container{height:150px;width:44px;display:flex;align-items:center;justify-content:center;
-  background:rgba(2,6,15,.7);border-radius:16px;border:1px solid var(--border);box-shadow:inset 0 2px 8px rgba(0,0,0,.4)}
-input[type=range]{-webkit-appearance:none;background:transparent;touch-action:pan-y}
-input[type=range]::-webkit-slider-runnable-track{width:100%;height:12px;cursor:pointer;background:#1b2029;border-radius:8px;border:1px solid var(--border)}
-input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:34px;width:24px;border-radius:8px;
-  background:var(--blue);cursor:pointer;margin-top:-12px;border:2px solid #fff;box-shadow:0 0 12px rgba(59,130,246,.8)}
-.slider-v{width:150px !important;height:44px !important;transform:rotate(-90deg);transform-origin:center}
+/* ползунки */
+input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;touch-action:pan-y;margin:0}
+input[type=range]::-webkit-slider-runnable-track{height:22px;cursor:pointer;background:#1b2029;border-radius:12px;border:1px solid var(--border)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:32px;height:60px;margin-top:-19px;
+  border-radius:12px;background:var(--blue);cursor:pointer;border:2px solid #fff;box-shadow:0 0 14px rgba(59,130,246,.8)}
+input.slim::-webkit-slider-runnable-track{height:14px}
+input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-radius:9px}
 
-.stop-btn{margin-top:8px;padding:7px 16px;background:rgba(244,63,94,.15);border:1px solid rgba(244,63,94,.4);
-  color:var(--rose);font-weight:700;font-size:12px;border-radius:12px;cursor:pointer}
+.slider-v-container{height:var(--sh);width:var(--T);display:flex;align-items:center;justify-content:center;
+  background:rgba(2,6,15,.7);border-radius:20px;border:1px solid var(--border);box-shadow:inset 0 2px 8px rgba(0,0,0,.4)}
+.slider-v{flex:none;width:var(--sh) !important;height:var(--T) !important;transform:rotate(-90deg);transform-origin:center}
+.slider-h-container{width:100%;height:var(--T);display:flex;align-items:center;padding:0 8px;
+  background:rgba(2,6,15,.7);border-radius:20px;border:1px solid var(--border);box-shadow:inset 0 2px 8px rgba(0,0,0,.4)}
+.slider-h-container input{width:100%}
+.slim-wrap{height:36px;display:flex;align-items:center}
+.slim-wrap input{width:100%}
 
-.side{width:170px;display:flex;flex-direction:column;gap:10px}
-.field{background:rgba(2,6,15,.55);padding:10px;border-radius:16px;border:1px solid var(--border)}
-.field .row{margin-bottom:4px}
+/* иконки и кнопки-заглушки */
+.tank-svg{height:calc(var(--sh) - 24px);width:auto;aspect-ratio:240/280}
+.car-svg{height:calc(var(--sh) - 8px);width:auto;aspect-ratio:240/200}
+.btn-row{display:flex;gap:8px;margin-top:8px}
+.aux-btn{width:46px;height:36px;border-radius:12px;background:var(--panel2);border:1px solid var(--border);
+  color:var(--text);font-weight:700;font-size:14px;cursor:pointer}
+.aux-btn:active{background:var(--blue-dk)}
+
+/* правая колонка классики */
+.side{width:300px;align-self:stretch;display:flex;flex-direction:column;justify-content:space-between;gap:8px}
+.field{background:rgba(2,6,15,.55);padding:8px 10px;border-radius:16px;border:1px solid var(--border)}
 .field label{font-size:11px;font-weight:600;color:#cbd5e1}
-.field input[type=range]{width:100%}
+.field .row{margin-bottom:4px}
+.cal{display:flex;align-items:center;gap:6px;margin-top:6px}
+.mini-btn{width:30px;height:30px;border-radius:9px;background:var(--panel2);border:1px solid var(--border);
+  color:var(--text);font-size:16px;cursor:pointer;padding:0}
+.num{width:56px;height:30px;background:#0d0f12;color:#e2e8f0;border:1px solid var(--border);border-radius:8px;padding:4px}
 
 .hidden{display:none !important}
-
 .gear{transform-box:fill-box;transform-origin:center}
 .wheel{transform-box:fill-box;transform-origin:center;transition:transform .08s ease-out}
 
-.footer{width:100%;background:rgba(20,24,32,.9);border:1px solid var(--border);border-radius:14px;
-  padding:6px 12px;display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+.footer{flex:none;background:rgba(20,24,32,.9);border:1px solid var(--border);border-radius:14px;
+  padding:6px 12px;display:flex;justify-content:space-between;align-items:center}
 .footer span:first-child{font-size:10px;color:var(--muted)}
 .footer code{font-size:11px;color:var(--cyan);background:#020617;padding:2px 8px;border-radius:6px;border:1px solid var(--border)}
 
@@ -393,14 +487,29 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:34px;widt
       <button id="btn-tank" class="mode-btn active" onclick="switchMode(0)">&#128737; Танковый</button>
       <button id="btn-classic" class="mode-btn" onclick="switchMode(1)">&#128663; Классический</button>
     </div>
-    <div class="row" style="gap:6px">
+    <div class="row" style="gap:10px">
+      <div class="hstats stale" id="hstats">
+        <div class="stat" title="Уровень Wi-Fi">
+          <div class="bars w0" id="wifi-bars"><i></i><i></i><i></i><i></i></div>
+          <span id="wifi-txt">--</span>
+        </div>
+        <div class="stat" title="Аккумулятор">
+          <div class="bat" id="bat-ic"><div class="bat-fill" id="bat-fill"></div></div>
+          <span id="batt-txt">--</span>
+        </div>
+      </div>
       <button class="icon-btn" onclick="toggleFullscreen()" title="На весь экран">&#9974;</button>
-      <span class="badge">ESP32</span>
+      <span class="badge bad" id="link-badge">Нет связи</span>
     </div>
   </div>
 
-  <main id="tank-panel" class="panel" style="margin-top:10px">
-    <div class="row">
+  <div id="batt-banner" class="banner hidden" onclick="dismissBanner()">
+    <span id="banner-text"></span>
+    <span class="banner-x" id="banner-x">&#10005;</span>
+  </div>
+
+  <main id="tank-panel" class="panel">
+    <div class="cluster">
       <div class="col">
         <span class="lbl">Левая гусеница</span>
         <span class="val" id="val-left">0%</span>
@@ -411,23 +520,35 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:34px;widt
         </div>
       </div>
 
-      <div class="col" style="flex:1">
-        <svg viewBox="0 0 220 280" style="width:100%;max-width:150px">
-          <rect x="50" y="40" width="120" height="200" rx="16" fill="#1b2029" stroke="#2a3140" stroke-width="3"/>
-          <rect x="65" y="60" width="90" height="160" rx="10" fill="#0d0f12" stroke="#1b2029" stroke-width="2"/>
-          <circle cx="110" cy="140" r="30" fill="#1b2029" stroke="#3b82f6" stroke-width="2" opacity=".4"/>
-          <g id="t-left">
-            <rect x="15" y="20" width="32" height="240" rx="10" fill="#090d16" stroke="#2a3140" stroke-width="2"/>
-            <polygon id="t-left-f" points="31,70 21,85 41,85" fill="#2a3140"/>
-            <polygon id="t-left-r" points="31,210 21,195 41,195" fill="#2a3140"/>
+      <div class="col">
+        <svg class="tank-svg" viewBox="0 0 240 280">
+          <defs>
+            <pattern id="tread" width="62" height="16" patternUnits="userSpaceOnUse">
+              <rect width="62" height="16" fill="#090d16"/>
+              <rect y="12" width="62" height="4" fill="#1b2029"/>
+            </pattern>
+          </defs>
+          <rect x="64" y="30" width="112" height="220" rx="20" fill="#1b2029" stroke="#2a3140" stroke-width="3"/>
+          <rect x="80" y="52" width="80" height="176" rx="12" fill="#0d0f12" stroke="#1b2029" stroke-width="2"/>
+          <rect x="112" y="24" width="16" height="96" rx="5" fill="#2a3140" stroke="#3b82f6" stroke-width="1.5" opacity=".7"/>
+          <circle cx="120" cy="150" r="34" fill="#1b2029" stroke="#3b82f6" stroke-width="2.5" opacity=".9"/>
+          <g>
+            <rect id="t-left-body" x="6" y="14" width="62" height="252" rx="14" fill="url(#tread)" stroke="#2a3140" stroke-width="3"/>
+            <polygon id="t-left-f" points="37,50 18,84 56,84" fill="#2a3140"/>
+            <polygon id="t-left-r" points="37,230 18,196 56,196" fill="#2a3140"/>
           </g>
-          <g id="t-right">
-            <rect x="173" y="20" width="32" height="240" rx="10" fill="#090d16" stroke="#2a3140" stroke-width="2"/>
-            <polygon id="t-right-f" points="189,70 179,85 199,85" fill="#2a3140"/>
-            <polygon id="t-right-r" points="189,210 179,195 199,195" fill="#2a3140"/>
+          <g>
+            <rect id="t-right-body" x="172" y="14" width="62" height="252" rx="14" fill="url(#tread)" stroke="#2a3140" stroke-width="3"/>
+            <polygon id="t-right-f" points="203,50 184,84 222,84" fill="#2a3140"/>
+            <polygon id="t-right-r" points="203,230 184,196 222,196" fill="#2a3140"/>
           </g>
         </svg>
-        <button class="stop-btn" onclick="stopAll()">&#9995; СТОП</button>
+        <div class="btn-row">
+          <button class="aux-btn" onclick="auxBtn(1)">1</button>
+          <button class="aux-btn" onclick="auxBtn(2)">2</button>
+          <button class="aux-btn" onclick="auxBtn(3)">3</button>
+          <button class="aux-btn" onclick="auxBtn(4)">4</button>
+        </div>
       </div>
 
       <div class="col">
@@ -442,8 +563,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:34px;widt
     </div>
   </main>
 
-  <main id="classic-panel" class="panel hidden" style="margin-top:10px">
-    <div class="row">
+  <main id="classic-panel" class="panel hidden">
+    <div class="cluster">
       <div class="col">
         <span class="lbl">Газ (A)</span>
         <span class="val g" id="val-drive">0%</span>
@@ -454,8 +575,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:34px;widt
         </div>
       </div>
 
-      <div class="col" style="flex:1">
-        <svg viewBox="0 0 240 200" style="width:100%;max-width:170px">
+      <div class="col">
+        <svg class="car-svg" viewBox="0 0 240 200">
           <rect x="70" y="20" width="100" height="160" rx="18" fill="#1b2029" stroke="#2a3140" stroke-width="3"/>
           <polygon id="c-fwd" points="120,38 105,55 135,55" fill="#2a3140"/>
           <polygon id="c-rev" points="120,162 105,145 135,145" fill="#2a3140"/>
@@ -468,39 +589,37 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:34px;widt
           <g><rect x="25" y="135" width="22" height="45" rx="6" fill="#0d0f12" stroke="#2a3140" stroke-width="2"/></g>
           <g><rect x="193" y="135" width="22" height="45" rx="6" fill="#0d0f12" stroke="#2a3140" stroke-width="2"/></g>
         </svg>
-        <button class="stop-btn" onclick="stopAll()">СБРОСИТЬ ВСЕ</button>
+        <div class="btn-row">
+          <button class="aux-btn" onclick="auxBtn(1)">1</button>
+          <button class="aux-btn" onclick="auxBtn(2)">2</button>
+          <button class="aux-btn" onclick="auxBtn(3)">3</button>
+          <button class="aux-btn" onclick="auxBtn(4)">4</button>
+        </div>
       </div>
 
       <div class="side">
         <div class="field">
           <div class="row"><label>Доп. мотор (B)</label><span class="val c" id="val-aux">0%</span></div>
-          <input type="range" id="slider-aux" min="-100" max="100" value="0"
-                 oninput="updateAux('B',this.value)"
-                 onmouseup="resetSlider('slider-aux','B',updateAux)" ontouchend="resetSlider('slider-aux','B',updateAux)">
-        </div>
-        <div class="field">
-          <div class="row"><label>Руль (Servo)</label><span class="val" id="val-steer">0&#176;</span></div>
-          <input type="range" id="slider-steer" min="-100" max="100" value="0"
-                 oninput="updateSteer('S',this.value)"
-                 onmouseup="resetSlider('slider-steer','S',updateSteer)" ontouchend="resetSlider('slider-steer','S',updateSteer)">
-        </div>
-        <div class="field">
-          <div class="row"><label>Калибровка руля</label></div>
-          <div class="row" style="margin-top:6px">
+          <div class="slim-wrap">
+            <input type="range" class="slim" id="slider-aux" min="-100" max="100" value="0"
+                   oninput="updateAux('B',this.value)"
+                   onmouseup="resetSlider('slider-aux','B',updateAux)" ontouchend="resetSlider('slider-aux','B',updateAux)">
+          </div>
+          <div class="cal">
             <span class="lbl">Центр</span>
+            <button class="mini-btn" onclick="adjTrim(-10)">&minus;</button>
             <span class="val" id="val-trim">0</span>
+            <button class="mini-btn" onclick="adjTrim(10)">+</button>
+            <span class="lbl" style="margin-left:6px">Макс.&#176;</span>
+            <input type="number" class="num" id="maxdeg-input" min="5" max="90" value="45" onchange="setMaxDeg(this.value)">
           </div>
-          <div class="row" style="gap:6px;justify-content:center">
-            <button class="icon-btn" onclick="adjTrim(-10)">-</button>
-            <button class="icon-btn" onclick="adjTrim(10)">+</button>
-          </div>
-          <div class="row" style="margin-top:10px">
-            <span class="lbl">Макс. угол,&#176;</span>
-          </div>
-          <div class="row" style="gap:6px">
-            <input type="number" id="maxdeg-input" min="5" max="90" value="45"
-                   style="width:60px;background:#0d0f12;color:#e2e8f0;border:1px solid var(--border);border-radius:8px;padding:4px"
-                   onchange="setMaxDeg(this.value)">
+        </div>
+        <div>
+          <div class="row"><label class="lbl">Руль (Servo)</label><span class="val" id="val-steer">0&#176;</span></div>
+          <div class="slider-h-container">
+            <input type="range" id="slider-steer" min="-100" max="100" value="0"
+                   oninput="updateSteer('S',this.value)"
+                   onmouseup="resetSlider('slider-steer','S',updateSteer)" ontouchend="resetSlider('slider-steer','S',updateSteer)">
           </div>
         </div>
       </div>
@@ -525,53 +644,159 @@ async function toggleFullscreen(){
   }catch(e){}
 }
 
-var ws = new WebSocket('ws://' + location.host + '/ws');
+// ---------- подгонка длины ползунков под высоту экрана ----------
+function fitSliders(){
+  var p = document.querySelector('.panel:not(.hidden)');
+  if (!p) return;
+  var h = Math.max(110, Math.min(240, p.clientHeight - 96));
+  document.documentElement.style.setProperty('--sh', h + 'px');
+}
+window.addEventListener('resize', fitSliders);
+window.addEventListener('load', fitSliders);
+
+// ---------- WebSocket с автопереподключением ----------
+var ws = null;
 var state = {A:0, B:0, S:0}; // последние отправленные значения по каждому каналу
+var curMode = 0, modeHoldUntil = 0;
+
+function wsOpen(){ return ws && ws.readyState === WebSocket.OPEN; }
+
+function connectWS(){
+  ws = new WebSocket('ws://' + location.host + '/ws');
+  ws.onopen = function(){ setLink(true); stopAll(); loadCalib(); };
+  ws.onclose = function(){ setLink(false); setTimeout(connectWS, 1000); };
+  ws.onmessage = onStatus;
+}
+
+function setLink(ok){
+  var b = document.getElementById('link-badge');
+  b.textContent = ok ? 'ESP32' : 'Нет связи';
+  b.classList.toggle('bad', !ok);
+  document.getElementById('hstats').classList.toggle('stale', !ok);
+  if (!ok) updateWifi(0);
+}
 
 function send(ch, val){
   state[ch] = parseInt(val);
   var data = {ch:ch, val:state[ch]};
   document.getElementById('telemetry').textContent = JSON.stringify(data);
-  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
+  if (wsOpen()) ws.send(JSON.stringify(data));
 }
 
 // Пока слайдер держат на месте, браузер не шлёт новых oninput-событий,
 // а серверный сторож (500мс без пакетов) глушит мотор/серву, приняв тишину за обрыв связи.
 // Поэтому раз в 150мс подтверждаем текущие значения, даже если они не менялись.
 setInterval(function(){
-  if (ws.readyState !== WebSocket.OPEN) return;
+  if (!wsOpen()) return;
   for (var ch in state) ws.send(JSON.stringify({ch:ch, val:state[ch]}));
 }, 150);
 
+// ---------- статус от платы: Wi-Fi, батарея, режим ----------
+function onStatus(ev){
+  var d;
+  try { d = JSON.parse(ev.data); } catch(e){ return; }
+  if (!d.st) return;
+  updateWifi(d.r);
+  updateBattery(d.v, d.p);
+  if (typeof d.m === 'number' && d.m !== curMode && Date.now() > modeHoldUntil) applyMode(d.m);
+}
+
+function updateWifi(r){
+  var n = 0, txt = '--';
+  if (r < 0){
+    n = r > -55 ? 4 : (r > -65 ? 3 : (r > -75 ? 2 : 1));
+    txt = r + ' dBm';
+  }
+  var bars = document.getElementById('wifi-bars');
+  bars.className = 'bars w' + n;
+  for (var i = 0; i < 4; i++) bars.children[i].classList.toggle('on', i < n);
+  document.getElementById('wifi-txt').textContent = txt;
+}
+
+var battLevel = 0;      // 0 — норма, 1 — низкий (<=10%), 2 — разряжен (<=1%)
+var dismissedLvl = 0;   // уровень, для которого баннер закрыт вручную
+var bannerShown = false;
+
+function updateBattery(v, p){
+  var fill = document.getElementById('bat-fill');
+  var txt = document.getElementById('batt-txt');
+  var ic = document.getElementById('bat-ic');
+  if (v < 0.5){   // батарея не подключена (питание по USB)
+    fill.style.width = '0%';
+    txt.textContent = 'USB';
+    ic.className = 'bat';
+    battLevel = 0;
+    showBanner(p);
+    return;
+  }
+  txt.textContent = p + '% \u00b7 ' + v.toFixed(1) + 'V';
+  fill.style.width = p + '%';
+  ic.className = 'bat' + (p <= 10 ? ' crit' : (p <= 30 ? ' warn' : ''));
+
+  // уровень баннера с гистерезисом, чтобы не мигал на границе
+  var lvl = battLevel;
+  if (p <= 1) lvl = 2;
+  else if (p <= 10 && lvl < 1) lvl = 1;
+  else if (lvl === 2 && p >= 4) lvl = 1;
+  if (lvl >= 1 && p >= 13) lvl = 0;
+  battLevel = lvl;
+  showBanner(p);
+}
+
+function showBanner(p){
+  if (battLevel === 0) dismissedLvl = 0;
+  var show = (battLevel === 2) || (battLevel === 1 && dismissedLvl !== 1);
+  var el = document.getElementById('batt-banner');
+  if (show){
+    el.className = 'banner lvl' + battLevel;
+    document.getElementById('banner-text').textContent = (battLevel === 2)
+      ? 'Аккумулятор почти разряжен (' + p + '%). Остановите модель и зарядите батарею!'
+      : 'Низкий заряд аккумулятора (' + p + '%). Скоро потребуется зарядка.';
+    document.getElementById('banner-x').style.display = (battLevel === 1) ? '' : 'none';
+  } else {
+    el.className = 'banner hidden';
+  }
+  if (show !== bannerShown){ bannerShown = show; fitSliders(); }
+}
+
+function dismissBanner(){
+  if (battLevel === 1){ dismissedLvl = 1; showBanner(0); }
+}
+
+// ---------- режимы ----------
+// applyMode — только интерфейс; switchMode — команда плате + интерфейс
+function applyMode(m){
+  curMode = m;
+  document.getElementById('tank-panel').classList.toggle('hidden', m !== 0);
+  document.getElementById('classic-panel').classList.toggle('hidden', m !== 1);
+  document.getElementById('btn-tank').classList.toggle('active', m === 0);
+  document.getElementById('btn-classic').classList.toggle('active', m === 1);
+  fitSliders();
+}
+
 function switchMode(m){
-  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({mode:m}));
-  document.getElementById('tank-panel').classList.toggle('hidden', m!==0);
-  document.getElementById('classic-panel').classList.toggle('hidden', m!==1);
-  document.getElementById('btn-tank').classList.toggle('active', m===0);
-  document.getElementById('btn-classic').classList.toggle('active', m===1);
+  modeHoldUntil = Date.now() + 1500; // не даём устаревшему статусу переключить экран обратно
+  if (wsOpen()) ws.send(JSON.stringify({mode:m}));
+  applyMode(m);
   stopAll();
 }
 
+// ---------- управление ----------
 function updateTank(ch, val){
   send(ch, val);
-  var n = parseInt(val);
-  if(ch==='A'){
-    document.getElementById('val-left').textContent = val + '%';
-    document.getElementById('t-left-f').setAttribute('fill', n>0 ? '#3b82f6':'#2a3140');
-    document.getElementById('t-left-r').setAttribute('fill', n<0 ? '#3b82f6':'#2a3140');
-  } else {
-    document.getElementById('val-right').textContent = val + '%';
-    document.getElementById('t-right-f').setAttribute('fill', n>0 ? '#3b82f6':'#2a3140');
-    document.getElementById('t-right-r').setAttribute('fill', n<0 ? '#3b82f6':'#2a3140');
-  }
+  var n = parseInt(val), s = (ch === 'A') ? 'left' : 'right';
+  document.getElementById('val-' + s).textContent = val + '%';
+  document.getElementById('t-' + s + '-f').setAttribute('fill', n > 0 ? '#3b82f6' : '#2a3140');
+  document.getElementById('t-' + s + '-r').setAttribute('fill', n < 0 ? '#3b82f6' : '#2a3140');
+  document.getElementById('t-' + s + '-body').setAttribute('stroke', n !== 0 ? '#3b82f6' : '#2a3140');
 }
 
 function updateDrive(ch, val){
   send(ch, val);
   document.getElementById('val-drive').textContent = val + '%';
   var n = parseInt(val);
-  document.getElementById('c-fwd').setAttribute('fill', n>0 ? '#10b981':'#2a3140');
-  document.getElementById('c-rev').setAttribute('fill', n<0 ? '#10b981':'#2a3140');
+  document.getElementById('c-fwd').setAttribute('fill', n > 0 ? '#10b981' : '#2a3140');
+  document.getElementById('c-rev').setAttribute('fill', n < 0 ? '#10b981' : '#2a3140');
 }
 
 function updateSteer(ch, val){
@@ -597,26 +822,32 @@ function updateAux(ch, val){
   if (Math.abs(auxSpeed) > 0 && !animId) animId = requestAnimationFrame(animateGear);
 }
 
-var trimValue = 0; // мкс, абсолютное смещение от 1500 — сервер держит то же самое состояние
+// Кнопки 1-4 пока без функций. Сюда потом подключим команды (например свет).
+function auxBtn(n){ }
+
+// ---------- калибровка руля ----------
+var trimValue = 0; // мкс, абсолютное смещение от 1500 — плата хранит то же самое значение
 
 function adjTrim(delta){
   trimValue = Math.max(-400, Math.min(400, trimValue + delta));
   document.getElementById('val-trim').textContent = trimValue;
-  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({trim: trimValue}));
+  if (wsOpen()) ws.send(JSON.stringify({trim: trimValue}));
 }
 
 function setMaxDeg(v){
   var deg = Math.max(5, Math.min(90, parseInt(v) || 45));
   document.getElementById('maxdeg-input').value = deg;
-  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({maxdeg: deg}));
+  if (wsOpen()) ws.send(JSON.stringify({maxdeg: deg}));
 }
 
-// Подтягиваем сохранённую на плате калибровку при открытии страницы
-fetch('/calib').then(r => r.json()).then(c => {
-  trimValue = c.trim;
-  document.getElementById('val-trim').textContent = trimValue;
-  document.getElementById('maxdeg-input').value = c.maxdeg;
-}).catch(()=>{});
+// Подтягиваем сохранённую на плате калибровку
+function loadCalib(){
+  fetch('/calib').then(function(r){ return r.json(); }).then(function(c){
+    trimValue = c.trim;
+    document.getElementById('val-trim').textContent = trimValue;
+    document.getElementById('maxdeg-input').value = c.maxdeg;
+  }).catch(function(){});
+}
 
 function resetSlider(id, ch, fn){ var s = document.getElementById(id); s.value = 0; fn(ch, 0); }
 
@@ -627,6 +858,9 @@ function stopAll(){
   resetSlider('slider-steer','S',updateSteer);
   resetSlider('slider-aux','B',updateAux);
 }
+
+fitSliders();
+connectWS();
 </script>
 </body>
 </html>
@@ -672,18 +906,25 @@ void setup() {
   server.begin();
 
   stopAll();
+  updateStatus(); // первичные значения для первого подключившегося клиента
   lastCmdMillis = millis();
 }
 
 void loop() {
-  static unsigned long lastDisplay = 0;
+  static unsigned long lastStatus = 0;
 
   // Safety: нет команд > CMD_TIMEOUT_MS — стоп
   if (millis() - lastCmdMillis > CMD_TIMEOUT_MS) stopAll();
 
-  if (millis() - lastDisplay > 1000) {
+  if (millis() - lastStatus > 1000) {
+    lastStatus = millis();
+    updateStatus();
     updateDisplay(ws.count());
-    lastDisplay = millis();
+    if (ws.count() > 0) {
+      char buf[96];
+      buildStatus(buf, sizeof(buf));
+      ws.textAll(buf);
+    }
   }
 
   ElegantOTA.loop();
