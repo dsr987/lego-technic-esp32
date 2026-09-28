@@ -1,3 +1,4 @@
+#include <Arduino.h>
 // ESP32 Lego Technic motorization — Версия: 0.0.6
 // Библиотеки: ESPAsyncWebServer 3.1.0 (форк lacamera из Library Manager), AsyncTCP 1.1.4, ArduinoJson,
 // Adafruit_SSD1306, Adafruit_GFX, Adafruit_BusIO, ESP32Servo, ElegantOTA (ayushsharma82)
