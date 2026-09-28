@@ -402,4 +402,290 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;height:34px;widt
   <main id="tank-panel" class="panel" style="margin-top:10px">
     <div class="row">
       <div class="col">
-        <span class="lbl">Левая
+        <span class="lbl">Левая гусеница</span>
+        <span class="val" id="val-left">0%</span>
+        <div class="slider-v-container">
+          <input type="range" id="slider-left" class="slider-v" min="-100" max="100" value="0"
+                 oninput="updateTank('A',this.value)"
+                 onmouseup="resetSlider('slider-left','A',updateTank)" ontouchend="resetSlider('slider-left','A',updateTank)">
+        </div>
+      </div>
+
+      <div class="col" style="flex:1">
+        <svg viewBox="0 0 220 280" style="width:100%;max-width:150px">
+          <rect x="50" y="40" width="120" height="200" rx="16" fill="#1b2029" stroke="#2a3140" stroke-width="3"/>
+          <rect x="65" y="60" width="90" height="160" rx="10" fill="#0d0f12" stroke="#1b2029" stroke-width="2"/>
+          <circle cx="110" cy="140" r="30" fill="#1b2029" stroke="#3b82f6" stroke-width="2" opacity=".4"/>
+          <g id="t-left">
+            <rect x="15" y="20" width="32" height="240" rx="10" fill="#090d16" stroke="#2a3140" stroke-width="2"/>
+            <polygon id="t-left-f" points="31,70 21,85 41,85" fill="#2a3140"/>
+            <polygon id="t-left-r" points="31,210 21,195 41,195" fill="#2a3140"/>
+          </g>
+          <g id="t-right">
+            <rect x="173" y="20" width="32" height="240" rx="10" fill="#090d16" stroke="#2a3140" stroke-width="2"/>
+            <polygon id="t-right-f" points="189,70 179,85 199,85" fill="#2a3140"/>
+            <polygon id="t-right-r" points="189,210 179,195 199,195" fill="#2a3140"/>
+          </g>
+        </svg>
+        <button class="stop-btn" onclick="stopAll()">&#9995; СТОП</button>
+      </div>
+
+      <div class="col">
+        <span class="lbl">Правая гусеница</span>
+        <span class="val" id="val-right">0%</span>
+        <div class="slider-v-container">
+          <input type="range" id="slider-right" class="slider-v" min="-100" max="100" value="0"
+                 oninput="updateTank('B',this.value)"
+                 onmouseup="resetSlider('slider-right','B',updateTank)" ontouchend="resetSlider('slider-right','B',updateTank)">
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <main id="classic-panel" class="panel hidden" style="margin-top:10px">
+    <div class="row">
+      <div class="col">
+        <span class="lbl">Газ (A)</span>
+        <span class="val g" id="val-drive">0%</span>
+        <div class="slider-v-container">
+          <input type="range" id="slider-drive" class="slider-v" min="-100" max="100" value="0"
+                 oninput="updateDrive('A',this.value)"
+                 onmouseup="resetSlider('slider-drive','A',updateDrive)" ontouchend="resetSlider('slider-drive','A',updateDrive)">
+        </div>
+      </div>
+
+      <div class="col" style="flex:1">
+        <svg viewBox="0 0 240 200" style="width:100%;max-width:170px">
+          <rect x="70" y="20" width="100" height="160" rx="18" fill="#1b2029" stroke="#2a3140" stroke-width="3"/>
+          <polygon id="c-fwd" points="120,38 105,55 135,55" fill="#2a3140"/>
+          <polygon id="c-rev" points="120,162 105,145 135,145" fill="#2a3140"/>
+          <g id="c-gear" class="gear" transform="translate(120,100)">
+            <circle cx="0" cy="0" r="13" fill="#0d0f12" stroke="#22d3ee" stroke-width="2.5"/>
+            <circle cx="0" cy="0" r="5" fill="#1b2029" stroke="#22d3ee" stroke-width="1.5"/>
+          </g>
+          <g id="c-fl" class="wheel" transform="translate(36,45)"><rect x="-11" y="-20" width="22" height="40" rx="6" fill="#0d0f12" stroke="#3b82f6" stroke-width="2"/></g>
+          <g id="c-fr" class="wheel" transform="translate(204,45)"><rect x="-11" y="-20" width="22" height="40" rx="6" fill="#0d0f12" stroke="#3b82f6" stroke-width="2"/></g>
+          <g><rect x="25" y="135" width="22" height="45" rx="6" fill="#0d0f12" stroke="#2a3140" stroke-width="2"/></g>
+          <g><rect x="193" y="135" width="22" height="45" rx="6" fill="#0d0f12" stroke="#2a3140" stroke-width="2"/></g>
+        </svg>
+        <button class="stop-btn" onclick="stopAll()">СБРОСИТЬ ВСЕ</button>
+      </div>
+
+      <div class="side">
+        <div class="field">
+          <div class="row"><label>Доп. мотор (B)</label><span class="val c" id="val-aux">0%</span></div>
+          <input type="range" id="slider-aux" min="-100" max="100" value="0"
+                 oninput="updateAux('B',this.value)"
+                 onmouseup="resetSlider('slider-aux','B',updateAux)" ontouchend="resetSlider('slider-aux','B',updateAux)">
+        </div>
+        <div class="field">
+          <div class="row"><label>Руль (Servo)</label><span class="val" id="val-steer">0&#176;</span></div>
+          <input type="range" id="slider-steer" min="-100" max="100" value="0"
+                 oninput="updateSteer('S',this.value)"
+                 onmouseup="resetSlider('slider-steer','S',updateSteer)" ontouchend="resetSlider('slider-steer','S',updateSteer)">
+        </div>
+        <div class="field">
+          <div class="row"><label>Калибровка руля</label></div>
+          <div class="row" style="margin-top:6px">
+            <span class="lbl">Центр</span>
+            <span class="val" id="val-trim">0</span>
+          </div>
+          <div class="row" style="gap:6px;justify-content:center">
+            <button class="icon-btn" onclick="adjTrim(-10)">-</button>
+            <button class="icon-btn" onclick="adjTrim(10)">+</button>
+          </div>
+          <div class="row" style="margin-top:10px">
+            <span class="lbl">Макс. угол,&#176;</span>
+          </div>
+          <div class="row" style="gap:6px">
+            <input type="number" id="maxdeg-input" min="5" max="90" value="45"
+                   style="width:60px;background:#0d0f12;color:#e2e8f0;border:1px solid var(--border);border-radius:8px;padding:4px"
+                   onchange="setMaxDeg(this.value)">
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <div class="footer">
+    <span>Монитор порта (TX):</span>
+    <code id="telemetry">{"ch":"A","val":0}</code>
+  </div>
+</div>
+
+<script>
+document.addEventListener('touchmove', function(e){ if (e.target.tagName !== 'INPUT') e.preventDefault(); }, {passive:false});
+
+async function toggleFullscreen(){
+  try{
+    if(!document.fullscreenElement){
+      await document.documentElement.requestFullscreen();
+      if(screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape').catch(()=>{});
+    } else { document.exitFullscreen(); }
+  }catch(e){}
+}
+
+var ws = new WebSocket('ws://' + location.host + '/ws');
+var state = {A:0, B:0, S:0}; // последние отправленные значения по каждому каналу
+
+function send(ch, val){
+  state[ch] = parseInt(val);
+  var data = {ch:ch, val:state[ch]};
+  document.getElementById('telemetry').textContent = JSON.stringify(data);
+  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data));
+}
+
+// Пока слайдер держат на месте, браузер не шлёт новых oninput-событий,
+// а серверный сторож (500мс без пакетов) глушит мотор/серву, приняв тишину за обрыв связи.
+// Поэтому раз в 150мс подтверждаем текущие значения, даже если они не менялись.
+setInterval(function(){
+  if (ws.readyState !== WebSocket.OPEN) return;
+  for (var ch in state) ws.send(JSON.stringify({ch:ch, val:state[ch]}));
+}, 150);
+
+function switchMode(m){
+  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({mode:m}));
+  document.getElementById('tank-panel').classList.toggle('hidden', m!==0);
+  document.getElementById('classic-panel').classList.toggle('hidden', m!==1);
+  document.getElementById('btn-tank').classList.toggle('active', m===0);
+  document.getElementById('btn-classic').classList.toggle('active', m===1);
+  stopAll();
+}
+
+function updateTank(ch, val){
+  send(ch, val);
+  var n = parseInt(val);
+  if(ch==='A'){
+    document.getElementById('val-left').textContent = val + '%';
+    document.getElementById('t-left-f').setAttribute('fill', n>0 ? '#3b82f6':'#2a3140');
+    document.getElementById('t-left-r').setAttribute('fill', n<0 ? '#3b82f6':'#2a3140');
+  } else {
+    document.getElementById('val-right').textContent = val + '%';
+    document.getElementById('t-right-f').setAttribute('fill', n>0 ? '#3b82f6':'#2a3140');
+    document.getElementById('t-right-r').setAttribute('fill', n<0 ? '#3b82f6':'#2a3140');
+  }
+}
+
+function updateDrive(ch, val){
+  send(ch, val);
+  document.getElementById('val-drive').textContent = val + '%';
+  var n = parseInt(val);
+  document.getElementById('c-fwd').setAttribute('fill', n>0 ? '#10b981':'#2a3140');
+  document.getElementById('c-rev').setAttribute('fill', n<0 ? '#10b981':'#2a3140');
+}
+
+function updateSteer(ch, val){
+  send(ch, val);
+  document.getElementById('val-steer').innerHTML = val + '&#176;';
+  var deg = val * 0.35;
+  document.getElementById('c-fl').style.transform = 'translate(36px,45px) rotate(' + deg + 'deg)';
+  document.getElementById('c-fr').style.transform = 'translate(204px,45px) rotate(' + deg + 'deg)';
+}
+
+var gearAngle = 0, auxSpeed = 0, animId = null;
+function animateGear(){
+  if (Math.abs(auxSpeed) > 0){
+    gearAngle += auxSpeed * 0.05;
+    document.getElementById('c-gear').style.transform = 'translate(120px,100px) rotate(' + gearAngle + 'deg)';
+    animId = requestAnimationFrame(animateGear);
+  } else { animId = null; }
+}
+function updateAux(ch, val){
+  send(ch, val);
+  document.getElementById('val-aux').textContent = val + '%';
+  auxSpeed = parseInt(val);
+  if (Math.abs(auxSpeed) > 0 && !animId) animId = requestAnimationFrame(animateGear);
+}
+
+var trimValue = 0; // мкс, абсолютное смещение от 1500 — сервер держит то же самое состояние
+
+function adjTrim(delta){
+  trimValue = Math.max(-400, Math.min(400, trimValue + delta));
+  document.getElementById('val-trim').textContent = trimValue;
+  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({trim: trimValue}));
+}
+
+function setMaxDeg(v){
+  var deg = Math.max(5, Math.min(90, parseInt(v) || 45));
+  document.getElementById('maxdeg-input').value = deg;
+  if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({maxdeg: deg}));
+}
+
+// Подтягиваем сохранённую на плате калибровку при открытии страницы
+fetch('/calib').then(r => r.json()).then(c => {
+  trimValue = c.trim;
+  document.getElementById('val-trim').textContent = trimValue;
+  document.getElementById('maxdeg-input').value = c.maxdeg;
+}).catch(()=>{});
+
+function resetSlider(id, ch, fn){ var s = document.getElementById(id); s.value = 0; fn(ch, 0); }
+
+function stopAll(){
+  resetSlider('slider-left','A',updateTank);
+  resetSlider('slider-right','B',updateTank);
+  resetSlider('slider-drive','A',updateDrive);
+  resetSlider('slider-steer','S',updateSteer);
+  resetSlider('slider-aux','B',updateAux);
+}
+</script>
+</body>
+</html>
+)HTML";
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(TB_STBY, OUTPUT); digitalWrite(TB_STBY, HIGH); // включить драйвер
+  pinMode(TB_AIN1, OUTPUT); pinMode(TB_AIN2, OUTPUT);
+  pinMode(TB_BIN1, OUTPUT); pinMode(TB_BIN2, OUTPUT);
+  ledcSetup(LEDC_CH_A, 5000, 8);      // канал, частота 5кГц, разрешение 8 бит (0-255)
+  ledcAttachPin(TB_PWMA, LEDC_CH_A);  // привязка канала к физическому GPIO
+  ledcSetup(LEDC_CH_B, 5000, 8);
+  ledcAttachPin(TB_PWMB, LEDC_CH_B);
+
+  steerServo.setPeriodHertz(50);
+  steerServo.attach(SERVO_PIN, 1000, 2000);
+
+  Wire.begin(OLED_SDA, OLED_SCL);
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+
+  loadMode();
+  loadSteerCal();
+
+  WiFi.softAP("LegoTechnic", "12345678"); // TODO: сменить пароль
+
+  ws.onEvent(onWsEvent);
+  server.addHandler(&ws);
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
+    req->send(200, "text/html", PAGE_HTML);
+  });
+  server.on("/calib", HTTP_GET, [](AsyncWebServerRequest *req) {
+    String json = "{\"trim\":" + String(steerCenterUs - 1500) +
+                  ",\"maxdeg\":" + String(steerMaxAngleDeg) + "}";
+    req->send(200, "application/json", json);
+  });
+
+  // Веб-обновление прошивки: http://192.168.4.1/update, залить .bin — без USB и без Arduino IDE.
+  // admin/admin — ок для отладки в поле (за WPA2-паролем самой точки доступа), но перед тем как
+  // показывать модель кому-то ещё — сменить на что-то менее очевидное.
+  ElegantOTA.begin(&server, "admin", "admin");
+  server.begin();
+
+  stopAll();
+  lastCmdMillis = millis();
+}
+
+void loop() {
+  static unsigned long lastDisplay = 0;
+
+  // Safety: нет команд > CMD_TIMEOUT_MS — стоп
+  if (millis() - lastCmdMillis > CMD_TIMEOUT_MS) stopAll();
+
+  if (millis() - lastDisplay > 1000) {
+    updateDisplay(ws.count());
+    lastDisplay = millis();
+  }
+
+  ElegantOTA.loop();
+  ws.cleanupClients();
+}
