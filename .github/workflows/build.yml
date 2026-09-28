@@ -1,0 +1,60 @@
+name: Build ESP32 firmware
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - 'lego_technic_esp32/**'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install arduino-cli
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Configure ESP32 board index
+        run: |
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls \
+            https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+
+      - name: Install ESP32 core 2.0.9
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@2.0.9
+
+      - name: Install libraries
+        run: |
+          arduino-cli lib install \
+            "ESPAsyncWebServer@3.1.0" \
+            "AsyncTCP@1.1.4" \
+            "ArduinoJson" \
+            "Adafruit SSD1306" \
+            "Adafruit GFX Library" \
+            "Adafruit BusIO" \
+            "ESP32Servo" \
+            "ElegantOTA"
+
+      - name: Patch ElegantOTA for async webserver
+        run: |
+          find ~/Arduino/libraries ~/.arduino15 -path "*ElegantOTA/src/ElegantOTA.h" 2>/dev/null -exec \
+            sed -i 's/#define ELEGANTOTA_USE_ASYNC_WEBSERVER 0/#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1/' {} \;
+
+      - name: Compile
+        run: |
+          arduino-cli compile --fqbn esp32:esp32:esp32 \
+            --output-dir build_output \
+            lego_technic_esp32
+
+      - name: Publish .bin as Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          files: build_output/*.ino.bin
