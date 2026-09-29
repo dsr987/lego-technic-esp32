@@ -1,4 +1,4 @@
-// ESP32 Lego Technic motorization — Версия: 0.0.7 (GUI Update)
+// ESP32 Lego Technic motorization — Версия: 0.0.7a (GUI Update, правки визуализации)
 // Библиотеки: ESPAsyncWebServer 3.1.0 (форк lacamera из Library Manager), AsyncTCP 1.1.4, ArduinoJson,
 // Adafruit_SSD1306, Adafruit_GFX, Adafruit_BusIO, ESP32Servo, ElegantOTA (ayushsharma82)
 // ESP32 core: 2.0.9 — зафиксирован сознательно (конфликт ledc API и веб-сервера на core 3.x).
@@ -31,25 +31,14 @@
  *
  * GPIO ESP32 (сигнальные, тонкие провода) — см. комментарии на каждой строке ниже.
  */
-// Что исправлено и улучшено в 0.0.7 (GUI Update):
-// - Танковый режим: ползунки толще (68 px) и придвинуты к центру; иконка танка перерисована —
-//   широкие гусеницы с протектором, башня со стволом; гусеницы подсвечиваются при движении.
-// - Классический режим: ползунок газа толще и ближе к центру; руль — такой же толщины, внизу
-//   справа; над ним компактный блок "доп. мотор + калибровка руля"; иконка машины крупнее.
-// - Кнопки "СТОП" и "СБРОСИТЬ ВСЕ" убраны (остановка — отпусканием ползунка), вместо них
-//   заглушки 1-4 без функций (auxBtn() в скрипте — точка подключения).
-// - Шапка: уровень Wi-Fi (RSSI клиента, измеряется на плате) и статус аккумулятора
-//   (иконка, %, вольты; при питании по USB — надпись USB). Бейдж связи: ESP32 / Нет связи.
-// - Баннеры о заряде: жёлтый при <=10% (закрывается касанием), красный при <=1% (не закрывается).
-//   Уровни переключаются с гистерезисом, чтобы не мигать на границе.
-// - Плата раз в секунду шлёт статус по WebSocket: {"st":1,"v":В,"p":%,"r":dBm,"m":режим,"c":клиенты}.
-// - Процент заряда считается плавно (интерполяция по точкам 6.0/6.8/7.0/7.4/7.8/8.2 В),
-//   а не ступенями: иначе значений 1% и 10% просто не существует.
-// - Страница сама переподключается к плате (после OTA/перезагрузки), при подключении сбрасывает
-//   слайдеры в ноль и подхватывает режим, сохранённый на плате.
-// - Добавлен #include <Arduino.h> — файл собирается и как .ino, и как app.cpp.
-// (альфа-тест по 0.0.6 подтвердил: OTA работает, иконки режимов и LOW BATTERY отображаются,
-//  ложных срабатываний нет)
+// Что исправлено в 0.0.7a (по итогам альфа-теста 0.0.7):
+// - Иконка доп. мотора: вместо двух пустых колец — шестерня с зубцами, вращение читаемо
+//   визуально и не режет глаз на высоких значениях слайдера (снижен коэффициент скорости).
+// - Значение руля отображается в процентах (значение слайдера), а не в градусах — реальный
+//   угол зависит от калибровки MAKC.°, показывать "градусы" было некорректно.
+// - В шапке под IP-адресом добавлена метка текущей версии/стадии: "(alpha 0.0.7a)".
+// (альфа-тест 0.0.7 подтвердил: толщина и расположение ползунков ок, Wi-Fi/батарея в шапке
+//  работают, автопереподключение и оба баннера разряда сработали как задумано)
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -363,6 +352,7 @@ body{padding:max(env(safe-area-inset-top,0px),6px) 10px max(env(safe-area-inset-
   border:1px solid rgba(59,130,246,.4);display:flex;align-items:center;justify-content:center;font-size:16px}
 .brand-title{font-size:13px;font-weight:700;line-height:1}
 .brand-sub{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);margin-top:3px}
+.brand-ver{font-size:9px;color:var(--muted);opacity:.7;margin-top:1px}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--emerald);animation:pulse 1.5s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .mode-switch{display:flex;gap:4px;background:rgba(2,6,15,.6);border:1px solid var(--border);border-radius:12px;padding:4px}
@@ -481,6 +471,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
       <div>
         <div class="brand-title">Lego Control Center</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-address">192.168.4.1</span></div>
+        <div class="brand-ver">(alpha 0.0.7a)</div>
       </div>
     </div>
     <div class="mode-switch">
@@ -583,6 +574,16 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
           <g id="c-gear" class="gear" transform="translate(120,100)">
             <circle cx="0" cy="0" r="13" fill="#0d0f12" stroke="#22d3ee" stroke-width="2.5"/>
             <circle cx="0" cy="0" r="5" fill="#1b2029" stroke="#22d3ee" stroke-width="1.5"/>
+            <g fill="#22d3ee">
+              <rect x="-2.5" y="-19" width="5" height="5" rx="1"/>
+              <rect x="-2.5" y="14" width="5" height="5" rx="1"/>
+              <rect x="-19" y="-2.5" width="5" height="5" rx="1"/>
+              <rect x="14" y="-2.5" width="5" height="5" rx="1"/>
+              <rect x="-14" y="-14" width="5" height="5" rx="1" transform="rotate(45)"/>
+              <rect x="9" y="9" width="5" height="5" rx="1" transform="rotate(45)"/>
+              <rect x="-14" y="9" width="5" height="5" rx="1" transform="rotate(-45)"/>
+              <rect x="9" y="-14" width="5" height="5" rx="1" transform="rotate(-45)"/>
+            </g>
           </g>
           <g id="c-fl" class="wheel" transform="translate(36,45)"><rect x="-11" y="-20" width="22" height="40" rx="6" fill="#0d0f12" stroke="#3b82f6" stroke-width="2"/></g>
           <g id="c-fr" class="wheel" transform="translate(204,45)"><rect x="-11" y="-20" width="22" height="40" rx="6" fill="#0d0f12" stroke="#3b82f6" stroke-width="2"/></g>
@@ -615,7 +616,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
           </div>
         </div>
         <div>
-          <div class="row"><label class="lbl">Руль (Servo)</label><span class="val" id="val-steer">0&#176;</span></div>
+          <div class="row"><label class="lbl">Руль (Servo)</label><span class="val" id="val-steer">0%</span></div>
           <div class="slider-h-container">
             <input type="range" id="slider-steer" min="-100" max="100" value="0"
                    oninput="updateSteer('S',this.value)"
@@ -801,7 +802,7 @@ function updateDrive(ch, val){
 
 function updateSteer(ch, val){
   send(ch, val);
-  document.getElementById('val-steer').innerHTML = val + '&#176;';
+  document.getElementById('val-steer').textContent = val + '%';
   var deg = val * 0.35;
   document.getElementById('c-fl').style.transform = 'translate(36px,45px) rotate(' + deg + 'deg)';
   document.getElementById('c-fr').style.transform = 'translate(204px,45px) rotate(' + deg + 'deg)';
@@ -810,7 +811,7 @@ function updateSteer(ch, val){
 var gearAngle = 0, auxSpeed = 0, animId = null;
 function animateGear(){
   if (Math.abs(auxSpeed) > 0){
-    gearAngle += auxSpeed * 0.05;
+    gearAngle += auxSpeed * 0.03;
     document.getElementById('c-gear').style.transform = 'translate(120px,100px) rotate(' + gearAngle + 'deg)';
     animId = requestAnimationFrame(animateGear);
   } else { animId = null; }
