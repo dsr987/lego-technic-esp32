@@ -1,4 +1,4 @@
-// ESP32 Lego Technic motorization — Версия: 0.0.7a (GUI Update, правки визуализации)
+// ESP32 Lego Technic motorization — Версия: 0.0.7b
 // Библиотеки: ESPAsyncWebServer 3.1.0 (форк lacamera из Library Manager), AsyncTCP 1.1.4, ArduinoJson,
 // Adafruit_SSD1306, Adafruit_GFX, Adafruit_BusIO, ESP32Servo, ElegantOTA (ayushsharma82)
 // ESP32 core: 2.0.9 — зафиксирован сознательно (конфликт ledc API и веб-сервера на core 3.x).
@@ -31,14 +31,18 @@
  *
  * GPIO ESP32 (сигнальные, тонкие провода) — см. комментарии на каждой строке ниже.
  */
-// Что исправлено в 0.0.7a (по итогам альфа-теста 0.0.7):
-// - Иконка доп. мотора: вместо двух пустых колец — шестерня с зубцами, вращение читаемо
-//   визуально и не режет глаз на высоких значениях слайдера (снижен коэффициент скорости).
-// - Значение руля отображается в процентах (значение слайдера), а не в градусах — реальный
-//   угол зависит от калибровки MAKC.°, показывать "градусы" было некорректно.
-// - В шапке под IP-адресом добавлена метка текущей версии/стадии: "(alpha 0.0.7a)".
-// (альфа-тест 0.0.7 подтвердил: толщина и расположение ползунков ок, Wi-Fi/батарея в шапке
-//  работают, автопереподключение и оба баннера разряда сработали как задумано)
+// Что исправлено и добавлено в 0.0.7b (по итогам альфа-теста 0.0.7a):
+// - Заряд батареи (%) на OLED и в GUI обновляется только в покое (все каналы = 0, выдержка 400мс) —
+//   просадка под нагрузкой моторов больше не искажает показания заряда. Напряжение (В) — как и было,
+//   живой замер каждую секунду, это честный вольтметр, не путать с зарядом.
+// - Иконка доп. мотора (B) в классическом режиме перерисована: корпус мотора с молнией по референсу
+//   пользователя, две вращающиеся стрелки по бокам как индикатор скорости/направления вращения,
+//   молния пульсирует свечением, пока мотор активен.
+// - Реверс вращения моторов: флаги reverseA/reverseB, привязаны к физическому каналу (не к режиму),
+//   переключаются кнопками под слайдерами (танк: обе гусеницы; классика: газ и доп. мотор),
+//   сохраняются в NVS, применяются сразу по нажатию без ожидания движения слайдера.
+// (альфа-тест 0.0.7a подтвердил: GUI без наложений и обрезаний, Wi-Fi/батарея в шапке работают,
+//  сигнал и напряжение близки к показаниям мультиметра)
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -95,9 +99,20 @@ AsyncWebSocket ws("/ws");
 unsigned long lastCmdMillis = 0;
 const unsigned long CMD_TIMEOUT_MS = 500; // safety: стоп, если нет команд
 
-int motorAVal = 0; // -100..100, текущее значение (для отображения/отладки)
+int motorAVal = 0; // -100..100, как пришло со слайдера (реверс сюда не подмешивается)
 int motorBVal = 0;
 int servoVal  = 0;
+
+// ---------- Реверс моторов ----------
+// Привязан к физическому каналу (A/B), не к режиму: один и тот же мотор в танке и в классике —
+// это один и тот же канал, реверс должен быть одинаковым в обоих режимах.
+bool reverseA = false;
+bool reverseB = false;
+
+void loadMotorRev() {
+  reverseA = prefs.getUChar("revA", 0) != 0;
+  reverseB = prefs.getUChar("revB", 0) != 0;
+}
 
 // ---------- Калибровка руля ----------
 // us = центр + (val/100) * maxAngleDeg * (1000/180)
@@ -128,9 +143,18 @@ void setMotor(int in1, int in2, int pwmChannel, int val) {
   ledcWrite(pwmChannel, duty);
 }
 
+void applyMotorA(int val) {
+  motorAVal = val; // сохраняем "как есть", реверс — только на выходе в железо
+  setMotor(TB_AIN1, TB_AIN2, LEDC_CH_A, reverseA ? -val : val);
+}
+void applyMotorB(int val) {
+  motorBVal = val;
+  setMotor(TB_BIN1, TB_BIN2, LEDC_CH_B, reverseB ? -val : val);
+}
+
 void stopAll() {
-  setMotor(TB_AIN1, TB_AIN2, LEDC_CH_A, 0);
-  setMotor(TB_BIN1, TB_BIN2, LEDC_CH_B, 0);
+  applyMotorA(0);
+  applyMotorB(0);
   steerServo.writeMicroseconds(steerCenterUs); // стоп/центр (с учётом калибровки)
   motorAVal = motorBVal = servoVal = 0;
 }
@@ -140,11 +164,16 @@ void stopAll() {
 // Ниже 0.5В — батарея физически не подключена (стенд на USB), это не разряд, предупреждение не нужно.
 #define LOW_BATTERY_THRESHOLD_V 6.0
 #define BATTERY_DISCONNECTED_V  0.5
+#define REST_SETTLE_MS 400 // сколько мс все каналы должны быть на нуле, прежде чем обновлять заряд (%)
 
-float battV = 0.0;    // напряжение батареи, В (обновляется раз в секунду в updateStatus)
-int   battPct = 0;    // заряд, % (0..100)
+float battV = 0.0;    // напряжение батареи, В — живой замер каждую секунду, всегда актуален
+int   battPct = 0;    // заряд, % — обновляется ТОЛЬКО в покое (см. updateStatus)
 int   wifiRssi = 0;   // RSSI лучшего клиента точки доступа, dBm; 0 = клиентов нет
-int   lowBattCount = 0; // сколько замеров подряд ниже порога (антидребезг предупреждения)
+int   lowBattCount = 0; // сколько замеров подряд ниже порога (антидребезг предупреждения, по живому В)
+
+bool wasAtRest = true;
+unsigned long restStartMillis = 0;
+bool firstStatusRun = true;
 
 float readBatteryVoltage() {
   // усреднение по 8 выборкам — ADC ESP32 шумит
@@ -184,23 +213,36 @@ int getBestRssi() {
   return best;
 }
 
-// Раз в секунду: обновляет напряжение, процент, RSSI и счётчик предупреждения о разряде.
+// Раз в секунду: напряжение — всегда, заряд(%) — только в покое, RSSI и антидребезг LOW BATTERY.
 void updateStatus() {
-  battV = readBatteryVoltage();
-  battPct = batteryPercent(battV);
+  battV = readBatteryVoltage(); // честный вольтметр, живой всегда
+
+  bool atRest = (motorAVal == 0 && motorBVal == 0 && servoVal == 0);
+  if (atRest) {
+    if (!wasAtRest) { restStartMillis = millis(); wasAtRest = true; }
+    if (firstStatusRun || millis() - restStartMillis > REST_SETTLE_MS) {
+      battPct = batteryPercent(battV); // заряд обновляем только "отстоявшись" без нагрузки
+      firstStatusRun = false;
+    }
+  } else {
+    wasAtRest = false; // под нагрузкой — просто не трогаем battPct, держим последнее спокойное значение
+  }
+
   wifiRssi = getBestRssi();
 
-  // Антидребезг: тревога — после 3 замеров подряд ниже порога,
-  // сброс — только выше порога +0.3В (или когда батарея отключена).
+  // Антидребезг предупреждения — по живому напряжению (это безопасность, должна реагировать быстро,
+  // даже под нагрузкой): тревога — после 3 замеров подряд ниже порога, сброс — выше порога +0.3В.
   bool below = (battV > BATTERY_DISCONNECTED_V && battV < LOW_BATTERY_THRESHOLD_V);
   if (below) { if (lowBattCount < 3) lowBattCount++; }
   else if (battV > LOW_BATTERY_THRESHOLD_V + 0.3 || battV <= BATTERY_DISCONNECTED_V) lowBattCount = 0;
 }
 
-// Статус для веб-страницы: v — вольты, p — %, r — RSSI (0 = нет), m — режим, c — WS-клиенты
+// Статус для веб-страницы: v — вольты (живой), p — % заряда (только в покое), r — RSSI,
+// m — режим, c — WS-клиенты, ra/rb — реверс каналов A/B
 void buildStatus(char *buf, size_t n) {
-  snprintf(buf, n, "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,\"m\":%d,\"c\":%d}",
-           battV, battPct, wifiRssi, (int)currentMode, (int)ws.count());
+  snprintf(buf, n, "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,\"m\":%d,\"c\":%d,\"ra\":%d,\"rb\":%d}",
+           battV, battPct, wifiRssi, (int)currentMode, (int)ws.count(),
+           reverseA ? 1 : 0, reverseB ? 1 : 0);
 }
 
 // ---------- OLED ----------
@@ -295,16 +337,31 @@ void handleWsMessage(uint8_t *data, size_t len) {
     return;
   }
 
+  // Реверс мотора: {"rev":"A"} или {"rev":"B"} — переключатель, применяется сразу к текущему val
+  if (doc.containsKey("rev")) {
+    const char* rch = doc["rev"] | "";
+    if (strcmp(rch, "A") == 0) {
+      reverseA = !reverseA;
+      prefs.putUChar("revA", reverseA ? 1 : 0);
+      applyMotorA(motorAVal);
+    } else if (strcmp(rch, "B") == 0) {
+      reverseB = !reverseB;
+      prefs.putUChar("revB", reverseB ? 1 : 0);
+      applyMotorB(motorBVal);
+    }
+    return;
+  }
+
   const char* ch = doc["ch"] | "";
   int val = doc["val"] | 0;
 
   if (currentMode == MODE_TANK) {
-    if (strcmp(ch, "A") == 0) { motorAVal = val; setMotor(TB_AIN1, TB_AIN2, LEDC_CH_A, val); }
-    else if (strcmp(ch, "B") == 0) { motorBVal = val; setMotor(TB_BIN1, TB_BIN2, LEDC_CH_B, val); }
+    if (strcmp(ch, "A") == 0) applyMotorA(val);
+    else if (strcmp(ch, "B") == 0) applyMotorB(val);
   } else { // MODE_CAR
-    if (strcmp(ch, "A") == 0) { motorAVal = val; setMotor(TB_AIN1, TB_AIN2, LEDC_CH_A, val); }      // drive
-    else if (strcmp(ch, "B") == 0) { motorBVal = val; setMotor(TB_BIN1, TB_BIN2, LEDC_CH_B, val); } // accessory
-    else if (strcmp(ch, "S") == 0) applySteer(val);                                                 // steer
+    if (strcmp(ch, "A") == 0) applyMotorA(val);       // drive
+    else if (strcmp(ch, "B") == 0) applyMotorB(val);  // accessory
+    else if (strcmp(ch, "S") == 0) applySteer(val);   // steer
   }
 }
 
@@ -312,7 +369,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
                AwsEventType type, void *arg, uint8_t *data, size_t len) {
   if (type == WS_EVT_CONNECT) {
     // сразу отдаём статус новому клиенту, не дожидаясь секундного таймера
-    char buf[96];
+    char buf[128];
     buildStatus(buf, sizeof(buf));
     client->text(buf);
   } else if (type == WS_EVT_DATA) {
@@ -425,6 +482,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
   color:var(--text);font-weight:700;font-size:14px;cursor:pointer}
 .aux-btn:active{background:var(--blue-dk)}
 
+/* кнопка реверса — привязана к каналу (data-ch), одинаковое состояние во всех режимах */
+.rev-btn{margin-top:6px;padding:5px 10px;border-radius:10px;background:var(--panel2);border:1px solid var(--border);
+  color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.03em;cursor:pointer;white-space:nowrap}
+.rev-btn.active{background:rgba(59,130,246,.18);border-color:var(--blue);color:var(--blue)}
+
 /* правая колонка классики */
 .side{width:300px;align-self:stretch;display:flex;flex-direction:column;justify-content:space-between;gap:8px}
 .field{background:rgba(2,6,15,.55);padding:8px 10px;border-radius:16px;border:1px solid var(--border)}
@@ -438,6 +500,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
 .hidden{display:none !important}
 .gear{transform-box:fill-box;transform-origin:center}
 .wheel{transform-box:fill-box;transform-origin:center;transition:transform .08s ease-out}
+
+/* иконка доп. мотора: пульсирующая молния */
+@keyframes boltPulse{0%,100%{opacity:.55}50%{opacity:1}}
+.bolt-glow{filter:drop-shadow(0 0 5px #22d3ee)}
+.bolt-pulse{animation:boltPulse 1s ease-in-out infinite}
 
 .footer{flex:none;background:rgba(20,24,32,.9);border:1px solid var(--border);border-radius:14px;
   padding:6px 12px;display:flex;justify-content:space-between;align-items:center}
@@ -471,7 +538,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
       <div>
         <div class="brand-title">Lego Control Center</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-address">192.168.4.1</span></div>
-        <div class="brand-ver">(alpha 0.0.7a)</div>
+        <div class="brand-ver">(alpha 0.0.7b)</div>
       </div>
     </div>
     <div class="mode-switch">
@@ -509,6 +576,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
                  oninput="updateTank('A',this.value)"
                  onmouseup="resetSlider('slider-left','A',updateTank)" ontouchend="resetSlider('slider-left','A',updateTank)">
         </div>
+        <button class="rev-btn" data-ch="A" onclick="toggleRev('A')">&#8644; РЕВЕРС</button>
       </div>
 
       <div class="col">
@@ -550,6 +618,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
                  oninput="updateTank('B',this.value)"
                  onmouseup="resetSlider('slider-right','B',updateTank)" ontouchend="resetSlider('slider-right','B',updateTank)">
         </div>
+        <button class="rev-btn" data-ch="B" onclick="toggleRev('B')">&#8644; РЕВЕРС</button>
       </div>
     </div>
   </main>
@@ -564,6 +633,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
                  oninput="updateDrive('A',this.value)"
                  onmouseup="resetSlider('slider-drive','A',updateDrive)" ontouchend="resetSlider('slider-drive','A',updateDrive)">
         </div>
+        <button class="rev-btn" data-ch="A" onclick="toggleRev('A')">&#8644; РЕВЕРС</button>
       </div>
 
       <div class="col">
@@ -571,20 +641,25 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
           <rect x="70" y="20" width="100" height="160" rx="18" fill="#1b2029" stroke="#2a3140" stroke-width="3"/>
           <polygon id="c-fwd" points="120,38 105,55 135,55" fill="#2a3140"/>
           <polygon id="c-rev" points="120,162 105,145 135,145" fill="#2a3140"/>
-          <g id="c-gear" class="gear" transform="translate(120,100)">
-            <circle cx="0" cy="0" r="13" fill="#0d0f12" stroke="#22d3ee" stroke-width="2.5"/>
-            <circle cx="0" cy="0" r="5" fill="#1b2029" stroke="#22d3ee" stroke-width="1.5"/>
-            <g fill="#22d3ee">
-              <rect x="-2.5" y="-19" width="5" height="5" rx="1"/>
-              <rect x="-2.5" y="14" width="5" height="5" rx="1"/>
-              <rect x="-19" y="-2.5" width="5" height="5" rx="1"/>
-              <rect x="14" y="-2.5" width="5" height="5" rx="1"/>
-              <rect x="-14" y="-14" width="5" height="5" rx="1" transform="rotate(45)"/>
-              <rect x="9" y="9" width="5" height="5" rx="1" transform="rotate(45)"/>
-              <rect x="-14" y="9" width="5" height="5" rx="1" transform="rotate(-45)"/>
-              <rect x="9" y="-14" width="5" height="5" rx="1" transform="rotate(-45)"/>
+
+          <!-- Иконка доп. мотора: корпус + молния (пульсирует при активности) + вращающиеся стрелки -->
+          <g transform="translate(120,100)">
+            <rect x="-30" y="-5" width="14" height="10" rx="5" fill="#1b2029" stroke="#2a3140"/>
+            <rect x="16" y="-5" width="14" height="10" rx="5" fill="#1b2029" stroke="#2a3140"/>
+            <rect x="-6" y="-20" width="12" height="6" rx="3" fill="#1b2029"/>
+            <rect x="-16" y="-14" width="32" height="28" rx="8" fill="#1b2029" stroke="#2a3140" stroke-width="2"/>
+            <polygon id="aux-bolt" points="1,-10 -6,2 0,2 -3,10 7,-3 1,-3" fill="#2a3140"/>
+
+            <g id="aux-arrow-l" class="gear" transform="translate(-34,0)">
+              <path id="aux-arrow-l-path" d="M -9,0 A 9 9 0 1 1 6,7.8" stroke="#2a3140" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+              <polygon id="aux-arrow-l-head" points="6,7.8 12,6 9,1" fill="#2a3140"/>
+            </g>
+            <g id="aux-arrow-r" class="gear" transform="translate(34,0)">
+              <path id="aux-arrow-r-path" d="M -9,0 A 9 9 0 1 1 6,7.8" stroke="#2a3140" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+              <polygon id="aux-arrow-r-head" points="6,7.8 12,6 9,1" fill="#2a3140"/>
             </g>
           </g>
+
           <g id="c-fl" class="wheel" transform="translate(36,45)"><rect x="-11" y="-20" width="22" height="40" rx="6" fill="#0d0f12" stroke="#3b82f6" stroke-width="2"/></g>
           <g id="c-fr" class="wheel" transform="translate(204,45)"><rect x="-11" y="-20" width="22" height="40" rx="6" fill="#0d0f12" stroke="#3b82f6" stroke-width="2"/></g>
           <g><rect x="25" y="135" width="22" height="45" rx="6" fill="#0d0f12" stroke="#2a3140" stroke-width="2"/></g>
@@ -613,6 +688,10 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
             <button class="mini-btn" onclick="adjTrim(10)">+</button>
             <span class="lbl" style="margin-left:6px">Макс.&#176;</span>
             <input type="number" class="num" id="maxdeg-input" min="5" max="90" value="45" onchange="setMaxDeg(this.value)">
+          </div>
+          <div class="cal">
+            <span class="lbl">Реверс мотора B</span>
+            <button class="rev-btn" data-ch="B" onclick="toggleRev('B')">&#8644;</button>
           </div>
         </div>
         <div>
@@ -692,7 +771,7 @@ setInterval(function(){
   for (var ch in state) ws.send(JSON.stringify({ch:ch, val:state[ch]}));
 }, 150);
 
-// ---------- статус от платы: Wi-Fi, батарея, режим ----------
+// ---------- статус от платы: Wi-Fi, батарея, режим, реверс ----------
 function onStatus(ev){
   var d;
   try { d = JSON.parse(ev.data); } catch(e){ return; }
@@ -700,6 +779,8 @@ function onStatus(ev){
   updateWifi(d.r);
   updateBattery(d.v, d.p);
   if (typeof d.m === 'number' && d.m !== curMode && Date.now() > modeHoldUntil) applyMode(d.m);
+  if (typeof d.ra === 'number') { revState.A = !!d.ra; updateRevButtons(); }
+  if (typeof d.rb === 'number') { revState.B = !!d.rb; updateRevButtons(); }
 }
 
 function updateWifi(r){
@@ -808,23 +889,47 @@ function updateSteer(ch, val){
   document.getElementById('c-fr').style.transform = 'translate(204px,45px) rotate(' + deg + 'deg)';
 }
 
-var gearAngle = 0, auxSpeed = 0, animId = null;
-function animateGear(){
+// ---------- доп. мотор: иконка с молнией и вращающимися стрелками ----------
+var auxAngle = 0, auxSpeed = 0, auxAnimId = null;
+function animateAux(){
   if (Math.abs(auxSpeed) > 0){
-    gearAngle += auxSpeed * 0.03;
-    document.getElementById('c-gear').style.transform = 'translate(120px,100px) rotate(' + gearAngle + 'deg)';
-    animId = requestAnimationFrame(animateGear);
-  } else { animId = null; }
+    auxAngle += auxSpeed * 0.12; // скорость вращения индикатора (не самого мотора)
+    document.getElementById('aux-arrow-l').style.transform = 'translate(-34px,0) rotate(' + auxAngle + 'deg)';
+    document.getElementById('aux-arrow-r').style.transform = 'translate(34px,0) rotate(' + auxAngle + 'deg)';
+    auxAnimId = requestAnimationFrame(animateAux);
+  } else { auxAnimId = null; }
 }
 function updateAux(ch, val){
   send(ch, val);
   document.getElementById('val-aux').textContent = val + '%';
   auxSpeed = parseInt(val);
-  if (Math.abs(auxSpeed) > 0 && !animId) animId = requestAnimationFrame(animateGear);
+  var active = Math.abs(auxSpeed) > 0;
+  var bolt = document.getElementById('aux-bolt');
+  bolt.classList.toggle('bolt-glow', active);
+  bolt.classList.toggle('bolt-pulse', active);
+  var col = active ? '#22d3ee' : '#2a3140';
+  document.getElementById('aux-arrow-l-path').setAttribute('stroke', col);
+  document.getElementById('aux-arrow-l-head').setAttribute('fill', col);
+  document.getElementById('aux-arrow-r-path').setAttribute('stroke', col);
+  document.getElementById('aux-arrow-r-head').setAttribute('fill', col);
+  if (active && !auxAnimId) auxAnimId = requestAnimationFrame(animateAux);
 }
 
 // Кнопки 1-4 пока без функций. Сюда потом подключим команды (например свет).
 function auxBtn(n){ }
+
+// ---------- реверс моторов (привязан к каналу, не к режиму) ----------
+var revState = {A:false, B:false};
+
+function toggleRev(ch){
+  revState[ch] = !revState[ch]; // применится по факту сервером, но обновим сразу для отклика
+  updateRevButtons();
+  if (wsOpen()) ws.send(JSON.stringify({rev: ch}));
+}
+function updateRevButtons(){
+  document.querySelectorAll('.rev-btn[data-ch="A"]').forEach(function(b){ b.classList.toggle('active', revState.A); });
+  document.querySelectorAll('.rev-btn[data-ch="B"]').forEach(function(b){ b.classList.toggle('active', revState.B); });
+}
 
 // ---------- калибровка руля ----------
 var trimValue = 0; // мкс, абсолютное смещение от 1500 — плата хранит то же самое значение
@@ -841,12 +946,15 @@ function setMaxDeg(v){
   if (wsOpen()) ws.send(JSON.stringify({maxdeg: deg}));
 }
 
-// Подтягиваем сохранённую на плате калибровку
+// Подтягиваем сохранённую на плате калибровку (руль + реверс)
 function loadCalib(){
   fetch('/calib').then(function(r){ return r.json(); }).then(function(c){
     trimValue = c.trim;
     document.getElementById('val-trim').textContent = trimValue;
     document.getElementById('maxdeg-input').value = c.maxdeg;
+    revState.A = !!c.revA;
+    revState.B = !!c.revB;
+    updateRevButtons();
   }).catch(function(){});
 }
 
@@ -886,6 +994,7 @@ void setup() {
 
   loadMode();
   loadSteerCal();
+  loadMotorRev();
 
   WiFi.softAP("LegoTechnic", "12345678"); // TODO: сменить пароль
 
@@ -896,7 +1005,9 @@ void setup() {
   });
   server.on("/calib", HTTP_GET, [](AsyncWebServerRequest *req) {
     String json = "{\"trim\":" + String(steerCenterUs - 1500) +
-                  ",\"maxdeg\":" + String(steerMaxAngleDeg) + "}";
+                  ",\"maxdeg\":" + String(steerMaxAngleDeg) +
+                  ",\"revA\":" + String(reverseA ? 1 : 0) +
+                  ",\"revB\":" + String(reverseB ? 1 : 0) + "}";
     req->send(200, "application/json", json);
   });
 
@@ -922,7 +1033,7 @@ void loop() {
     updateStatus();
     updateDisplay(ws.count());
     if (ws.count() > 0) {
-      char buf[96];
+      char buf[128];
       buildStatus(buf, sizeof(buf));
       ws.textAll(buf);
     }
