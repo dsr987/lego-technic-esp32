@@ -1,4 +1,4 @@
-// ESP32 Lego Technic motorization — Версия: 0.0.7b
+// ESP32 Lego Technic motorization — Версия: 0.0.7c
 // Библиотеки: ESPAsyncWebServer 3.1.0 (форк lacamera из Library Manager), AsyncTCP 1.1.4, ArduinoJson,
 // Adafruit_SSD1306, Adafruit_GFX, Adafruit_BusIO, ESP32Servo, ElegantOTA (ayushsharma82)
 // ESP32 core: 2.0.9 — зафиксирован сознательно (конфликт ledc API и веб-сервера на core 3.x).
@@ -31,18 +31,13 @@
  *
  * GPIO ESP32 (сигнальные, тонкие провода) — см. комментарии на каждой строке ниже.
  */
-// Что исправлено и добавлено в 0.0.7b (по итогам альфа-теста 0.0.7a):
-// - Заряд батареи (%) на OLED и в GUI обновляется только в покое (все каналы = 0, выдержка 400мс) —
-//   просадка под нагрузкой моторов больше не искажает показания заряда. Напряжение (В) — как и было,
-//   живой замер каждую секунду, это честный вольтметр, не путать с зарядом.
-// - Иконка доп. мотора (B) в классическом режиме перерисована: корпус мотора с молнией по референсу
-//   пользователя, две вращающиеся стрелки по бокам как индикатор скорости/направления вращения,
-//   молния пульсирует свечением, пока мотор активен.
-// - Реверс вращения моторов: флаги reverseA/reverseB, привязаны к физическому каналу (не к режиму),
-//   переключаются кнопками под слайдерами (танк: обе гусеницы; классика: газ и доп. мотор),
-//   сохраняются в NVS, применяются сразу по нажатию без ожидания движения слайдера.
-// (альфа-тест 0.0.7a подтвердил: GUI без наложений и обрезаний, Wi-Fi/батарея в шапке работают,
-//  сигнал и напряжение близки к показаниям мультиметра)
+// Что исправлено в 0.0.7c (по итогам альфа-теста 0.0.7b):
+// - Иконка доп. мотора (B) окончательно упрощена: дуговые вращающиеся стрелки и обе "таблетки"-
+//   заглушки убраны. Теперь это просто стрелка влево — корпус мотора с молнией — стрелка вправо.
+//   Стрелки не крутятся, только загораются (меняют цвет) в сторону текущего направления вращения
+//   и гаснут в нуле. Молния и её пульсация — без изменений, работали нормально.
+// (альфа-тест 0.0.7b подтвердил: реверс применяется мгновенно и синхронно между режимами,
+//  заряд(%) действительно "замораживается" под нагрузкой и обновляется после остановки)
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -498,7 +493,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
 .num{width:56px;height:30px;background:#0d0f12;color:#e2e8f0;border:1px solid var(--border);border-radius:8px;padding:4px}
 
 .hidden{display:none !important}
-.gear{transform-box:fill-box;transform-origin:center}
 .wheel{transform-box:fill-box;transform-origin:center;transition:transform .08s ease-out}
 
 /* иконка доп. мотора: пульсирующая молния */
@@ -538,7 +532,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
       <div>
         <div class="brand-title">Lego Control Center</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-address">192.168.4.1</span></div>
-        <div class="brand-ver">(alpha 0.0.7b)</div>
+        <div class="brand-ver">(alpha 0.0.7c)</div>
       </div>
     </div>
     <div class="mode-switch">
@@ -642,22 +636,13 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
           <polygon id="c-fwd" points="120,38 105,55 135,55" fill="#2a3140"/>
           <polygon id="c-rev" points="120,162 105,145 135,145" fill="#2a3140"/>
 
-          <!-- Иконка доп. мотора: корпус + молния (пульсирует при активности) + вращающиеся стрелки -->
+          <!-- Иконка доп. мотора: стрелка влево — корпус с молнией — стрелка вправо. Стрелки не крутятся,
+               просто загораются в сторону текущего направления вращения. -->
           <g transform="translate(120,100)">
-            <rect x="-30" y="-5" width="14" height="10" rx="5" fill="#1b2029" stroke="#2a3140"/>
-            <rect x="16" y="-5" width="14" height="10" rx="5" fill="#1b2029" stroke="#2a3140"/>
-            <rect x="-6" y="-20" width="12" height="6" rx="3" fill="#1b2029"/>
+            <polygon id="aux-arrow-l" points="-44,0 -30,-9 -30,9" fill="#2a3140"/>
             <rect x="-16" y="-14" width="32" height="28" rx="8" fill="#1b2029" stroke="#2a3140" stroke-width="2"/>
             <polygon id="aux-bolt" points="1,-10 -6,2 0,2 -3,10 7,-3 1,-3" fill="#2a3140"/>
-
-            <g id="aux-arrow-l" class="gear" transform="translate(-34,0)">
-              <path id="aux-arrow-l-path" d="M -9,0 A 9 9 0 1 1 6,7.8" stroke="#2a3140" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-              <polygon id="aux-arrow-l-head" points="6,7.8 12,6 9,1" fill="#2a3140"/>
-            </g>
-            <g id="aux-arrow-r" class="gear" transform="translate(34,0)">
-              <path id="aux-arrow-r-path" d="M -9,0 A 9 9 0 1 1 6,7.8" stroke="#2a3140" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-              <polygon id="aux-arrow-r-head" points="6,7.8 12,6 9,1" fill="#2a3140"/>
-            </g>
+            <polygon id="aux-arrow-r" points="44,0 30,-9 30,9" fill="#2a3140"/>
           </g>
 
           <g id="c-fl" class="wheel" transform="translate(36,45)"><rect x="-11" y="-20" width="22" height="40" rx="6" fill="#0d0f12" stroke="#3b82f6" stroke-width="2"/></g>
@@ -889,30 +874,17 @@ function updateSteer(ch, val){
   document.getElementById('c-fr').style.transform = 'translate(204px,45px) rotate(' + deg + 'deg)';
 }
 
-// ---------- доп. мотор: иконка с молнией и вращающимися стрелками ----------
-var auxAngle = 0, auxSpeed = 0, auxAnimId = null;
-function animateAux(){
-  if (Math.abs(auxSpeed) > 0){
-    auxAngle += auxSpeed * 0.12; // скорость вращения индикатора (не самого мотора)
-    document.getElementById('aux-arrow-l').style.transform = 'translate(-34px,0) rotate(' + auxAngle + 'deg)';
-    document.getElementById('aux-arrow-r').style.transform = 'translate(34px,0) rotate(' + auxAngle + 'deg)';
-    auxAnimId = requestAnimationFrame(animateAux);
-  } else { auxAnimId = null; }
-}
+// ---------- доп. мотор: молния + статичные стрелки направления ----------
 function updateAux(ch, val){
   send(ch, val);
   document.getElementById('val-aux').textContent = val + '%';
-  auxSpeed = parseInt(val);
-  var active = Math.abs(auxSpeed) > 0;
+  var n = parseInt(val);
+  var active = n !== 0;
   var bolt = document.getElementById('aux-bolt');
   bolt.classList.toggle('bolt-glow', active);
   bolt.classList.toggle('bolt-pulse', active);
-  var col = active ? '#22d3ee' : '#2a3140';
-  document.getElementById('aux-arrow-l-path').setAttribute('stroke', col);
-  document.getElementById('aux-arrow-l-head').setAttribute('fill', col);
-  document.getElementById('aux-arrow-r-path').setAttribute('stroke', col);
-  document.getElementById('aux-arrow-r-head').setAttribute('fill', col);
-  if (active && !auxAnimId) auxAnimId = requestAnimationFrame(animateAux);
+  document.getElementById('aux-arrow-l').setAttribute('fill', n < 0 ? '#22d3ee' : '#2a3140');
+  document.getElementById('aux-arrow-r').setAttribute('fill', n > 0 ? '#22d3ee' : '#2a3140');
 }
 
 // Кнопки 1-4 пока без функций. Сюда потом подключим команды (например свет).
