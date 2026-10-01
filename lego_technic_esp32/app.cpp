@@ -1,10 +1,12 @@
-// ESP32 Lego Technic motorization — Версия: 0.0.9 "LED Update"
+// ESP32 Lego Technic motorization — Версия: 0.1.0 beta
 // Библиотеки: ESPAsyncWebServer 3.1.0 (форк lacamera из Library Manager), AsyncTCP 1.1.4, ArduinoJson,
 // Adafruit_SSD1306, Adafruit_GFX, Adafruit_BusIO, ESP32Servo, ElegantOTA (ayushsharma82)
 // ESP32 core: 2.0.9 — зафиксирован сознательно (конфликт ledc API и веб-сервера на core 3.x).
 // Сборка/заливка: arduino-cli + .bat-скрипт (компилирует под esp32:esp32@2.0.9, находит порт, шьёт).
 // ElegantOTA: в файле <библиотеки>/ElegantOTA/src/ElegantOTA.h
 // "#define ELEGANTOTA_USE_ASYNC_WEBSERVER 0" -> "...1" (правится один раз, вручную).
+//
+// Переход в бета-тест. Начиная с этой версии — маркировка beta, версии 0.0.x были alpha.
 
 /*
  * ПОЛНАЯ СХЕМА ПОДКЛЮЧЕНИЯ (включая то, что не идёт на GPIO ESP32)
@@ -29,23 +31,25 @@
  * LED (3-pin разъём: левый/GND/правый):
  *   GPIO32 -> резистор ~150Ω -> анод переднего (зелёная иконка) светодиода -> катод -> GND
  *   GPIO33 -> резистор ~150Ω -> анод заднего (красная иконка) светодиода -> катод -> GND
- *   Резистор ставится в разрыв сигнального провода, не на GND. Подобрать номинал под конкретный
- *   светодиод (см. комментарий в шапке версии 0.0.9) — ориентир ~8-10мА, не выше 15-20мА на пин.
  *
  * Делитель напряжения батареи (для BATT_PIN):
  *   Шина (+) -> R1(100к) -> точка замера -> R2(39к) -> GND ; точка замера -> BATT_PIN
  *
  * GPIO ESP32 (сигнальные, тонкие провода) — см. комментарии на каждой строке ниже.
  */
-// Что добавлено в 0.0.9 "LED Update":
-// - Управление светом: GPIO32 (передние, зелёная иконка) и GPIO33 (задние, красная иконка).
-//   Простое вкл/выкл через кнопки 1 и 2 в GUI (были заглушками), состояние сохраняется в NVS,
-//   одинаково в обоих режимах (танк/классика) — привязано к физическому выходу, не к режиму,
-//   по той же логике, что и реверс моторов. Кнопки 3/4 остаются заглушками без функций.
-// - Иконки лампочек нарисованы прямо на кнопках 1/2: тусклые в выключенном состоянии,
-//   яркие с подсветкой во включённом.
-// (0.0.8 Cleanup: убран мёртвый CSS; 0.0.7c ещё не протестирован на реальном железе —
-//  плата вышла из строя при сборке, новая прошивка проверялась только компиляцией)
+// Что добавлено в 0.1.0 beta:
+// - Имитация оборотов двигателя (кнопка 3, только классический режим, иконка двигателя):
+//   по включении доп. мотор (B) сразу крутится на 33% мощности (холостой ход), дальше его
+//   скорость растёт пропорционально |значение газа| (0..100% газа в любую сторону -> 33..100%
+//   на моторе B). Направление вращения мотора B не меняется от направления газа — его задаёт
+//   только кнопка реверса. Состояние НЕ сохраняется между включениями (это активный режим
+//   вождения, а не настройка железа) — после каждой перезагрузки/переподключения выключено,
+//   включается заново вручную. При переключении в танковый режим гасится автоматически.
+// - Из-за этой функции скорректирована логика "заморозки заряда батареи" (0.0.7b): пока
+//   имитация активна, канал B исключён из условия "все каналы на нуле" — иначе заряд никогда
+//   бы не обновлялся, т.к. канал B в этом режиме никогда не бывает в нуле.
+// (0.0.9 LED Update подтверждён на реальном железе: свет работает, реверс работает, серва не
+//  дребезжит, моторы крутятся штатно; код чист, альфа-тест пройден полностью)
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -133,6 +137,11 @@ void applyLeds() {
   digitalWrite(LED_REAR_PIN, ledRearOn ? HIGH : LOW);
 }
 
+// ---------- Имитация оборотов двигателя (только MODE_CAR) ----------
+// НЕ сохраняется в NVS намеренно — это активный режим вождения, а не настройка железа;
+// после перезагрузки/переподключения всегда выключено, включается заново вручную.
+bool engineSimOn = false;
+
 // ---------- Калибровка руля ----------
 // us = центр + (val/100) * maxAngleDeg * (1000/180)
 // 1000/180 — стандартная шкала хобби-серв: 1000мкс на 180°.
@@ -162,20 +171,30 @@ void setMotor(int in1, int in2, int pwmChannel, int val) {
   ledcWrite(pwmChannel, duty);
 }
 
-void applyMotorA(int val) {
-  motorAVal = val; // сохраняем "как есть", реверс — только на выходе в железо
-  setMotor(TB_AIN1, TB_AIN2, LEDC_CH_A, reverseA ? -val : val);
-}
 void applyMotorB(int val) {
   motorBVal = val;
   setMotor(TB_BIN1, TB_BIN2, LEDC_CH_B, reverseB ? -val : val);
 }
 
+// Пересчитывает мотор B из текущего газа (motorAVal), когда активна имитация оборотов.
+// Направление вращения мотора B фиксировано (только кнопкой реверса), меняется лишь скорость.
+void applyEngineSim() {
+  if (!engineSimOn || currentMode != MODE_CAR) return;
+  int aux = (int)(33.0 + 67.0 * abs(motorAVal) / 100.0 + 0.5); // 33..100%, всегда положительное
+  applyMotorB(aux);
+}
+
+void applyMotorA(int val) {
+  motorAVal = val; // сохраняем "как есть", реверс — только на выходе в железо
+  setMotor(TB_AIN1, TB_AIN2, LEDC_CH_A, reverseA ? -val : val);
+  applyEngineSim(); // если имитация активна — скорость мотора B пересчитывается от газа
+}
+
 void stopAll() {
   applyMotorA(0);
-  applyMotorB(0);
+  if (!engineSimOn) applyMotorB(0); // если имитация активна, applyMotorA() уже выставил её сам
   steerServo.writeMicroseconds(steerCenterUs); // стоп/центр (с учётом калибровки)
-  motorAVal = motorBVal = servoVal = 0;
+  servoVal = 0;
 }
 
 // ---------- Батарея и статус ----------
@@ -236,7 +255,12 @@ int getBestRssi() {
 void updateStatus() {
   battV = readBatteryVoltage(); // честный вольтметр, живой всегда
 
-  bool atRest = (motorAVal == 0 && motorBVal == 0 && servoVal == 0);
+  // Пока активна имитация оборотов, канал B намеренно не в нуле (холостой ход 33%) —
+  // это не повод считать модель "под нагрузкой", исключаем B из условия покоя.
+  bool atRest = (engineSimOn && currentMode == MODE_CAR)
+                  ? (motorAVal == 0 && servoVal == 0)
+                  : (motorAVal == 0 && motorBVal == 0 && servoVal == 0);
+
   if (atRest) {
     if (!wasAtRest) { restStartMillis = millis(); wasAtRest = true; }
     if (firstStatusRun || millis() - restStartMillis > REST_SETTLE_MS) {
@@ -257,11 +281,12 @@ void updateStatus() {
 }
 
 // Статус для веб-страницы: v — вольты (живой), p — % заряда (только в покое), r — RSSI,
-// m — режим, c — WS-клиенты, ra/rb — реверс каналов A/B, lf/lr — состояние LED
+// m — режим, c — WS-клиенты, ra/rb — реверс каналов A/B, lf/lr — состояние LED, es — имитация оборотов
 void buildStatus(char *buf, size_t n) {
-  snprintf(buf, n, "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,\"m\":%d,\"c\":%d,\"ra\":%d,\"rb\":%d,\"lf\":%d,\"lr\":%d}",
+  snprintf(buf, n, "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,\"m\":%d,\"c\":%d,\"ra\":%d,\"rb\":%d,\"lf\":%d,\"lr\":%d,\"es\":%d}",
            battV, battPct, wifiRssi, (int)currentMode, (int)ws.count(),
-           reverseA ? 1 : 0, reverseB ? 1 : 0, ledFrontOn ? 1 : 0, ledRearOn ? 1 : 0);
+           reverseA ? 1 : 0, reverseB ? 1 : 0, ledFrontOn ? 1 : 0, ledRearOn ? 1 : 0,
+           engineSimOn ? 1 : 0);
 }
 
 // ---------- OLED ----------
@@ -337,6 +362,7 @@ void handleWsMessage(uint8_t *data, size_t len) {
 
   if (doc.containsKey("mode")) {
     saveMode((Mode)doc["mode"].as<int>());
+    engineSimOn = false; // имитация оборотов имеет смысл только в классике — гасим при смене режима
     stopAll();
     return;
   }
@@ -366,7 +392,8 @@ void handleWsMessage(uint8_t *data, size_t len) {
     } else if (strcmp(rch, "B") == 0) {
       reverseB = !reverseB;
       prefs.putUChar("revB", reverseB ? 1 : 0);
-      applyMotorB(motorBVal);
+      if (engineSimOn && currentMode == MODE_CAR) applyEngineSim();
+      else applyMotorB(motorBVal);
     }
     return;
   }
@@ -385,6 +412,16 @@ void handleWsMessage(uint8_t *data, size_t len) {
     return;
   }
 
+  // Имитация оборотов двигателя: {"eng":1} — переключатель, только в классическом режиме
+  if (doc.containsKey("eng")) {
+    if (currentMode == MODE_CAR) {
+      engineSimOn = !engineSimOn;
+      if (engineSimOn) applyEngineSim();
+      else applyMotorB(0);
+    }
+    return;
+  }
+
   const char* ch = doc["ch"] | "";
   int val = doc["val"] | 0;
 
@@ -392,9 +429,9 @@ void handleWsMessage(uint8_t *data, size_t len) {
     if (strcmp(ch, "A") == 0) applyMotorA(val);
     else if (strcmp(ch, "B") == 0) applyMotorB(val);
   } else { // MODE_CAR
-    if (strcmp(ch, "A") == 0) applyMotorA(val);       // drive
-    else if (strcmp(ch, "B") == 0) applyMotorB(val);  // accessory
-    else if (strcmp(ch, "S") == 0) applySteer(val);   // steer
+    if (strcmp(ch, "A") == 0) applyMotorA(val);                     // drive (пересчитает и B, если имитация активна)
+    else if (strcmp(ch, "B") == 0 && !engineSimOn) applyMotorB(val); // accessory — игнорируем ручной слайдер, пока имитация рулит каналом сама
+    else if (strcmp(ch, "S") == 0) applySteer(val);                 // steer
   }
 }
 
@@ -402,7 +439,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
                AwsEventType type, void *arg, uint8_t *data, size_t len) {
   if (type == WS_EVT_CONNECT) {
     // сразу отдаём статус новому клиенту, не дожидаясь секундного таймера
-    char buf[144];
+    char buf[160];
     buildStatus(buf, sizeof(buf));
     client->text(buf);
   } else if (type == WS_EVT_DATA) {
@@ -520,6 +557,10 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
 .led-btn[data-ch="F"].active svg{color:#10b981;filter:drop-shadow(0 0 5px #10b981)}
 .led-btn[data-ch="R"].active svg{color:#f43f5e;filter:drop-shadow(0 0 5px #f43f5e)}
 
+/* кнопка имитации оборотов — иконка двигателя, подсветка амброй, пока активна */
+.eng-btn svg{color:#3a4252;transition:color .15s,filter .15s}
+.eng-btn.active svg{color:#f59e0b;filter:drop-shadow(0 0 5px #f59e0b)}
+
 /* кнопка реверса — привязана к каналу (data-ch), одинаковое состояние во всех режимах */
 .rev-btn{margin-top:6px;padding:5px 10px;border-radius:10px;background:var(--panel2);border:1px solid var(--border);
   color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.03em;cursor:pointer;white-space:nowrap}
@@ -575,7 +616,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
       <div>
         <div class="brand-title">Lego Control Center</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-address">192.168.4.1</span></div>
-        <div class="brand-ver">(alpha 0.0.9)</div>
+        <div class="brand-ver">(beta 0.1.0)</div>
       </div>
     </div>
     <div class="mode-switch">
@@ -704,7 +745,14 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
           <button class="aux-btn led-btn" data-ch="R" onclick="toggleLed('R')" title="Задние фонари">
             <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="10" r="7" fill="currentColor"/><rect x="9" y="17" width="6" height="4" rx="1" fill="currentColor"/></svg>
           </button>
-          <button class="aux-btn" onclick="auxBtn(3)">3</button>
+          <button class="aux-btn eng-btn" id="eng-btn" onclick="toggleEngine()" title="Имитация оборотов двигателя">
+            <svg viewBox="0 0 24 24" width="18" height="18">
+              <rect x="4" y="9" width="13" height="9" rx="2" fill="currentColor"/>
+              <rect x="7" y="5" width="3" height="4" fill="currentColor"/>
+              <rect x="12" y="5" width="3" height="4" fill="currentColor"/>
+              <rect x="17" y="12" width="4" height="3" fill="currentColor"/>
+            </svg>
+          </button>
           <button class="aux-btn" onclick="auxBtn(4)">4</button>
         </div>
       </div>
@@ -807,7 +855,7 @@ setInterval(function(){
   for (var ch in state) ws.send(JSON.stringify({ch:ch, val:state[ch]}));
 }, 150);
 
-// ---------- статус от платы: Wi-Fi, батарея, режим, реверс, свет ----------
+// ---------- статус от платы: Wi-Fi, батарея, режим, реверс, свет, имитация оборотов ----------
 function onStatus(ev){
   var d;
   try { d = JSON.parse(ev.data); } catch(e){ return; }
@@ -819,6 +867,7 @@ function onStatus(ev){
   if (typeof d.rb === 'number') { revState.B = !!d.rb; updateRevButtons(); }
   if (typeof d.lf === 'number') { ledState.F = !!d.lf; updateLedButtons(); }
   if (typeof d.lr === 'number') { ledState.R = !!d.lr; updateLedButtons(); }
+  if (typeof d.es === 'number') { engineOn = !!d.es; updateEngineButton(); }
 }
 
 function updateWifi(r){
@@ -891,6 +940,7 @@ function applyMode(m){
   document.getElementById('classic-panel').classList.toggle('hidden', m !== 1);
   document.getElementById('btn-tank').classList.toggle('active', m === 0);
   document.getElementById('btn-classic').classList.toggle('active', m === 1);
+  if (m !== 1) { engineOn = false; updateEngineButton(); } // имитация оборотов есть только в классике
   fitSliders();
 }
 
@@ -917,6 +967,9 @@ function updateDrive(ch, val){
   var n = parseInt(val);
   document.getElementById('c-fwd').setAttribute('fill', n > 0 ? '#10b981' : '#2a3140');
   document.getElementById('c-rev').setAttribute('fill', n < 0 ? '#10b981' : '#2a3140');
+  // Пока активна имитация оборотов, сервер сам пересчитывает мотор B от газа —
+  // синхронно отражаем это и в интерфейсе, не дожидаясь отдельного пакета по каналу B.
+  if (engineOn) renderAuxFromEngine(n);
 }
 
 function updateSteer(ch, val){
@@ -928,10 +981,8 @@ function updateSteer(ch, val){
 }
 
 // ---------- доп. мотор: молния + статичные стрелки направления ----------
-function updateAux(ch, val){
-  send(ch, val);
-  document.getElementById('val-aux').textContent = val + '%';
-  var n = parseInt(val);
+function renderAux(n){
+  document.getElementById('val-aux').textContent = n + '%';
   var active = n !== 0;
   var bolt = document.getElementById('aux-bolt');
   bolt.classList.toggle('bolt-glow', active);
@@ -939,9 +990,41 @@ function updateAux(ch, val){
   document.getElementById('aux-arrow-l').setAttribute('fill', n < 0 ? '#22d3ee' : '#2a3140');
   document.getElementById('aux-arrow-r').setAttribute('fill', n > 0 ? '#22d3ee' : '#2a3140');
 }
+function updateAux(ch, val){
+  if (engineOn) return; // пока имитация активна, ручной слайдер доп. мотора не действует
+  send(ch, val);
+  renderAux(parseInt(val));
+}
+// Визуальное отражение автоматического мотора B, пока активна имитация оборотов.
+// Направление задаёт реверс (revState.B), сервер держит это же правило — здесь только индикация.
+function renderAuxFromEngine(driveVal){
+  var auxPct = Math.round(33 + 67 * Math.abs(driveVal) / 100);
+  var signed = revState.B ? -auxPct : auxPct;
+  document.getElementById('val-aux').textContent = auxPct + '%';
+  var bolt = document.getElementById('aux-bolt');
+  bolt.classList.add('bolt-glow', 'bolt-pulse');
+  document.getElementById('aux-arrow-l').setAttribute('fill', signed < 0 ? '#22d3ee' : '#2a3140');
+  document.getElementById('aux-arrow-r').setAttribute('fill', signed > 0 ? '#22d3ee' : '#2a3140');
+}
 
-// Кнопки 3/4 пока без функций — свободные заглушки под будущий функционал.
+// Кнопки 3 (в танке) и 4 пока без функций — свободные заглушки под будущий функционал.
 function auxBtn(n){ }
+
+// ---------- имитация оборотов двигателя (только классический режим) ----------
+var engineOn = false;
+
+function toggleEngine(){
+  if (curMode !== 1) return;
+  engineOn = !engineOn; // применится по факту сервером, но обновим сразу для отклика
+  updateEngineButton();
+  if (wsOpen()) ws.send(JSON.stringify({eng: 1}));
+  if (engineOn) renderAuxFromEngine(state.A || 0);
+  else renderAux(0);
+}
+function updateEngineButton(){
+  var b = document.getElementById('eng-btn');
+  if (b) b.classList.toggle('active', engineOn);
+}
 
 // ---------- свет (привязан к физическому выходу, не к режиму) ----------
 var ledState = {F:false, R:false};
@@ -1006,7 +1089,7 @@ function stopAll(){
   resetSlider('slider-right','B',updateTank);
   resetSlider('slider-drive','A',updateDrive);
   resetSlider('slider-steer','S',updateSteer);
-  resetSlider('slider-aux','B',updateAux);
+  if (!engineOn) resetSlider('slider-aux','B',updateAux);
 }
 
 fitSliders();
@@ -1081,7 +1164,7 @@ void loop() {
     updateStatus();
     updateDisplay(ws.count());
     if (ws.count() > 0) {
-      char buf[144];
+      char buf[160];
       buildStatus(buf, sizeof(buf));
       ws.textAll(buf);
     }
