@@ -1,4 +1,4 @@
-// ESP32 Lego Technic motorization — Версия: 0.0.8 (Cleanup)
+// ESP32 Lego Technic motorization — Версия: 0.0.9 "LED Update"
 // Библиотеки: ESPAsyncWebServer 3.1.0 (форк lacamera из Library Manager), AsyncTCP 1.1.4, ArduinoJson,
 // Adafruit_SSD1306, Adafruit_GFX, Adafruit_BusIO, ESP32Servo, ElegantOTA (ayushsharma82)
 // ESP32 core: 2.0.9 — зафиксирован сознательно (конфликт ledc API и веб-сервера на core 3.x).
@@ -14,7 +14,7 @@
  *   Шина (+) -> Mini360 IN+ ; Шина (-) -> Mini360 IN- ; Mini360 OUT (выставить 5В) -> ESP32 5V/VIN
  *   Шина (+) -> TB6612 VM ; Шина (-) -> TB6612 GND (напрямую, минуя Mini360 — до 8.4В в норме для TB6612)
  *   TB6612 VCC (логика, 3.3-5В) -> ESP32 3V3 или 5V (см. даташит модуля TB6612 — обычно VCC=5V ок)
- *   Общий GND: батарея/BMS/выключатель/Mini360/TB6612/ESP32/OLED/серва — единая точка (важно для стабильной работы АЦП)
+ *   Общий GND: батарея/BMS/выключатель/Mini360/TB6612/ESP32/OLED/серва/LED — единая точка (важно для стабильной работы АЦП)
  *
  * Моторы (силовые, толстые провода, 2-pin разъёмы):
  *   TB6612 AO1/AO2 -> Lego мотор A (канал A)
@@ -26,18 +26,26 @@
  * OLED (сигнальный, 4-pin разъём):
  *   VCC -> 3.3В (ESP32 3V3) ; GND -> общий GND ; SDA -> OLED_SDA ; SCL -> OLED_SCL
  *
+ * LED (3-pin разъём: левый/GND/правый):
+ *   GPIO32 -> резистор ~150Ω -> анод переднего (зелёная иконка) светодиода -> катод -> GND
+ *   GPIO33 -> резистор ~150Ω -> анод заднего (красная иконка) светодиода -> катод -> GND
+ *   Резистор ставится в разрыв сигнального провода, не на GND. Подобрать номинал под конкретный
+ *   светодиод (см. комментарий в шапке версии 0.0.9) — ориентир ~8-10мА, не выше 15-20мА на пин.
+ *
  * Делитель напряжения батареи (для BATT_PIN):
  *   Шина (+) -> R1(100к) -> точка замера -> R2(39к) -> GND ; точка замера -> BATT_PIN
  *
  * GPIO ESP32 (сигнальные, тонкие провода) — см. комментарии на каждой строке ниже.
  */
-// Что изменено в 0.0.8 (Cleanup, без функциональных изменений):
-// - Убрано мёртвое CSS-правило .gear — использовалось вращающимися стрелками/шестернёй доп.
-//   мотора в 0.0.6-0.0.7b, в 0.0.7c эти элементы заменены статичными полигонами без этого класса.
-// - Полный аудит кода (C++/HTML/JS) на неиспользуемые функции, переменные, #define, ID — больше
-//   ничего не найдено, дальше чистить нечего.
-// (альфа-тест 0.0.7c ожидается — новая иконка доп.мотора со статичными стрелками ещё не проверена
-//  на реальном железе из-за выхода из строя платы)
+// Что добавлено в 0.0.9 "LED Update":
+// - Управление светом: GPIO32 (передние, зелёная иконка) и GPIO33 (задние, красная иконка).
+//   Простое вкл/выкл через кнопки 1 и 2 в GUI (были заглушками), состояние сохраняется в NVS,
+//   одинаково в обоих режимах (танк/классика) — привязано к физическому выходу, не к режиму,
+//   по той же логике, что и реверс моторов. Кнопки 3/4 остаются заглушками без функций.
+// - Иконки лампочек нарисованы прямо на кнопках 1/2: тусклые в выключенном состоянии,
+//   яркие с подсветкой во включённом.
+// (0.0.8 Cleanup: убран мёртвый CSS; 0.0.7c ещё не протестирован на реальном железе —
+//  плата вышла из строя при сборке, новая прошивка проверялась только компиляцией)
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -71,6 +79,8 @@
 #define OLED_SCL  26  // OLED SSD1306 — линия тактирования I2C
 #define BATT_PIN  34  // Вход АЦП со среднего вывода делителя напряжения батареи (R1=100к сверху, R2=39к к GND).
                       // Вход-only пин (ADC1_CH6), выходом быть не может — здесь это не важно.
+#define LED_FRONT_PIN 32 // Передние LED (зелёная иконка, кнопка 1) — через резистор на GND
+#define LED_REAR_PIN  33 // Задние LED (красная иконка, кнопка 2) — через резистор на GND
 
 // Делитель батареи: R1(верх, к батарее)=100k, R2(низ, к GND)=39k
 // factor = R2/(R1+R2) = 39/139
@@ -107,6 +117,20 @@ bool reverseB = false;
 void loadMotorRev() {
   reverseA = prefs.getUChar("revA", 0) != 0;
   reverseB = prefs.getUChar("revB", 0) != 0;
+}
+
+// ---------- LED (фары) ----------
+// Как и реверс — привязаны к физическому выходу, не к режиму.
+bool ledFrontOn = false;
+bool ledRearOn  = false;
+
+void loadLeds() {
+  ledFrontOn = prefs.getUChar("ledF", 0) != 0;
+  ledRearOn  = prefs.getUChar("ledR", 0) != 0;
+}
+void applyLeds() {
+  digitalWrite(LED_FRONT_PIN, ledFrontOn ? HIGH : LOW);
+  digitalWrite(LED_REAR_PIN, ledRearOn ? HIGH : LOW);
 }
 
 // ---------- Калибровка руля ----------
@@ -233,11 +257,11 @@ void updateStatus() {
 }
 
 // Статус для веб-страницы: v — вольты (живой), p — % заряда (только в покое), r — RSSI,
-// m — режим, c — WS-клиенты, ra/rb — реверс каналов A/B
+// m — режим, c — WS-клиенты, ra/rb — реверс каналов A/B, lf/lr — состояние LED
 void buildStatus(char *buf, size_t n) {
-  snprintf(buf, n, "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,\"m\":%d,\"c\":%d,\"ra\":%d,\"rb\":%d}",
+  snprintf(buf, n, "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,\"m\":%d,\"c\":%d,\"ra\":%d,\"rb\":%d,\"lf\":%d,\"lr\":%d}",
            battV, battPct, wifiRssi, (int)currentMode, (int)ws.count(),
-           reverseA ? 1 : 0, reverseB ? 1 : 0);
+           reverseA ? 1 : 0, reverseB ? 1 : 0, ledFrontOn ? 1 : 0, ledRearOn ? 1 : 0);
 }
 
 // ---------- OLED ----------
@@ -347,6 +371,20 @@ void handleWsMessage(uint8_t *data, size_t len) {
     return;
   }
 
+  // Свет: {"led":"F"} или {"led":"R"} — переключатель
+  if (doc.containsKey("led")) {
+    const char* lch = doc["led"] | "";
+    if (strcmp(lch, "F") == 0) {
+      ledFrontOn = !ledFrontOn;
+      prefs.putUChar("ledF", ledFrontOn ? 1 : 0);
+    } else if (strcmp(lch, "R") == 0) {
+      ledRearOn = !ledRearOn;
+      prefs.putUChar("ledR", ledRearOn ? 1 : 0);
+    }
+    applyLeds();
+    return;
+  }
+
   const char* ch = doc["ch"] | "";
   int val = doc["val"] | 0;
 
@@ -364,7 +402,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
                AwsEventType type, void *arg, uint8_t *data, size_t len) {
   if (type == WS_EVT_CONNECT) {
     // сразу отдаём статус новому клиенту, не дожидаясь секундного таймера
-    char buf[128];
+    char buf[144];
     buildStatus(buf, sizeof(buf));
     client->text(buf);
   } else if (type == WS_EVT_DATA) {
@@ -469,13 +507,18 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
 .slim-wrap{height:36px;display:flex;align-items:center}
 .slim-wrap input{width:100%}
 
-/* иконки и кнопки-заглушки */
+/* иконки и кнопки */
 .tank-svg{height:calc(var(--sh) - 24px);width:auto;aspect-ratio:240/280}
 .car-svg{height:calc(var(--sh) - 8px);width:auto;aspect-ratio:240/200}
 .btn-row{display:flex;gap:8px;margin-top:8px}
 .aux-btn{width:46px;height:36px;border-radius:12px;background:var(--panel2);border:1px solid var(--border);
-  color:var(--text);font-weight:700;font-size:14px;cursor:pointer}
+  color:var(--text);font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .aux-btn:active{background:var(--blue-dk)}
+
+/* кнопки света — иконка лампочки, цвет фиксирован (перед/зад), яркость/подсветка зависит от состояния */
+.led-btn svg{color:#3a4252;transition:color .15s,filter .15s}
+.led-btn[data-ch="F"].active svg{color:#10b981;filter:drop-shadow(0 0 5px #10b981)}
+.led-btn[data-ch="R"].active svg{color:#f43f5e;filter:drop-shadow(0 0 5px #f43f5e)}
 
 /* кнопка реверса — привязана к каналу (data-ch), одинаковое состояние во всех режимах */
 .rev-btn{margin-top:6px;padding:5px 10px;border-radius:10px;background:var(--panel2);border:1px solid var(--border);
@@ -532,7 +575,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
       <div>
         <div class="brand-title">Lego Control Center</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-address">192.168.4.1</span></div>
-        <div class="brand-ver">(alpha 0.0.8)</div>
+        <div class="brand-ver">(alpha 0.0.9)</div>
       </div>
     </div>
     <div class="mode-switch">
@@ -597,8 +640,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
           </g>
         </svg>
         <div class="btn-row">
-          <button class="aux-btn" onclick="auxBtn(1)">1</button>
-          <button class="aux-btn" onclick="auxBtn(2)">2</button>
+          <button class="aux-btn led-btn" data-ch="F" onclick="toggleLed('F')" title="Передние фары">
+            <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="10" r="7" fill="currentColor"/><rect x="9" y="17" width="6" height="4" rx="1" fill="currentColor"/></svg>
+          </button>
+          <button class="aux-btn led-btn" data-ch="R" onclick="toggleLed('R')" title="Задние фонари">
+            <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="10" r="7" fill="currentColor"/><rect x="9" y="17" width="6" height="4" rx="1" fill="currentColor"/></svg>
+          </button>
           <button class="aux-btn" onclick="auxBtn(3)">3</button>
           <button class="aux-btn" onclick="auxBtn(4)">4</button>
         </div>
@@ -651,8 +698,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-
           <g><rect x="193" y="135" width="22" height="45" rx="6" fill="#0d0f12" stroke="#2a3140" stroke-width="2"/></g>
         </svg>
         <div class="btn-row">
-          <button class="aux-btn" onclick="auxBtn(1)">1</button>
-          <button class="aux-btn" onclick="auxBtn(2)">2</button>
+          <button class="aux-btn led-btn" data-ch="F" onclick="toggleLed('F')" title="Передние фары">
+            <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="10" r="7" fill="currentColor"/><rect x="9" y="17" width="6" height="4" rx="1" fill="currentColor"/></svg>
+          </button>
+          <button class="aux-btn led-btn" data-ch="R" onclick="toggleLed('R')" title="Задние фонари">
+            <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="10" r="7" fill="currentColor"/><rect x="9" y="17" width="6" height="4" rx="1" fill="currentColor"/></svg>
+          </button>
           <button class="aux-btn" onclick="auxBtn(3)">3</button>
           <button class="aux-btn" onclick="auxBtn(4)">4</button>
         </div>
@@ -756,7 +807,7 @@ setInterval(function(){
   for (var ch in state) ws.send(JSON.stringify({ch:ch, val:state[ch]}));
 }, 150);
 
-// ---------- статус от платы: Wi-Fi, батарея, режим, реверс ----------
+// ---------- статус от платы: Wi-Fi, батарея, режим, реверс, свет ----------
 function onStatus(ev){
   var d;
   try { d = JSON.parse(ev.data); } catch(e){ return; }
@@ -766,6 +817,8 @@ function onStatus(ev){
   if (typeof d.m === 'number' && d.m !== curMode && Date.now() > modeHoldUntil) applyMode(d.m);
   if (typeof d.ra === 'number') { revState.A = !!d.ra; updateRevButtons(); }
   if (typeof d.rb === 'number') { revState.B = !!d.rb; updateRevButtons(); }
+  if (typeof d.lf === 'number') { ledState.F = !!d.lf; updateLedButtons(); }
+  if (typeof d.lr === 'number') { ledState.R = !!d.lr; updateLedButtons(); }
 }
 
 function updateWifi(r){
@@ -887,8 +940,21 @@ function updateAux(ch, val){
   document.getElementById('aux-arrow-r').setAttribute('fill', n > 0 ? '#22d3ee' : '#2a3140');
 }
 
-// Кнопки 1-4 пока без функций. Сюда потом подключим команды (например свет).
+// Кнопки 3/4 пока без функций — свободные заглушки под будущий функционал.
 function auxBtn(n){ }
+
+// ---------- свет (привязан к физическому выходу, не к режиму) ----------
+var ledState = {F:false, R:false};
+
+function toggleLed(ch){
+  ledState[ch] = !ledState[ch]; // применится по факту сервером, но обновим сразу для отклика
+  updateLedButtons();
+  if (wsOpen()) ws.send(JSON.stringify({led: ch}));
+}
+function updateLedButtons(){
+  document.querySelectorAll('.led-btn[data-ch="F"]').forEach(function(b){ b.classList.toggle('active', ledState.F); });
+  document.querySelectorAll('.led-btn[data-ch="R"]').forEach(function(b){ b.classList.toggle('active', ledState.R); });
+}
 
 // ---------- реверс моторов (привязан к каналу, не к режиму) ----------
 var revState = {A:false, B:false};
@@ -918,7 +984,7 @@ function setMaxDeg(v){
   if (wsOpen()) ws.send(JSON.stringify({maxdeg: deg}));
 }
 
-// Подтягиваем сохранённую на плате калибровку (руль + реверс)
+// Подтягиваем сохранённую на плате калибровку (руль + реверс + свет)
 function loadCalib(){
   fetch('/calib').then(function(r){ return r.json(); }).then(function(c){
     trimValue = c.trim;
@@ -927,6 +993,9 @@ function loadCalib(){
     revState.A = !!c.revA;
     revState.B = !!c.revB;
     updateRevButtons();
+    ledState.F = !!c.ledF;
+    ledState.R = !!c.ledR;
+    updateLedButtons();
   }).catch(function(){});
 }
 
@@ -958,6 +1027,9 @@ void setup() {
   ledcSetup(LEDC_CH_B, 5000, 8);
   ledcAttachPin(TB_PWMB, LEDC_CH_B);
 
+  pinMode(LED_FRONT_PIN, OUTPUT);
+  pinMode(LED_REAR_PIN, OUTPUT);
+
   steerServo.setPeriodHertz(50);
   steerServo.attach(SERVO_PIN, 1000, 2000);
 
@@ -967,6 +1039,8 @@ void setup() {
   loadMode();
   loadSteerCal();
   loadMotorRev();
+  loadLeds();
+  applyLeds();
 
   WiFi.softAP("LegoTechnic", "12345678"); // TODO: сменить пароль
 
@@ -979,7 +1053,9 @@ void setup() {
     String json = "{\"trim\":" + String(steerCenterUs - 1500) +
                   ",\"maxdeg\":" + String(steerMaxAngleDeg) +
                   ",\"revA\":" + String(reverseA ? 1 : 0) +
-                  ",\"revB\":" + String(reverseB ? 1 : 0) + "}";
+                  ",\"revB\":" + String(reverseB ? 1 : 0) +
+                  ",\"ledF\":" + String(ledFrontOn ? 1 : 0) +
+                  ",\"ledR\":" + String(ledRearOn ? 1 : 0) + "}";
     req->send(200, "application/json", json);
   });
 
@@ -1005,7 +1081,7 @@ void loop() {
     updateStatus();
     updateDisplay(ws.count());
     if (ws.count() > 0) {
-      char buf[128];
+      char buf[144];
       buildStatus(buf, sizeof(buf));
       ws.textAll(buf);
     }
