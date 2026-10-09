@@ -1,3 +1,5 @@
+![Extract GUI](https://github.com/dsr987/lego-technic-esp32/actions/workflows/extract-gui.yml/badge.svg)
+
 # Lego Technic ESP32 — моторизация с веб-управлением
 
 Прошивка для контроллера ESP32, превращающая модели Lego Technic в управляемую со смартфона технику. Плата сама поднимает Wi-Fi точку доступа, управление идёт из обычного браузера: без приложений, роутера и интернета.
