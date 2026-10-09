@@ -4,7 +4,8 @@
 
 // CHANGELOG 0.2.34:
 // - Плавный переход между джойстиком мотора B и баннером "Имитация ДВС" (fade-анимация)
-// - Наложение элементов через position:absolute (top/left/right) вместо display:none
+// - Добавлен контейнер .slim-container для корректного позиционирования без наложений
+// - Наложение элементов через position:absolute внутри slim-container вместо display:none
 // - Добавлены CSS-переходы opacity и transform для eng-label и wrap-aux
 
 #include <Arduino.h>
@@ -418,7 +419,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .slider-v-container .slider-v{height:110px!important}
 
 /* ---------- Плавный переход джойстик ↔ баннер "Имитация ДВС" ---------- */
-/* Новый контейнер slim-container — обёртка для джойстика и баннера */
+/* Контейнер slim-container — обёртка для джойстика и баннера, чтобы они не перекрывали заголовок "Мотор B" */
 .slim-container {
   position: relative;
   min-height: 52px;
@@ -698,7 +699,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   <div class="overlay-icon">📱</div>
   <h2>Поверните устройство</h2>
   <p>Для управления переведите телефон в горизонтальное положение или включите полный экран.</p>
-  <button class="fs-btn" onclick="toggleFullscreen()"> Включить полный экран</button>
+  <button class="fs-btn" onclick="toggleFullscreen()">⛶ Включить полный экран</button>
 </div>
 
 <div class="wrap">
@@ -721,7 +722,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     </div>
     <div class="mode-switch">
       <button id="btn-tank" class="mode-btn active" type="button">🛡 Танковый</button>
-      <button id="btn-classic" class="mode-btn" type="button"> Классический</button>
+      <button id="btn-classic" class="mode-btn" type="button">🚗 Классический</button>
       <button id="btn-test" class="mode-btn" type="button">🔧 Тестовый</button>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
@@ -846,7 +847,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
           <button class="aux-btn led-btn" data-ch="F" type="button" title="Передние фары"><span class="ico">💡</span></button>
           <button class="aux-btn led-btn" data-ch="R" type="button" title="Задние фонари"><span class="ico">🛑</span></button>
           <button class="aux-btn eng-btn" id="eng-btn" type="button" title="Имитация ДВС → мотор B"><span class="ico">⚙️</span></button>
-          <button class="aux-btn aux-mode-btn" id="aux-mode-btn" type="button" title="Доп. моторы B/C"><span class="ico">🎛️</span></button>
+          <button class="aux-btn aux-mode-btn" id="aux-mode-btn" type="button" title="Доп. моторы B/C"><span class="ico">️</span></button>
         </div>
       </div>
       <div class="side">
@@ -873,15 +874,15 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
             </div>
           </div>
           <div class="side-top" id="aux-panel">
-           <div class="field" id="field-B">
-  <div class="row"><label>Мотор B</label><span class="val c" id="val-aux">0%</span></div>
-  <div class="slim-container">
-    <div class="slim-wrap" id="wrap-aux">
-      <input type="range" class="slim" id="slider-aux" min="-100" max="100" value="0" style="width:100%">
-    </div>
-    <div class="eng-label" id="eng-label">Имитация ДВС</div>
-  </div>
-</div>
+            <div class="field" id="field-B">
+              <div class="row"><label>Мотор B</label><span class="val c" id="val-aux">0%</span></div>
+              <div class="slim-container">
+                <div class="slim-wrap" id="wrap-aux">
+                  <input type="range" class="slim" id="slider-aux" min="-100" max="100" value="0" style="width:100%">
+                </div>
+                <div class="eng-label" id="eng-label">Имитация ДВС</div>
+              </div>
+            </div>
             <div class="field" id="field-C">
               <div class="row"><label>Мотор C</label><span class="val a" id="val-C">0%</span></div>
               <div class="slim-wrap">
@@ -931,7 +932,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
         <div class="btn-row" style="margin-top:0; justify-content:center; gap:12px">
           <button class="aux-btn led-btn" data-ch="F" type="button" title="Передние фары"><span class="ico">💡</span></button>
           <button class="aux-btn led-btn" data-ch="R" type="button" title="Задние фонари"><span class="ico">🛑</span></button>
-          <button class="aux-btn reset-btn" id="test-reset-btn" type="button" title="Сбросить всё в 0"><span class="ico">🔄</span></button>
+          <button class="aux-btn reset-btn" id="test-reset-btn" type="button" title="Сбросить всё в 0"><span class="ico"></span></button>
         </div>
         <div style="width:100%">
           <div class="row" style="display:flex;justify-content:space-between;margin-bottom:4px">
@@ -988,7 +989,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div style="font-size:13px;color:var(--text);line-height:1.85">
         <div>💡 <b style="color:#eab308">Свет</b></div>
         <div>🛑 <b style="color:#f43f5e">Стоп</b></div>
-        <div>⚙️ <b style="color:var(--amber)">Имитация ДВС</b></div>
+        <div>️ <b style="color:var(--amber)">Имитация ДВС</b></div>
         <div>🎛️ <b style="color:var(--cyan)">Доп. моторы</b></div>
       </div>
     </div>
