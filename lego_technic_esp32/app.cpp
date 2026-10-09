@@ -6,6 +6,7 @@
 // - Плавный переход между джойстиком мотора B и баннером "Имитация ДВС" (fade-анимация)
 // - Наложение элементов через position:absolute вместо display:none
 // - Добавлены CSS-переходы opacity и transform для eng-label и wrap-aux
+// - Исправлен конфликт между inset:0 и height в CSS
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -21,36 +22,26 @@
 #include <ElegantOTA.h>
 
 // ---------- Пины Драйверов и Периферии ----------
-#define COMMON_STBY 4   // Общий STBY для TB6612FNG и DRV8825 (HIGH = Включены, LOW = Сон)
-
-// TB6612FNG — Моторы A и B
+#define COMMON_STBY 4
 #define TB_AIN1   16  
 #define TB_AIN2   17  
 #define TB_PWMA   18  
 #define TB_BIN1   19  
 #define TB_BIN2   21  
 #define TB_PWMB   22  
-
-// DRV8825 — Мотор C (управление через STEP/DIR)
 #define DRV_DIR   23  
 #define DRV_STEP  5   
-
-// LEDC Каналы (ШИМ)
 #define LEDC_CH_A 4   
 #define LEDC_CH_B 5   
 #define LEDC_CH_C 6   
-
-// Прочая периферия
 #define SERVO_PIN   27  
 #define OLED_SDA    25  
 #define OLED_SCL    26  
 #define BATT_PIN    34  
 #define LED_FRONT_PIN 32 
 #define LED_REAR_PIN  33 
-
 #define BATT_DIVIDER_FACTOR 0.2680
 
-// ---------- Переменные Режимов и Состояния ----------
 enum Mode { MODE_TANK = 0, MODE_CAR = 1, MODE_TEST = 2 };
 Mode currentMode = MODE_TANK;
 
@@ -72,12 +63,10 @@ int servoVal  = 0;
 bool reverseA = false;
 bool reverseB = false;
 bool reverseC = false;
-
 bool ledFrontOn = false;
 bool ledRearOn  = false;
 bool engineSimOn = false;
 
-// Калибровка сервопривода
 const float US_PER_DEGREE = 1000.0 / 180.0;
 int steerCenterUs    = 1500;
 int steerMaxAngleDeg = 45;
@@ -104,7 +93,6 @@ void applySteer(int val) {
   steerServo.writeMicroseconds(us);
 }
 
-// ---------- Управление Моторами ----------
 void setDCBridge(int in1, int in2, int pwmChannel, int val) {
   val = constrain(val, -100, 100);
   int duty = map(abs(val), 0, 100, 0, 255);
@@ -124,7 +112,6 @@ void setDRV8825Motor(int dirPin, int pwmChannel, int val) {
 void applyMotorA(int val) {
   motorAVal = val;
   setDCBridge(TB_AIN1, TB_AIN2, LEDC_CH_A, reverseA ? -val : val);
-  
   if (engineSimOn && currentMode == MODE_CAR) {
     int aux = (int)(33.0 + 67.0 * abs(motorAVal) / 100.0 + 0.5);
     int actualB = reverseB ? -aux : aux;
@@ -154,7 +141,6 @@ void stopAll() {
   applyMotorA(0); 
   applyMotorC(0);
   applySteer(0);
-  
   if (!engineSimOn) {
     motorBVal = 0;
     applyMotorB(0);
@@ -162,15 +148,12 @@ void stopAll() {
   updateDriverStandby();
 }
 
-// ---------- Батарея и Мониторинг ----------
 float battV = 0.0;
-int   battPct = 0;
-int   wifiRssi = 0;
-
+int battPct = 0;
+int wifiRssi = 0;
 #define LOW_BATTERY_THRESHOLD_V 6.0
 #define BATTERY_DISCONNECTED_V  0.5
 #define REST_SETTLE_MS 400 
-
 bool wasAtRest = true;
 unsigned long restStartMillis = 0;
 bool firstStatusRun = true;
@@ -185,7 +168,7 @@ float readBatteryVoltage() {
 
 int batteryPercent(float v) {
   static const float PV[] = {6.0, 6.8, 7.0, 7.4, 7.8, 8.2};
-  static const float PP[] = {0,   10,  25,  50,  75,  100};
+  static const float PP[] = {0, 10, 25, 50, 75, 100};
   if (v <= PV[0]) return 0;
   if (v >= PV[5]) return 100;
   for (int i = 0; i < 5; i++) {
@@ -206,11 +189,9 @@ int getBestRssi() {
 
 void updateStatus() {
   battV = readBatteryVoltage();
-
   bool atRest = (engineSimOn && currentMode == MODE_CAR)
                   ? (motorAVal == 0 && motorCVal == 0 && servoVal == 0)
                   : (motorAVal == 0 && motorBVal == 0 && motorCVal == 0 && servoVal == 0);
-
   if (atRest) {
     if (!wasAtRest) { restStartMillis = millis(); wasAtRest = true; }
     if (firstStatusRun || millis() - restStartMillis > REST_SETTLE_MS) {
@@ -220,9 +201,7 @@ void updateStatus() {
   } else {
     wasAtRest = false;
   }
-
   wifiRssi = getBestRssi();
-
   bool below = (battV > BATTERY_DISCONNECTED_V && battV < LOW_BATTERY_THRESHOLD_V);
   if (below) { if (lowBattCount < 3) lowBattCount++; }
   else if (battV > LOW_BATTERY_THRESHOLD_V + 0.3 || battV <= BATTERY_DISCONNECTED_V) lowBattCount = 0;
@@ -235,7 +214,6 @@ void buildStatus(char *buf, size_t n) {
            ledFrontOn ? 1 : 0, ledRearOn ? 1 : 0, engineSimOn ? 1 : 0);
 }
 
-// ---------- Display ----------
 void updateDisplay() {
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
@@ -244,10 +222,8 @@ void updateDisplay() {
   if (currentMode == MODE_TANK) display.print("TANK");
   else if (currentMode == MODE_CAR) display.print("CAR");
   else display.print("TEST");
-
   display.setCursor(0, 20);
   display.printf("%d%%\n", battPct);
-
   display.setTextSize(1);
   display.setCursor(0, 44);
   display.printf("%.2fV\n", battV);
@@ -256,41 +232,33 @@ void updateDisplay() {
   display.display();
 }
 
-// ---------- WebSocket ----------
 void handleWsMessage(uint8_t *data, size_t len) {
   StaticJsonDocument<256> doc;
   if (deserializeJson(doc, data, len) != DeserializationError::Ok) return;
-
   lastCmdMillis = millis();
-
   if (doc.containsKey("mode")) {
     currentMode = (Mode)doc["mode"].as<int>();
     engineSimOn = false;
     stopAll();
     return;
   }
-
   if (doc.containsKey("trim")) {
     steerCenterUs = 1500 + constrain(doc["trim"].as<int>(), -400, 400);
     prefs.putInt("steer_c", steerCenterUs);
     applySteer(servoVal);
     return;
   }
-
   if (doc.containsKey("maxdeg")) {
     steerMaxAngleDeg = constrain(doc["maxdeg"].as<int>(), 5, 90);
     prefs.putInt("steer_a", steerMaxAngleDeg);
     applySteer(servoVal);
     return;
   }
-
   if (doc.containsKey("revA")) { reverseA = doc["revA"].as<int>() == 1; prefs.putUChar("revA", reverseA ? 1 : 0); }
   if (doc.containsKey("revB")) { reverseB = doc["revB"].as<int>() == 1; prefs.putUChar("revB", reverseB ? 1 : 0); }
   if (doc.containsKey("revC")) { reverseC = doc["revC"].as<int>() == 1; prefs.putUChar("revC", reverseC ? 1 : 0); }
-
   if (doc.containsKey("ledF")) { ledFrontOn = doc["ledF"].as<int>() == 1; prefs.putUChar("ledF", ledFrontOn ? 1 : 0); applyLeds(); }
   if (doc.containsKey("ledR")) { ledRearOn = doc["ledR"].as<int>() == 1; prefs.putUChar("ledR", ledRearOn ? 1 : 0); applyLeds(); }
-
   if (doc.containsKey("eng")) {
     engineSimOn = doc["eng"].as<int>() == 1;
     if (!engineSimOn) {
@@ -300,15 +268,12 @@ void handleWsMessage(uint8_t *data, size_t len) {
       applyMotorA(motorAVal);
     }
   }
-
   const char* ch = doc["ch"] | "";
   int val = doc["val"] | 0;
-
   if (strcmp(ch, "A") == 0) applyMotorA(val);
   else if (strcmp(ch, "B") == 0 && !engineSimOn) applyMotorB(val);
   else if (strcmp(ch, "C") == 0) applyMotorC(val);
   else if (strcmp(ch, "S") == 0) applySteer(val);
-
   updateDriverStandby();
 }
 
@@ -322,7 +287,6 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
   }
 }
 
-// ---------- HTML GUI v0.2.34 ----------
 const char PAGE_HTML[] PROGMEM = R"HTML(
 <!DOCTYPE html>
 <html lang="ru">
@@ -417,25 +381,79 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   width:36px;height:90px;margin-top:-34px;border-radius:14px}
 .slider-v-container .slider-v{height:110px!important}
 
-/* ---------- Плавный переход джойстик ↔ баннер "Имитация ДВС" ---------- */
-#field-B { position: relative; }
-.slim-wrap {
-  position: absolute; inset: 0; height: 52px; display: flex; align-items: center; padding: 0 8px;
-  background: rgba(2,6,15,.7); border-radius: 12px; border: 1px solid var(--border);
-  box-shadow: inset 0 2px 8px rgba(0,0,0,.4); opacity: 1; transform: scale(1);
-  transition: opacity 0.35s ease, transform 0.35s ease; pointer-events: auto;
+/* ========== ПЛАВНЫЙ ПЕРЕХОД: ДЖОЙСТИК ↔ БАННЕР "ИМИТАЦИЯ ДВС" ========== */
+/* Контейнер field-B — относительное позиционирование для абсолютных дочерних элементов */
+#field-B { 
+  position: relative; 
+  min-height: 52px; /* Явная высота для корректного позиционирования */
 }
-[data-theme="light"] .slim-wrap { background:#e2e8f0; box-shadow: inset 0 2px 6px rgba(0,0,0,.08); }
-.slim-wrap input { width: 100%; }
-.slim-wrap.hidden { opacity: 0; transform: scale(0.95); pointer-events: none; }
 
-.eng-label {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; height: 52px;
-  font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--amber);
-  text-align: center; background: rgba(245,158,11,.08); border-radius: 12px; border: 1px solid rgba(245,158,11,.35);
-  opacity: 0; transform: scale(0.95); transition: opacity 0.35s ease, transform 0.35s ease; pointer-events: none;
+/* Джойстик мотора B — по умолчанию видимый */
+.slim-wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  background: rgba(2,6,15,.7);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: inset 0 2px 8px rgba(0,0,0,.4);
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  pointer-events: auto;
 }
-.eng-label.visible { opacity: 1; transform: scale(1); pointer-events: auto; }
+[data-theme="light"] .slim-wrap { 
+  background:#e2e8f0; 
+  box-shadow: inset 0 2px 6px rgba(0,0,0,.08); 
+}
+.slim-wrap input { 
+  width: 100%; 
+}
+
+/* Скрытое состояние джойстика: прозрачность + лёгкое уменьшение */
+.slim-wrap.hidden {
+  opacity: 0;
+  transform: scale(0.95);
+  pointer-events: none;
+}
+
+/* Баннер "Имитация ДВС" — по умолчанию скрыт */
+.eng-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--amber);
+  text-align: center;
+  background: rgba(245,158,11,.08);
+  border-radius: 12px;
+  border: 1px solid rgba(245,158,11,.35);
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  pointer-events: none;
+}
+
+/* Активное состояние баннера: проявление + нормальный масштаб */
+.eng-label.visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+/* ========== КОНЕЦ ПЛАВНОГО ПЕРЕХОДА ========== */
 
 .tank-svg{height:calc(var(--sh) - 8px);width:auto;aspect-ratio:240/280;max-height:100%}
 .car-svg{height:calc(var(--sh) - 4px);width:auto;aspect-ratio:240/200;max-height:100%}
@@ -565,7 +583,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 <body>
 
 <div class="overlay" id="rotate-overlay">
-  <div class="overlay-icon">📱</div>
+  <div class="overlay-icon"></div>
   <h2>Поверните устройство</h2>
   <p>Для управления переведите телефон в горизонтальное положение или включите полный экран.</p>
   <button class="fs-btn" onclick="toggleFullscreen()">⛶ Включить полный экран</button>
@@ -775,7 +793,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="servo-group">
         <div class="btn-row" style="margin-top:0; justify-content:center; gap:12px">
           <button class="aux-btn led-btn" data-ch="F" type="button" title="Передние фары"><span class="ico">💡</span></button>
-          <button class="aux-btn led-btn" data-ch="R" type="button" title="Задние фонари"><span class="ico">🛑</span></button>
+          <button class="aux-btn led-btn" data-ch="R" type="button" title="Задние фонари"><span class="ico"></span></button>
           <button class="aux-btn reset-btn" id="test-reset-btn" type="button" title="Сбросить всё в 0"><span class="ico">🔄</span></button>
         </div>
         <div style="width:100%">
@@ -826,7 +844,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <h3>Реверс моторов</h3>
       <div class="line"><span>Канал A</span><span class="grow"></span><button class="rev-btn" data-ch="A" type="button">⇄</button></div>
       <div class="line"><span>Канал B</span><span class="grow"></span><button class="rev-btn" data-ch="B" type="button">⇄</button></div>
-      <div class="line"><span>Канал C</span><span class="grow"></span><button class="rev-btn" data-ch="C" type="button">⇄</button></div>
+      <div class="line"><span>Канал C</span><span class="grow"></span><button class="rev-btn" data-ch="C" type="button"></button></div>
     </div>
     <div class="block">
       <h3>Кнопки</h3>
@@ -964,10 +982,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     var slB=$('slider-aux'), wrap=$('wrap-aux'), lab=$('eng-label');
     if(!slB || !wrap || !lab) return;
     if(eng){
-      wrap.classList.add('hidden'); lab.classList.add('visible');
+      wrap.classList.add('hidden');
+      lab.classList.add('visible');
       auxB=engineBFromDrive(); slB.value=auxB; $('val-aux').textContent=auxB+'%';
     } else {
-      wrap.classList.remove('hidden'); lab.classList.remove('visible');
+      wrap.classList.remove('hidden');
+      lab.classList.remove('visible');
       slB.disabled=false; auxB=0; slB.value=0; $('val-aux').textContent='0%';
     }
     paintCar();
@@ -1066,7 +1086,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 </html>
 )HTML";
 
-// ---------- Setup / Loop ----------
 void setup() {
   Serial.begin(115200);
   pinMode(COMMON_STBY, OUTPUT); digitalWrite(COMMON_STBY, LOW); 
