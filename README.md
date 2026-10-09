@@ -13,9 +13,10 @@
 
 Хотите оценить интерфейс пульта управления до прошивки платы? Откройте демо-версию в браузере:
 
+
 <div align="center">
 
-[![Попробовать GUI](https://img.shields.io/badge/🎮_Попробовать_GUI-открыть_в_браузере-blue?style=for-the-badge&logo=googlechrome)](https://raw.githack.com/dsr987/lego-technic-esp32/main/index.html)
+[![Попробовать GUI](https://img.shields.io/badge/_Попробовать_GUI-открыть_в_браузере-blue?style=for-the-badge&logo=googlechrome)](https://dsr987.github.io/lego-technic-esp32/index.html)
 
 </div>
 
