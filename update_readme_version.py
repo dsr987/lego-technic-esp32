@@ -16,7 +16,7 @@ def get_version_from_cpp(cpp_file="lego_technic_esp32/app.cpp"):
     
     content = path.read_text(encoding='utf-8')
     
-    # Ищем строку вида: // ESP32 Lego Technic motorization — Версия: 0.2.34
+    # Ищем строку вида: // ESP32 Lego Technic motorization — Версия: 0.2.35
     match = re.search(r'Версия:\s*([\d.]+(?:\s+\w+)?)', content)
     
     if match:
@@ -40,14 +40,20 @@ def update_readme(readme_file="README.md", new_version=None):
     
     content = path.read_text(encoding='utf-8')
     
-    # Ищем и заменяем версию в строке "Текущая версия прошивки: X.Y.Z"
+    # Ищем строку с версией и заменяем всю строку целиком
+    # Ищем: "Текущая версия прошивки:" followed by version number
     old_pattern = r'(Текущая версия прошивки:\s*)([\d.]+\s*(?:beta|alpha|rc)?\s*)'
-    new_text = r'\1' + new_version
     
-    updated_content = re.sub(old_pattern, new_text, content, flags=re.IGNORECASE)
+    # Используем функцию замены вместо строки с \1
+    def replace_version(match):
+        prefix = match.group(1)
+        return prefix + new_version
+    
+    updated_content = re.sub(old_pattern, replace_version, content, flags=re.IGNORECASE)
     
     if updated_content == content:
         print("⚠️  Версия в README не изменилась или не найдена")
+        print("   Ищем: 'Текущая версия прошивки:'")
         return False
     
     path.write_text(updated_content, encoding='utf-8')
