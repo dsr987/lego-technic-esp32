@@ -2,6 +2,12 @@
 // Библиотеки: ESPAsyncWebServer, AsyncTCP, ArduinoJson, Adafruit_SSD1306, Adafruit_GFX, ESP32Servo, ElegantOTA
 // ESP32 core: 2.0.9 (совместимость с LEDC и AsyncWebServer)
 
+// CHANGELOG 0.2.33:
+// - Восстановлены анимации выезда панели доп. моторов (side-top)
+// - Добавлена плавная анимация иконки мотора C при имитации ДВС (centered)
+// - Исправлена синхронизация motorBVal при включенной имитации
+// - Добавлен контейнер side-stack для корректного позиционирования анимаций
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
