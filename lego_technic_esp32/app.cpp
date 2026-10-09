@@ -1,4 +1,4 @@
-// ESP32 Lego Technic motorization — Версия: 0.2.31
+// ESP32 Lego Technic motorization — Версия: 0.2.32
 // Библиотеки: ESPAsyncWebServer, AsyncTCP, ArduinoJson, Adafruit_SSD1306, Adafruit_GFX, ESP32Servo, ElegantOTA
 // ESP32 core: 2.0.9 (совместимость с LEDC и AsyncWebServer)
 
@@ -22,27 +22,26 @@
 #define TB_AIN1   16  
 #define TB_AIN2   17  
 #define TB_PWMA   18  
-#define TB_BIN1   19  
-#define TB_BIN2   21  
-#define TB_PWMB   22  
+#define TB_BIN1   19  // Исправлено: было 21 в сломанной версии
+#define TB_BIN2   21  // Исправлено: было 22 в сломанной версии
+#define TB_PWMB   22  // Исправлено: строго 22, без конфликтов
 
-// DRV8825 — Мотор C (DC мотор включен в обмотку драйвера, управление через STEP/DIR)
-#define DRV_DIR   23  // Направление мотора C
-#define DRV_STEP  5   // ШИМ / Скорость мотора C
+// DRV8825 — Мотор C (управление через STEP/DIR)
+#define DRV_DIR   23  
+#define DRV_STEP  5   
 
 // LEDC Каналы (ШИМ)
-#define LEDC_CH_A 4   // Канал ШИМ для Мотора A
-#define LEDC_CH_B 5   // Канал ШИМ для Мотора B
-#define LEDC_CH_C 6   // Канал ШИМ для Мотора C (DRV8825)
+#define LEDC_CH_A 4   
+#define LEDC_CH_B 5   
+#define LEDC_CH_C 6   
 
 // Прочая периферия
-#define SERVO_PIN 27  // Рулевая серва
-#define OLED_SDA  25  // I2C SDA
-#define OLED_SCL  26  // I2C SCL
-#define BATT_PIN  34  // Вход АЦП делителя АКБ
-
-#define LED_FRONT_PIN 32 // Передние фары
-#define LED_REAR_PIN  33 // Задние стоп-сигналы
+#define SERVO_PIN   27  
+#define OLED_SDA    25  
+#define OLED_SCL    26  
+#define BATT_PIN    34  
+#define LED_FRONT_PIN 32 
+#define LED_REAR_PIN  33 
 
 #define BATT_DIVIDER_FACTOR 0.2680
 
@@ -58,12 +57,12 @@ AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
 unsigned long lastCmdMillis = 0;
-const unsigned long CMD_TIMEOUT_MS = 600;
+const unsigned long CMD_TIMEOUT_MS = 500; // Вернули проверенное значение
 
-int motorAVal = 0; // -100..100
-int motorBVal = 0; // -100..100
-int motorCVal = 0; // -100..100
-int servoVal  = 0; // -100..100
+int motorAVal = 0; 
+int motorBVal = 0; 
+int motorCVal = 0; 
+int servoVal  = 0; 
 
 bool reverseA = false;
 bool reverseB = false;
@@ -71,7 +70,6 @@ bool reverseC = false;
 
 bool ledFrontOn = false;
 bool ledRearOn  = false;
-
 bool engineSimOn = false;
 
 // Калибровка сервопривода
@@ -121,9 +119,13 @@ void setDRV8825Motor(int dirPin, int pwmChannel, int val) {
 void applyMotorA(int val) {
   motorAVal = val;
   setDCBridge(TB_AIN1, TB_AIN2, LEDC_CH_A, reverseA ? -val : val);
+  
+  // Исправлена рассинхронизация: если имитация активна, motorBVal обновляется здесь
   if (engineSimOn && currentMode == MODE_CAR) {
     int aux = (int)(33.0 + 67.0 * abs(motorAVal) / 100.0 + 0.5);
-    setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_B, reverseB ? -aux : aux);
+    int actualB = reverseB ? -aux : aux;
+    motorBVal = actualB; 
+    setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_B, actualB);
   }
 }
 
@@ -143,11 +145,17 @@ void updateDriverStandby() {
 }
 
 void stopAll() {
-  motorAVal = 0; motorBVal = 0; motorCVal = 0;
-  applyMotorA(0);
-  if (!engineSimOn) applyMotorB(0);
+  motorAVal = 0; 
+  motorCVal = 0;
+  applyMotorA(0); // Это автоматически выставит motorBVal на 33% (или -33%), если engineSimOn == true
   applyMotorC(0);
   applySteer(0);
+  
+  // Если имитация выключена, принудительно гасим мотор B
+  if (!engineSimOn) {
+    motorBVal = 0;
+    applyMotorB(0);
+  }
   updateDriverStandby();
 }
 
@@ -155,6 +163,15 @@ void stopAll() {
 float battV = 0.0;
 int   battPct = 0;
 int   wifiRssi = 0;
+
+#define LOW_BATTERY_THRESHOLD_V 6.0
+#define BATTERY_DISCONNECTED_V  0.5
+#define REST_SETTLE_MS 400 
+
+bool wasAtRest = true;
+unsigned long restStartMillis = 0;
+bool firstStatusRun = true;
+int lowBattCount = 0;
 
 float readBatteryVoltage() {
   long sum = 0;
@@ -184,10 +201,29 @@ int getBestRssi() {
   return best;
 }
 
+// ИСПРАВЛЕНО: Вернута умная логика обновления процента заряда только в покое
 void updateStatus() {
   battV = readBatteryVoltage();
-  battPct = batteryPercent(battV);
+
+  bool atRest = (engineSimOn && currentMode == MODE_CAR)
+                  ? (motorAVal == 0 && motorCVal == 0 && servoVal == 0)
+                  : (motorAVal == 0 && motorBVal == 0 && motorCVal == 0 && servoVal == 0);
+
+  if (atRest) {
+    if (!wasAtRest) { restStartMillis = millis(); wasAtRest = true; }
+    if (firstStatusRun || millis() - restStartMillis > REST_SETTLE_MS) {
+      battPct = batteryPercent(battV);
+      firstStatusRun = false;
+    }
+  } else {
+    wasAtRest = false;
+  }
+
   wifiRssi = getBestRssi();
+
+  bool below = (battV > BATTERY_DISCONNECTED_V && battV < LOW_BATTERY_THRESHOLD_V);
+  if (below) { if (lowBattCount < 3) lowBattCount++; }
+  else if (battV > LOW_BATTERY_THRESHOLD_V + 0.3 || battV <= BATTERY_DISCONNECTED_V) lowBattCount = 0;
 }
 
 void buildStatus(char *buf, size_t n) {
@@ -255,7 +291,12 @@ void handleWsMessage(uint8_t *data, size_t len) {
 
   if (doc.containsKey("eng")) {
     engineSimOn = doc["eng"].as<int>() == 1;
-    if (!engineSimOn) applyMotorB(0);
+    if (!engineSimOn) {
+      motorBVal = 0;
+      applyMotorB(0);
+    } else {
+      applyMotorA(motorAVal); // Пересчитаем B под текущий газ
+    }
   }
 
   const char* ch = doc["ch"] | "";
@@ -279,7 +320,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
   }
 }
 
-// ---------- HTML GUI v0.2.31 ----------
+// ---------- HTML GUI v0.2.32 ----------
 const char PAGE_HTML[] PROGMEM = R"HTML(
 <!DOCTYPE html>
 <html lang="ru">
@@ -405,38 +446,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 #test-panel .motors-group{display:flex;align-items:center;justify-content:center;gap:clamp(24px,5vw,48px)}
 #test-panel .servo-group{display:flex;flex-direction:column;align-items:center;justify-content:center;width:min(380px,40vw);gap:16px}
 
-/* ---------- Плавные анимации выезда панелей (Слайдеры B/C vs Тахометр) ---------- */
-.side-stack {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-  width: 100%;
-  overflow: hidden;
-}
 .dash{
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  opacity: 1; transform: translateY(0);
-  transition: transform 0.42s cubic-bezier(0.22, 0.9, 0.3, 1), opacity 0.35s ease;
-  pointer-events: auto;
+  flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;gap:10px;
+  opacity:1;transition:opacity .28s ease;
 }
-.dash.hide{
-  opacity: 0; transform: translateY(-110%);
-  pointer-events: none;
-}
-.side-top{
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column; gap: 6px; justify-content: flex-start;
-  opacity: 0; transform: translateY(110%);
-  transition: transform 0.42s cubic-bezier(0.22, 0.9, 0.3, 1), opacity 0.35s ease;
-  pointer-events: none;
-}
-.side-top.open{
-  opacity: 1; transform: translateY(0);
-  pointer-events: auto;
-}
-.side-top .field{flex:1;display:flex;flex-direction:column;justify-content:center}
-
+.dash.hide{opacity:0;pointer-events:none;position:absolute;visibility:hidden}
+.side{position:relative}
 .gauge{display:flex;flex-direction:column;align-items:center;width:46%}
 .gauge svg{width:100%;height:auto;max-height:118px}
 .dead-btn{opacity:.38;pointer-events:none;font-weight:800;font-size:14px;color:var(--muted)}
@@ -488,6 +503,14 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   display:flex;flex-direction:column;gap:6px;
   min-height:0;
 }
+.side-top{flex:1 1 auto;min-height:0;display:none;flex-direction:column;gap:6px;justify-content:flex-start;
+  overflow:hidden;
+  max-height:0;opacity:0;
+  transition:max-height .32s cubic-bezier(.22,.9,.3,1), opacity .25s ease, margin .25s ease;
+  margin-bottom:0;
+}
+.side-top.open{display:flex;max-height:none;flex:1;opacity:1;margin-bottom:0;justify-content:space-between}
+.side-top.open .field{flex:1;display:flex;flex-direction:column;justify-content:center}
 .side-bottom{flex:0 0 auto;margin-top:auto}
 .field{background:var(--panel2);padding:8px;border-radius:12px;border:1px solid var(--border)}
 .field label{font-size:11px;font-weight:600;color:var(--text)}
@@ -503,7 +526,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .hidden{display:none!important}
 .wheel{transform-box:fill-box;transform-origin:center;transition:transform .08s ease-out}
 
-/* ---------- Настройки плавной анимации элементов и иконок моторов ---------- */
 #t-left-body, #t-right-body, #t-left-f, #t-left-r, #t-right-f, #t-right-r, #w-rl, #w-rr, #c-fwd, #c-rev {
   transition: stroke 0.36s ease, fill 0.36s ease, filter 0.36s ease;
 }
@@ -530,20 +552,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .sparks.on {
   opacity: 1;
   transition: opacity 0.50s ease;
-}
-
-/* Анимация проявления и плавной перестановки иконок моторов B и C */
-#motors-icon {
-  transition: opacity 0.40s ease;
-}
-#motor-b-group {
-  transition: opacity 0.40s ease, transform 0.40s cubic-bezier(0.22, 0.9, 0.3, 1);
-}
-#motor-c-group {
-  transition: opacity 0.40s ease, transform 0.40s cubic-bezier(0.22, 0.9, 0.3, 1);
-}
-#motor-c-group.centered {
-  transform: translateY(-28px);
 }
 
 @keyframes boltPulse{0%,100%{opacity:.55}50%{opacity:1}}
@@ -614,7 +622,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div>
         <div class="brand-title">Lego Control Center</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-addr">192.168.4.1</span></div>
-        <div class="brand-ver">0.2.31</div>
+        <div class="brand-ver">0.2.32</div>
       </div>
     </div>
     <div class="mode-switch">
@@ -640,7 +648,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     </div>
   </div>
 
-  <!-- TANK -->
   <main id="tank-panel" class="panel">
     <div class="cluster">
       <div class="col">
@@ -656,19 +663,15 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
           <rect x="80" y="52" width="80" height="176" rx="12" class="svg-deep" stroke-width="2"/>
           <rect x="112" y="24" width="16" height="96" rx="5" fill="var(--svg-stroke)" stroke="var(--blue)" stroke-width="1.5" opacity=".7"/>
           <circle cx="120" cy="150" r="34" class="svg-body" stroke="var(--blue)" stroke-width="2.5" opacity=".9"/>
-          
-          <!-- ЛЕВАЯ ГУСЕНИЦА -->
           <g id="t-left-group">
             <rect id="t-left-body" x="6" y="14" width="62" height="252" rx="14" class="svg-deep" stroke="var(--svg-stroke)" stroke-width="3"/>
             <path d="M 6 32 H 68 M 6 52 H 68 M 6 72 H 68 M 6 92 H 68 M 6 112 H 68 M 6 132 H 68 M 6 152 H 68 M 6 172 H 68 M 6 192 H 68 M 6 212 H 68 M 6 232 H 68 M 6 248 H 68" stroke="var(--svg-stroke)" stroke-width="2" stroke-linecap="round"/>
             <polygon id="t-left-f" points="37,42 18,72 56,72" fill="var(--svg-stroke)"/>
             <polygon id="t-left-r" points="37,238 18,208 56,208" fill="var(--svg-stroke)"/>
           </g>
-
-          <!-- ПРАВАЯ ГУСЕНИЦА -->
           <g id="t-right-group">
             <rect id="t-right-body" x="172" y="14" width="62" height="252" rx="14" class="svg-deep" stroke="var(--svg-stroke)" stroke-width="3"/>
-            <path d="M 172 32 H 234 M 172 52 H 234 M 172 72 H 234 M 172 92 H 234 M 172 112 H 234 M 172 132 H 234 M 172 152 H 234 M 172 172 H 234 M 172 192 H 234 M 172 232 H 234 M 172 248 H 234" stroke="var(--svg-stroke)" stroke-width="2" stroke-linecap="round"/>
+            <path d="M 172 32 H 234 M 172 52 H 234 M 172 72 H 234 M 172 92 H 234 M 172 112 H 234 M 172 132 H 234 M 172 152 H 234 M 172 172 H 234 M 172 192 H 234 M 172 212 H 234 M 172 232 H 234 M 172 248 H 234" stroke="var(--svg-stroke)" stroke-width="2" stroke-linecap="round"/>
             <polygon id="t-right-f" points="203,42 184,72 222,72" fill="var(--svg-stroke)"/>
             <polygon id="t-right-r" points="203,238 184,208 222,208" fill="var(--svg-stroke)"/>
           </g>
@@ -690,7 +693,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     </div>
   </main>
 
-  <!-- CLASSIC -->
   <main id="classic-panel" class="panel hidden">
     <div class="cluster">
       <div class="col">
@@ -714,7 +716,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
             <rect id="car-body" x="70" y="20" width="100" height="160" rx="18" class="svg-body" stroke-width="3"/>
             <polygon id="c-fwd" points="120,38 105,55 135,55" fill="var(--svg-stroke)"/>
             <polygon id="c-rev" points="120,162 105,145 135,145" fill="var(--svg-stroke)"/>
-
             <g id="motors-icon" opacity="0">
               <g id="motor-b-group" opacity="1">
                 <polygon id="b-al" points="76,72 90,63 90,81" fill="var(--svg-stroke)"/>
@@ -729,12 +730,10 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
                 <polygon id="c-ar" points="164,128 150,119 150,137" fill="var(--svg-stroke)"/>
               </g>
             </g>
-
             <circle id="hl-fl" cx="88" cy="32" r="5" fill="#3a4252"/>
             <circle id="hl-fr" cx="152" cy="32" r="5" fill="#3a4252"/>
             <circle id="hl-rl" cx="88" cy="168" r="5" fill="#3a4252"/>
             <circle id="hl-rr" cx="152" cy="168" r="5" fill="#3a4252"/>
-
             <g id="c-fl" class="wheel" transform="translate(36,45)">
               <rect id="w-fl" x="-11" y="-20" width="22" height="40" rx="6" class="svg-deep" stroke="var(--blue)" stroke-width="2"/>
             </g>
@@ -757,41 +756,39 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
         </div>
       </div>
       <div class="side">
-        <div class="side-stack">
-          <div class="dash" id="dash">
-            <div class="gauge">
-              <svg viewBox="0 0 120 100">
-                <path d="M18 78 A42 42 0 0 1 102 78" fill="none" stroke="var(--border)" stroke-width="8" stroke-linecap="round"/>
-                <path id="rpm-arc" d="M18 78 A42 42 0 0 1 102 78" fill="none" stroke="#f59e0b" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 200"/>
-                <g id="rpm-ticks"></g>
-                <line id="rpm-needle" x1="60" y1="78" x2="60" y2="40" stroke="var(--text)" stroke-width="2.5" stroke-linecap="round"/>
-                <circle cx="60" cy="78" r="4" fill="#f59e0b"/>
-                <text x="60" y="94" text-anchor="middle" fill="var(--muted)" font-size="9" font-weight="700">×1000</text>
-              </svg>
-            </div>
-            <div class="gauge">
-              <svg viewBox="0 0 120 100">
-                <path d="M18 78 A42 42 0 0 1 102 78" fill="none" stroke="var(--border)" stroke-width="8" stroke-linecap="round"/>
-                <path id="spd-arc" d="M18 78 A42 42 0 0 1 102 78" fill="none" stroke="#22d3ee" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 200"/>
-                <line id="spd-needle" x1="60" y1="78" x2="60" y2="40" stroke="var(--text)" stroke-width="2.5" stroke-linecap="round"/>
-                <circle cx="60" cy="78" r="4" fill="#22d3ee"/>
-                <text x="60" y="94" text-anchor="middle" fill="var(--muted)" font-size="9" font-weight="700">м/с</text>
-              </svg>
-            </div>
+        <div class="dash" id="dash">
+          <div class="gauge">
+            <svg viewBox="0 0 120 100">
+              <path d="M18 78 A42 42 0 0 1 102 78" fill="none" stroke="var(--border)" stroke-width="8" stroke-linecap="round"/>
+              <path id="rpm-arc" d="M18 78 A42 42 0 0 1 102 78" fill="none" stroke="#f59e0b" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 200"/>
+              <g id="rpm-ticks"></g>
+              <line id="rpm-needle" x1="60" y1="78" x2="60" y2="40" stroke="var(--text)" stroke-width="2.5" stroke-linecap="round"/>
+              <circle cx="60" cy="78" r="4" fill="#f59e0b"/>
+              <text x="60" y="94" text-anchor="middle" fill="var(--muted)" font-size="9" font-weight="700">×1000</text>
+            </svg>
           </div>
-          <div class="side-top" id="aux-panel">
-            <div class="field" id="field-B">
-              <div class="row"><label>Мотор B</label><span class="val c" id="val-aux">0%</span></div>
-              <div class="slim-wrap" id="wrap-aux">
-                <input type="range" class="slim" id="slider-aux" min="-100" max="100" value="0" style="width:100%">
-              </div>
-              <div class="eng-label" id="eng-label">Имитация ДВС</div>
+          <div class="gauge">
+            <svg viewBox="0 0 120 100">
+              <path d="M18 78 A42 42 0 0 1 102 78" fill="none" stroke="var(--border)" stroke-width="8" stroke-linecap="round"/>
+              <path id="spd-arc" d="M18 78 A42 42 0 0 1 102 78" fill="none" stroke="#22d3ee" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 200"/>
+              <line id="spd-needle" x1="60" y1="78" x2="60" y2="40" stroke="var(--text)" stroke-width="2.5" stroke-linecap="round"/>
+              <circle cx="60" cy="78" r="4" fill="#22d3ee"/>
+              <text x="60" y="94" text-anchor="middle" fill="var(--muted)" font-size="9" font-weight="700">м/с</text>
+            </svg>
+          </div>
+        </div>
+        <div class="side-top" id="aux-panel">
+          <div class="field" id="field-B">
+            <div class="row"><label>Мотор B</label><span class="val c" id="val-aux">0%</span></div>
+            <div class="slim-wrap" id="wrap-aux">
+              <input type="range" class="slim" id="slider-aux" min="-100" max="100" value="0" style="width:100%">
             </div>
-            <div class="field" id="field-C">
-              <div class="row"><label>Мотор C</label><span class="val a" id="val-C">0%</span></div>
-              <div class="slim-wrap">
-                <input type="range" class="slim" id="slider-C" min="-100" max="100" value="0" style="width:100%">
-              </div>
+            <div class="eng-label" id="eng-label">Имитация ДВС</div>
+          </div>
+          <div class="field" id="field-C">
+            <div class="row"><label>Мотор C</label><span class="val a" id="val-C">0%</span></div>
+            <div class="slim-wrap">
+              <input type="range" class="slim" id="slider-C" min="-100" max="100" value="0" style="width:100%">
             </div>
           </div>
         </div>
@@ -807,7 +804,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     </div>
   </main>
 
-  <!-- TEST MODE -->
   <main id="test-panel" class="panel hidden">
     <div class="cluster">
       <div class="motors-group">
@@ -1028,7 +1024,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     ['val-left','val-right','val-drive','val-aux','val-C','val-steer',
      'val-test-A','val-test-B','val-test-C','val-test-S'].forEach(function(id){ var e=$(id); if(e) e.textContent='0%'; });
     
-    /* Полный сброс света и стоп-сигналов */
     led.F = 0; led.R = 0;
     updateLedUI('F'); updateLedUI('R');
     txWS({ledF: 0}); txWS({ledR: 0});
@@ -1124,11 +1119,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     if(icon) icon.setAttribute('opacity', auxMode ? '1' : '0');
     if(auxMode){
       var bGroup = document.getElementById('motor-b-group');
-      var cGroup = document.getElementById('motor-c-group');
-      
       if(bGroup) bGroup.setAttribute('opacity', eng ? '0' : '1');
-      if(cGroup) cGroup.classList.toggle('centered', eng);
-
       if(!eng) setMotorViz('b', B);
       setMotorViz('c', C);
     }
@@ -1264,7 +1255,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     el.addEventListener('touchcancel', release);
   }
 
-  /* ТАНК */
   $('slider-left').oninput=function(){
     cancelSpring(this);
     var v=+this.value; 
@@ -1289,7 +1279,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     paintTank(+$('slider-left').value,v);
   });
 
-  /* КЛАССИКА */
   $('slider-drive').oninput=function(){
     cancelSpring(this);
     drive=+this.value; 
@@ -1338,7 +1327,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     steer=v; $('val-steer').textContent=v+'%'; txWS({ch:'S',val:v}); paintCar();
   });
 
-  /* ТЕСТОВЫЙ РЕЖИМ */
   $('slider-test-A').oninput=function(){ var v=+this.value; $('val-test-A').textContent=v+'%'; txWS({ch:'A',val:v}); };
   $('slider-test-B').oninput=function(){ var v=+this.value; $('val-test-B').textContent=v+'%'; txWS({ch:'B',val:v}); };
   $('slider-test-C').oninput=function(){ var v=+this.value; $('val-test-C').textContent=v+'%'; txWS({ch:'C',val:v}); };
