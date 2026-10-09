@@ -1,13 +1,12 @@
-// ESP32 Lego Technic motorization — Версия: 0.2.33
+// ESP32 Lego Technic motorization — Версия: 0.2.34
 // Библиотеки: ESPAsyncWebServer, AsyncTCP, ArduinoJson, Adafruit_SSD1306, Adafruit_GFX, ESP32Servo, ElegantOTA
 // ESP32 core: 2.0.9 (совместимость с LEDC и AsyncWebServer)
 
-// CHANGELOG 0.2.33:
-// - Восстановлены анимации выезда панели доп. моторов (side-top)
-// - Добавлена плавная анимация иконки мотора C при имитации ДВС (centered)
-// - Исправлена синхронизация motorBVal при включенной имитации
-// - Добавлен контейнер side-stack для корректного позиционирования анимаций
- 
+// CHANGELOG 0.2.34:
+// - Плавный переход между джойстиком мотора B и баннером "Имитация ДВС" (fade-анимация)
+// - Наложение элементов через position:absolute вместо display:none
+// - Добавлены CSS-переходы opacity и transform для eng-label и wrap-aux
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
@@ -323,7 +322,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
   }
 }
 
-// ---------- HTML GUI v0.2.33 ----------
+// ---------- HTML GUI v0.2.34 ----------
 const char PAGE_HTML[] PROGMEM = R"HTML(
 <!DOCTYPE html>
 <html lang="ru">
@@ -418,18 +417,63 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   width:36px;height:90px;margin-top:-34px;border-radius:14px}
 .slider-v-container .slider-v{height:110px!important}
 
-.slim-wrap{
-  height:52px;display:flex;align-items:center;padding:0 8px;
-  background:rgba(2,6,15,.7);border-radius:12px;border:1px solid var(--border);
-  box-shadow:inset 0 2px 8px rgba(0,0,0,.4);
+/* ---------- Плавный переход джойстик ↔ баннер "Имитация ДВС" ---------- */
+/* Контейнер field-B теперь position:relative, а slim-wrap и eng-label — absolute, наложены друг на друга */
+#field-B { position: relative; }
+.slim-wrap {
+  position: absolute;
+  inset: 0;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  background: rgba(2,6,15,.7);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  box-shadow: inset 0 2px 8px rgba(0,0,0,.4);
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  pointer-events: auto;
 }
-[data-theme="light"] .slim-wrap{background:#e2e8f0;box-shadow:inset 0 2px 6px rgba(0,0,0,.08)}
-.slim-wrap input{width:100%}
-.eng-label{
-  display:none;height:52px;align-items:center;justify-content:center;
-  font-size:13px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
-  color:var(--amber);text-align:center;
-  background:rgba(245,158,11,.08);border-radius:16px;border:1px solid rgba(245,158,11,.35);
+[data-theme="light"] .slim-wrap { background:#e2e8f0; box-shadow: inset 0 2px 6px rgba(0,0,0,.08); }
+.slim-wrap input { width: 100%; }
+
+/* Скрытое состояние джойстика: прозрачность + лёгкое уменьшение */
+.slim-wrap.hidden {
+  opacity: 0;
+  transform: scale(0.95);
+  pointer-events: none;
+}
+
+/* Баннер "Имитация ДВС" — по умолчанию скрыт */
+.eng-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--amber);
+  text-align: center;
+  background: rgba(245,158,11,.08);
+  border-radius: 12px;
+  border: 1px solid rgba(245,158,11,.35);
+  opacity: 0;
+  transform: scale(0.95);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  pointer-events: none;
+}
+
+/* Активное состояние баннера: проявление + нормальный масштаб */
+.eng-label.visible {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
 }
 
 .tank-svg{height:calc(var(--sh) - 8px);width:auto;aspect-ratio:240/280;max-height:100%}
@@ -657,12 +701,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div>
         <div class="brand-title">Lego Control Center</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-addr">192.168.4.1</span></div>
-        <div class="brand-ver">0.2.33</div>
+        <div class="brand-ver">0.2.34</div>
       </div>
     </div>
     <div class="mode-switch">
       <button id="btn-tank" class="mode-btn active" type="button">🛡 Танковый</button>
-      <button id="btn-classic" class="mode-btn" type="button">🚗 Классический</button>
+      <button id="btn-classic" class="mode-btn" type="button"> Классический</button>
       <button id="btn-test" class="mode-btn" type="button">🔧 Тестовый</button>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
@@ -678,7 +722,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       </div>
       <button class="icon-btn" type="button" onclick="toggleFullscreen()" title="Полный экран">⛶</button>
       <button class="icon-btn" type="button" id="themeBtn" title="Тема">🌙</button>
-      <button class="icon-btn" type="button" id="setBtn" title="Настройки">⚙</button>
+      <button class="icon-btn" type="button" id="setBtn" title="Настройки"></button>
       <span class="badge" id="ws-status">ПОДКЛЮЧЕНИЕ</span>
     </div>
   </div>
@@ -919,611 +963,4 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     <div class="block">
       <h3>Реверс моторов</h3>
       <div class="line"><span>Канал A</span><span class="grow"></span><button class="rev-btn" data-ch="A" type="button">⇄</button></div>
-      <div class="line"><span>Канал B</span><span class="grow"></span><button class="rev-btn" data-ch="B" type="button">⇄</button></div>
-      <div class="line"><span>Канал C</span><span class="grow"></span><button class="rev-btn" data-ch="C" type="button">⇄</button></div>
-    </div>
-    <div class="block">
-      <h3>Кнопки</h3>
-      <div style="font-size:13px;color:var(--text);line-height:1.85">
-        <div>💡 <b style="color:#eab308">Свет</b></div>
-        <div>🛑 <b style="color:#f43f5e">Стоп</b></div>
-        <div>⚙️ <b style="color:var(--amber)">Имитация ДВС</b></div>
-        <div>🎛️ <b style="color:var(--cyan)">Доп. моторы</b></div>
-      </div>
-    </div>
-  </div>
-</aside>
-
-<script>
-(function(){
-  function $(id){ return document.getElementById(id); }
-  var ws = null;
-  
-  function txWS(obj){
-    $('telemetry').textContent = JSON.stringify(obj);
-    if(ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
-  }
-
-  var mode=0, rev={A:0,B:0,C:0}, led={F:0,R:0};
-  var eng=false, auxMode=false, trim=0;
-  var drive=0, auxB=0, auxC=0, steer=0;
-  
-  var holdConfig = { A: false, B: false, C: false };
-  var holdActive = { A: false, B: false, C: false };
-  var holdTimer = { A: null, B: null, C: null };
-  var holdStartVal = { A: 0, B: 0, C: 0 };
-
-  function initWS(){
-    ws = new WebSocket('ws://' + location.host + '/ws');
-    ws.onopen = function(){ $('ws-status').textContent='ESP32'; $('ws-status').style.color='var(--emerald)'; };
-    ws.onclose = function(){ 
-      $('ws-status').textContent='НЕТ СВЯЗИ'; 
-      $('ws-status').style.color='var(--rose)'; 
-      updateWifi(0);
-      setTimeout(initWS,1000); 
-    };
-    ws.onmessage = function(e){
-      try{
-        var d = JSON.parse(e.data);
-        if(d.st){
-          $('batt-txt').textContent = d.p + '% · ' + d.v.toFixed(1) + 'V';
-          $('bat-fill').style.width = d.p + '%';
-          updateWifi(d.r);
-          
-          if(typeof d.ra !== 'undefined') { rev.A = !!d.ra; updateRevUI('A'); }
-          if(typeof d.rb !== 'undefined') { rev.B = !!d.rb; updateRevUI('B'); }
-          if(typeof d.rc !== 'undefined') { rev.C = !!d.rc; updateRevUI('C'); }
-          if(typeof d.lf !== 'undefined') { led.F = !!d.lf; updateLedUI('F'); }
-          if(typeof d.lr !== 'undefined') { led.R = !!d.lr; updateLedUI('R'); }
-          if(typeof d.es !== 'undefined') { eng = !!d.es; updateEngUI(); applyEngGate(); }
-        }
-      }catch(err){}
-    };
-  }
-
-  function updateWifi(r){
-    var n = 0, txt = '--';
-    if (r < 0){
-      n = r > -55 ? 4 : (r > -65 ? 3 : (r > -75 ? 2 : 1));
-      txt = r + ' dBm';
-    }
-    var bars = document.getElementById('wifi-bars');
-    if(bars){
-      bars.className = 'bars w' + n;
-      for (var i = 0; i < 4; i++) bars.children[i].classList.toggle('on', i < n);
-    }
-    var wtxt = document.getElementById('wifi-txt');
-    if(wtxt) wtxt.textContent = txt;
-  }
-
-  function updateRevUI(ch){
-    document.querySelectorAll('.rev-btn[data-ch="'+ch+'"]').forEach(function(b){
-      b.classList.toggle('active', rev[ch]);
-    });
-  }
-
-  function updateLedUI(ch){
-    document.querySelectorAll('.led-btn[data-ch="'+ch+'"]').forEach(function(b){
-      b.classList.toggle('active', led[ch]);
-    });
-    paintLights();
-  }
-
-  var th=localStorage.getItem('lcc_th')||'dark';
-  function setTh(t){
-    th=t; document.documentElement.setAttribute('data-theme', t==='light'?'light':'dark');
-    $('themeBtn').textContent=t==='light'?'☀️':'🌙';
-    localStorage.setItem('lcc_th',t);
-  }
-  setTh(th);
-  $('themeBtn').onclick=function(){ setTh(th==='dark'?'light':'dark'); };
-
-  window.toggleFullscreen=async function(){
-    try{
-      if(!document.fullscreenElement){
-        await document.documentElement.requestFullscreen();
-        if(screen.orientation&&screen.orientation.lock) await screen.orientation.lock('landscape').catch(function(){});
-      } else document.exitFullscreen();
-    }catch(e){}
-  };
-
-  function fitSliders(){
-    var p=document.querySelector('.panel:not(.hidden)');
-    if(!p) return;
-    document.documentElement.style.setProperty('--sh', Math.max(100, Math.min(220, p.clientHeight-88))+'px');
-  }
-  window.addEventListener('resize', fitSliders);
-  window.addEventListener('load', fitSliders);
-
-  function switchMode(m){
-    mode=m;
-    $('btn-tank').classList.toggle('active', m===0);
-    $('btn-classic').classList.toggle('active', m===1);
-    $('btn-test').classList.toggle('active', m===2);
-    
-    $('tank-panel').classList.toggle('hidden', m!==0);
-    $('classic-panel').classList.toggle('hidden', m!==1);
-    $('test-panel').classList.toggle('hidden', m!==2);
-
-    if(m===0){ eng=false; updateEngUI(); applyEngGate(); }
-    txWS({mode: m});
-    zeroAll(); setTimeout(fitSliders,30);
-  }
-  $('btn-tank').onclick=function(){ switchMode(0); };
-  $('btn-classic').onclick=function(){ switchMode(1); };
-  $('btn-test').onclick=function(){ switchMode(2); };
-
-  function zeroAll(){
-    drive=auxB=auxC=steer=0;
-    ['A','B','C'].forEach(function(ch){ clearHoldState(ch); });
-    ['slider-left','slider-right','slider-drive','slider-aux','slider-C','slider-steer',
-     'slider-test-A','slider-test-B','slider-test-C','slider-test-S'].forEach(function(id){ var e=$(id); if(e) e.value=0; });
-    ['val-left','val-right','val-drive','val-aux','val-C','val-steer',
-     'val-test-A','val-test-B','val-test-C','val-test-S'].forEach(function(id){ var e=$(id); if(e) e.textContent='0%'; });
-    
-    led.F = 0; led.R = 0;
-    updateLedUI('F'); updateLedUI('R');
-    txWS({ledF: 0}); txWS({ledR: 0});
-
-    txWS({ch:'A', val:0}); txWS({ch:'B', val:0}); txWS({ch:'C', val:0}); txWS({ch:'S', val:0});
-    paintTank(0,0); paintCar();
-  }
-
-  function toggleLightState(el, active){
-    if(!el) return;
-    el.classList.toggle('active-light', active);
-  }
-
-  function paintTank(L,R){
-    var green='#10b981', red='#f43f5e', off='var(--svg-stroke)';
-    var lf=$('t-left-f'),lr=$('t-left-r'),rf=$('t-right-f'),rr=$('t-right-r');
-    if(lf){ 
-      toggleLightState(lf, L>8);
-      toggleLightState(lr, L<-8);
-      lf.setAttribute('fill', L>8 ? green : off); 
-      lr.setAttribute('fill', L<-8 ? red : off); 
-    }
-    if(rf){ 
-      toggleLightState(rf, R>8);
-      toggleLightState(rr, R<-8);
-      rf.setAttribute('fill', R>8 ? green : off); 
-      rr.setAttribute('fill', R<-8 ? red : off); 
-    }
-    var lb=$('t-left-body'),rb=$('t-right-body');
-    if(lb){
-      toggleLightState(lb, Math.abs(L)>8);
-      lb.setAttribute('stroke', L>8 ? green : (L<-8 ? red : 'var(--svg-stroke)'));
-      lb.style.filter = L>8 ? 'drop-shadow(0 0 6px #10b981)' : (L<-8 ? 'drop-shadow(0 0 6px #f43f5e)' : '');
-    }
-    if(rb){
-      toggleLightState(rb, Math.abs(R)>8);
-      rb.setAttribute('stroke', R>8 ? green : (R<-8 ? red : 'var(--svg-stroke)'));
-      rb.style.filter = R>8 ? 'drop-shadow(0 0 6px #10b981)' : (R<-8 ? 'drop-shadow(0 0 6px #f43f5e)' : '');
-    }
-  }
-
-  function paintCar(){
-    var A=drive, S=steer, B=auxB, C=auxC;
-    var fwd=$('c-fwd'), revp=$('c-rev');
-    if(fwd){
-      toggleLightState(fwd, A>8);
-      fwd.setAttribute('fill', A>8?'var(--blue)':'var(--svg-stroke)');
-    }
-    if(revp){
-      toggleLightState(revp, A<-8);
-      revp.setAttribute('fill', A<-8?'var(--blue)':'var(--svg-stroke)');
-    }
-
-    var body=$('car-body');
-    if(body){
-      body.classList.toggle('eng-glow', eng);
-      if(eng){
-        body.setAttribute('stroke', '#f59e0b');
-        body.setAttribute('stroke-width', '4');
-        body.style.filter = 'drop-shadow(0 0 8px rgba(245,158,11,.7))';
-      } else {
-        body.setAttribute('stroke', 'var(--svg-stroke)');
-        body.setAttribute('stroke-width', '3');
-        body.style.filter = '';
-      }
-    }
-
-    var ang = S * 0.28;
-    var fl=$('c-fl'), fr=$('c-fr');
-    if(fl) fl.setAttribute('transform', 'translate(36,45) rotate('+ang+')');
-    if(fr) fr.setAttribute('transform', 'translate(204,45) rotate('+ang+')');
-    var wfl=$('w-fl'), wfr=$('w-fr');
-    var steerOn = Math.abs(S)>5;
-    if(wfl && wfr){
-      wfl.setAttribute('stroke', steerOn ? '#3b82f6' : 'var(--svg-stroke)');
-      wfl.style.filter = steerOn ? 'drop-shadow(0 0 6px #3b82f6)' : '';
-      wfr.setAttribute('stroke', steerOn ? '#3b82f6' : 'var(--svg-stroke)');
-      wfr.style.filter = steerOn ? 'drop-shadow(0 0 6px #3b82f6)' : '';
-    }
-
-    var wrl=$('w-rl'), wrr=$('w-rr');
-    if(wrl && wrr){
-      toggleLightState(wrl, Math.abs(A)>8);
-      toggleLightState(wrr, Math.abs(A)>8);
-      var col = 'var(--svg-stroke)', filt = '';
-      if(A>8){ col='#10b981'; filt='drop-shadow(0 0 6px #10b981)'; }
-      else if(A<-8){ col='#f43f5e'; filt='drop-shadow(0 0 6px #f43f5e)'; }
-      wrl.setAttribute('stroke', col); wrl.style.filter=filt;
-      wrr.setAttribute('stroke', col); wrr.style.filter=filt;
-    }
-
-    var icon=$('motors-icon');
-    if(icon) icon.setAttribute('opacity', auxMode ? '1' : '0');
-    if(auxMode){
-      var bGroup = document.getElementById('motor-b-group');
-      var cGroup = document.getElementById('motor-c-group');
-      
-      if(bGroup) bGroup.setAttribute('opacity', eng ? '0' : '1');
-      if(cGroup) cGroup.classList.toggle('centered', eng);
-
-      if(!eng) setMotorViz('b', B);
-      setMotorViz('c', C);
-    }
-  }
-
-  function setMotorViz(prefix, val){
-    var al=$(prefix+'-al'), ar=$(prefix+'-ar'), bolt=$(prefix+'-bolt');
-    if(!al) return;
-    al.setAttribute('fill', val<-8?'#22d3ee':'var(--svg-stroke)');
-    ar.setAttribute('fill', val>8?'#22d3ee':'var(--svg-stroke)');
-    if(bolt){
-      bolt.setAttribute('fill', Math.abs(val)>8?'#22d3ee':'var(--svg-stroke)');
-      bolt.setAttribute('class', Math.abs(val)>8?'bolt-glow bolt-pulse':'');
-    }
-  }
-
-  function paintLights(){
-    var yOn='#eab308', rOn='#f43f5e', off='#3a4252';
-    var fl=$('hl-fl'),fr=$('hl-fr'),rl=$('hl-rl'),rr=$('hl-rr');
-    if(fl){
-      fl.setAttribute('fill', led.F?yOn:off); fr.setAttribute('fill', led.F?yOn:off);
-      fl.style.filter = fr.style.filter = led.F?'drop-shadow(0 0 5px #eab308)':'';
-    }
-    if(rl){
-      rl.setAttribute('fill', led.R?rOn:off); rr.setAttribute('fill', led.R?rOn:off);
-      rl.style.filter = rr.style.filter = led.R?'drop-shadow(0 0 5px #f43f5e)':'';
-    }
-  }
-
-  function engineBFromDrive(){ return Math.round(33+67*Math.abs(drive)/100); }
-
-  function updateEngUI(){
-    var b=$('eng-btn'); if(b) b.classList.toggle('active', eng);
-    var s=$('sparks'); if(s) s.classList.toggle('on', eng);
-    paintCar();
-  }
-  function applyEngGate(){
-    var slB=$('slider-aux'), wrap=$('wrap-aux'), lab=$('eng-label');
-    if(!slB) return;
-    if(eng){
-      if(wrap) wrap.style.display='none';
-      if(lab) lab.style.display='flex';
-      auxB=engineBFromDrive();
-      slB.value=auxB; $('val-aux').textContent=auxB+'%';
-    } else {
-      if(wrap) wrap.style.display='flex';
-      if(lab) lab.style.display='none';
-      slB.disabled=false;
-      auxB=0; slB.value=0; $('val-aux').textContent='0%';
-    }
-    paintCar();
-  }
-  function updateAuxModeUI(){
-    var b=$('aux-mode-btn'); if(b) b.classList.toggle('active', auxMode);
-    var pan=$('aux-panel');
-    if(!pan) return;
-    var dash=$('dash');
-    if(auxMode){
-      if(dash) dash.classList.add('hide');
-      pan.classList.add('open');
-    } else {
-      if(dash) dash.classList.remove('hide');
-      pan.classList.remove('open');
-      if(!eng){ auxB=0; var slB=$('slider-aux'); if(slB) slB.value=0; $('val-aux').textContent='0%'; txWS({ch:'B',val:0}); }
-      auxC=0; var slC=$('slider-C'); if(slC) slC.value=0; $('val-C').textContent='0%'; txWS({ch:'C',val:0});
-    }
-    paintCar();
-  }
-
-  $('eng-btn').onclick=function(){ eng=!eng; updateEngUI(); applyEngGate(); txWS({eng: eng?1:0}); };
-  $('aux-mode-btn').onclick=function(){ auxMode=!auxMode; updateAuxModeUI(); applyEngGate(); };
-
-  var springs = {};
-  function springTo(el, target, onFrame){
-    if(!el) return;
-    if(springs[el.id]) cancelAnimationFrame(springs[el.id]);
-    var from = +el.value;
-    var t0 = performance.now();
-    var dur = 220;
-    function step(now){
-      var k = Math.min(1, (now-t0)/dur);
-      var e = 1 - Math.pow(1-k, 3);
-      var v = Math.round(from + (target-from)*e);
-      el.value = v;
-      onFrame(v, k>=1);
-      if(k<1) springs[el.id] = requestAnimationFrame(step);
-      else delete springs[el.id];
-    }
-    springs[el.id] = requestAnimationFrame(step);
-  }
-  function cancelSpring(el){
-    if(el && springs[el.id]){ cancelAnimationFrame(springs[el.id]); delete springs[el.id]; }
-  }
-
-  function clearHoldState(ch){
-    if(holdTimer[ch]){ clearTimeout(holdTimer[ch]); holdTimer[ch] = null; }
-    holdActive[ch] = false;
-  }
-
-  function handleInputHold(ch, val){
-    if(!holdConfig[ch]) return;
-    if(holdActive[ch]){
-      holdActive[ch] = false;
-    }
-    if(Math.abs(val) > 50){
-      if(!holdTimer[ch] || Math.abs(val - holdStartVal[ch]) > 5){
-        if(holdTimer[ch]) clearTimeout(holdTimer[ch]);
-        holdStartVal[ch] = val;
-        holdTimer[ch] = setTimeout(function(){
-          holdActive[ch] = true;
-          holdTimer[ch] = null;
-        }, 1500);
-      }
-    } else {
-      if(holdTimer[ch]){ clearTimeout(holdTimer[ch]); holdTimer[ch] = null; }
-    }
-  }
-
-  function bindSpring(el, ch, onFrame){
-    function start(){ 
-      cancelSpring(el); 
-      if(ch) clearHoldState(ch);
-    }
-    el.addEventListener('mousedown', start);
-    el.addEventListener('touchstart', start, {passive:true});
-    function release(){
-      if(el.disabled || mode===2) return;
-      var target = (ch && holdActive[ch]) ? +el.value : 0;
-      springTo(el, target, onFrame);
-    }
-    el.addEventListener('mouseup', release);
-    el.addEventListener('touchend', release);
-    el.addEventListener('touchcancel', release);
-  }
-
-  $('slider-left').oninput=function(){
-    cancelSpring(this);
-    var v=+this.value; 
-    handleInputHold('A', v);
-    $('val-left').textContent=v+'%'; txWS({ch:'A',val:v}); 
-    paintTank(v,+$('slider-right').value);
-  };
-  bindSpring($('slider-left'), 'A', function(v){
-    $('val-left').textContent=v+'%'; txWS({ch:'A',val:v}); 
-    paintTank(v,+$('slider-right').value);
-  });
-
-  $('slider-right').oninput=function(){
-    cancelSpring(this);
-    var v=+this.value; 
-    if(mode===0) handleInputHold('B', v);
-    $('val-right').textContent=v+'%'; txWS({ch:'B',val:v}); 
-    paintTank(+$('slider-left').value,v);
-  };
-  bindSpring($('slider-right'), 'B', function(v){
-    $('val-right').textContent=v+'%'; txWS({ch:'B',val:v}); 
-    paintTank(+$('slider-left').value,v);
-  });
-
-  $('slider-drive').oninput=function(){
-    cancelSpring(this);
-    drive=+this.value; 
-    handleInputHold('A', drive);
-    $('val-drive').textContent=drive+'%'; txWS({ch:'A',val:drive});
-    if(eng){ auxB=engineBFromDrive(); $('slider-aux').value=auxB; $('val-aux').textContent=auxB+'%'; }
-    paintCar();
-  };
-  bindSpring($('slider-drive'), 'A', function(v){
-    drive=v; $('val-drive').textContent=v+'%'; txWS({ch:'A',val:v});
-    if(eng){ auxB=engineBFromDrive(); $('slider-aux').value=auxB; $('val-aux').textContent=auxB+'%'; }
-    paintCar();
-  });
-
-  $('slider-aux').oninput=function(){
-    if(eng) return;
-    cancelSpring(this);
-    auxB=+this.value; 
-    handleInputHold('B', auxB);
-    $('val-aux').textContent=auxB+'%'; txWS({ch:'B',val:auxB}); 
-    paintCar();
-  };
-  bindSpring($('slider-aux'), 'B', function(v){
-    if(eng) return;
-    auxB=v; $('val-aux').textContent=v+'%'; txWS({ch:'B',val:v}); 
-    paintCar();
-  });
-
-  $('slider-C').oninput=function(){
-    cancelSpring(this);
-    auxC=+this.value; 
-    handleInputHold('C', auxC);
-    $('val-C').textContent=auxC+'%'; txWS({ch:'C',val:auxC}); 
-    paintCar();
-  };
-  bindSpring($('slider-C'), 'C', function(v){
-    auxC=v; $('val-C').textContent=v+'%'; txWS({ch:'C',val:v}); 
-    paintCar();
-  });
-
-  $('slider-steer').oninput=function(){
-    cancelSpring(this);
-    steer=+this.value; $('val-steer').textContent=steer+'%'; txWS({ch:'S',val:steer}); paintCar();
-  };
-  bindSpring($('slider-steer'), null, function(v){
-    steer=v; $('val-steer').textContent=v+'%'; txWS({ch:'S',val:v}); paintCar();
-  });
-
-  $('slider-test-A').oninput=function(){ var v=+this.value; $('val-test-A').textContent=v+'%'; txWS({ch:'A',val:v}); };
-  $('slider-test-B').oninput=function(){ var v=+this.value; $('val-test-B').textContent=v+'%'; txWS({ch:'B',val:v}); };
-  $('slider-test-C').oninput=function(){ var v=+this.value; $('val-test-C').textContent=v+'%'; txWS({ch:'C',val:v}); };
-  $('slider-test-S').oninput=function(){ var v=+this.value; $('val-test-S').textContent=v+'%'; txWS({ch:'S',val:v}); };
-  
-  $('test-reset-btn').onclick=function(){ zeroAll(); };
-
-  document.querySelectorAll('.rev-btn').forEach(function(b){
-    b.addEventListener('click', function(){
-      var ch=b.getAttribute('data-ch'); if(!ch) return;
-      rev[ch]=!rev[ch];
-      updateRevUI(ch);
-      var obj = {}; obj['rev' + ch] = rev[ch] ? 1 : 0;
-      txWS(obj);
-    });
-  });
-
-  document.querySelectorAll('.hold-btn').forEach(function(b){
-    b.addEventListener('click', function(){
-      var ch=b.getAttribute('data-ch'); if(!ch) return;
-      holdConfig[ch] = !holdConfig[ch];
-      clearHoldState(ch);
-      b.classList.toggle('active', holdConfig[ch]);
-      b.textContent = holdConfig[ch] ? 'ВКЛ' : 'ВЫКЛ';
-    });
-  });
-
-  document.querySelectorAll('.led-btn').forEach(function(b){
-    b.addEventListener('click', function(){
-      var c=b.getAttribute('data-ch');
-      led[c]=!led[c];
-      updateLedUI(c);
-      var obj = {}; obj['led' + c] = led[c] ? 1 : 0;
-      txWS(obj);
-    });
-  });
-
-  function openS(v){ $('sheet').classList.toggle('open',v); $('sbg').classList.toggle('open',v); }
-  $('setBtn').onclick=function(){ openS(true); };
-  $('sheetX').onclick=function(){ openS(false); };
-  $('sbg').onclick=function(){ openS(false); };
-  $('sheetBody').addEventListener('touchmove', function(e){ e.stopPropagation(); }, {passive:true});
-
-  $('trimM').onclick=function(){ trim=Math.max(-40,trim-5); $('val-trim').textContent=trim; txWS({trim:trim}); };
-  $('trimP').onclick=function(){ trim=Math.min(40,trim+5); $('val-trim').textContent=trim; txWS({trim:trim}); };
-  $('maxdeg-input').onchange=function(){ txWS({maxdeg: +this.value||45}); };
-
-  var speedMs = 0, rpmShown = 0, moveDir = 0;
-  function setNeedle(id, t){
-    var el=$(id); if(!el) return;
-    var ang = -90 + Math.max(0, Math.min(1, t))*180;
-    el.setAttribute('transform', 'rotate('+ang+' 60 78)');
-  }
-  function setArc(id, t){
-    var el=$(id); if(!el) return;
-    var len = 132;
-    var v = Math.max(0, Math.min(1, t))*len;
-    el.setAttribute('stroke-dasharray', v+' '+(200-v));
-  }
-  setInterval(function(){
-    var dir = drive>6 ? 1 : (drive<-6 ? -1 : 0);
-    var braking = (dir !== 0 && moveDir !== 0 && dir !== moveDir) || (dir === 0 && (speedMs>0.15 || rpmShown>40));
-    if(braking){
-      speedMs += (0 - speedMs) * 0.22;
-      rpmShown += (0 - rpmShown) * 0.22;
-      if(speedMs < 0.2 && rpmShown < 30){ speedMs = 0; rpmShown = 0; moveDir = dir; }
-    } else {
-      if(dir) moveDir = dir;
-      var targetRpm = eng ? (980 + (6000-980)*(Math.abs(drive)/100)) : 0;
-      rpmShown += (targetRpm - rpmShown) * 0.045;
-      var targetSpd = (Math.abs(drive)/100)*10;
-      speedMs += (targetSpd - speedMs) * 0.04;
-      if(!eng && rpmShown < 8) rpmShown = 0;
-      if(targetSpd===0 && speedMs<0.05) speedMs = 0;
-    }
-    setNeedle('rpm-needle', rpmShown/7000);
-    setArc('rpm-arc', rpmShown/7000);
-    setNeedle('spd-needle', speedMs/10);
-    setArc('spd-arc', speedMs/10);
-  }, 50);
-
-  document.addEventListener('touchmove', function(e){
-    if(e.target.closest && e.target.closest('.sheet-b')) return;
-    if(e.target.tagName!=='INPUT') e.preventDefault();
-  }, {passive:false});
-
-  initWS();
-  updateEngUI(); applyEngGate(); paintLights();
-  switchMode(0); fitSliders();
-})();
-</script>
-</body>
-</html>
-)HTML";
-
-// ---------- Setup / Loop ----------
-void setup() {
-  Serial.begin(115200);
-
-  pinMode(COMMON_STBY, OUTPUT); digitalWrite(COMMON_STBY, LOW); 
-
-  pinMode(TB_AIN1, OUTPUT); pinMode(TB_AIN2, OUTPUT);
-  pinMode(TB_BIN1, OUTPUT); pinMode(TB_BIN2, OUTPUT);
-  pinMode(DRV_DIR, OUTPUT);
-
-  ledcSetup(LEDC_CH_A, 5000, 8); ledcAttachPin(TB_PWMA, LEDC_CH_A);
-  ledcSetup(LEDC_CH_B, 5000, 8); ledcAttachPin(TB_PWMB, LEDC_CH_B);
-  ledcSetup(LEDC_CH_C, 5000, 8); ledcAttachPin(DRV_STEP, LEDC_CH_C);
-
-  pinMode(LED_FRONT_PIN, OUTPUT);
-  pinMode(LED_REAR_PIN, OUTPUT);
-
-  steerServo.setPeriodHertz(50);
-  steerServo.attach(SERVO_PIN, 1000, 2000);
-
-  Wire.begin(OLED_SDA, OLED_SCL);
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-
-  prefs.begin("cfg", false);
-  loadPreferences();
-  applyLeds();
-
-  WiFi.softAP("LegoTechnic", "12345678");
-
-  ws.onEvent(onWsEvent);
-  server.addHandler(&ws);
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
-    req->send(200, "text/html", PAGE_HTML);
-  });
-
-  ElegantOTA.begin(&server, "admin", "admin");
-  server.begin();
-
-  stopAll();
-  updateStatus();
-  lastCmdMillis = millis();
-}
-
-void loop() {
-  static unsigned long lastStatus = 0;
-
-  if (millis() - lastCmdMillis > CMD_TIMEOUT_MS) {
-    stopAll();
-  }
-
-  if (millis() - lastStatus > 1000) {
-    lastStatus = millis();
-    updateStatus();
-    updateDisplay();
-    if (ws.count() > 0) {
-      char buf[200];
-      buildStatus(buf, sizeof(buf));
-      ws.textAll(buf);
-    }
-  }
-
-  ElegantOTA.loop();
-  ws.cleanupClients();
-}
+      <div class="line"><span>Канал B</span><span class
