@@ -93,10 +93,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .slider-v-container .slider-v{height:110px!important}
 
 /* ---------- Плавный переход джойстик ↔ баннер "Имитация ДВС" ---------- */
-/* Контейнер field-B — относительное позиционирование для абсолютных дочерних элементов */
-#field-B {
+/* Новый контейнер slim-container — обёртка для джойстика и баннера */
+.slim-container {
   position: relative;
   min-height: 52px;
+  margin-top: 4px;
 }
 
 /* Джойстик мотора B — по умолчанию видимый */
@@ -547,13 +548,15 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
             </div>
           </div>
           <div class="side-top" id="aux-panel">
-            <div class="field" id="field-B">
-              <div class="row"><label>Мотор B</label><span class="val c" id="val-aux">0%</span></div>
-              <div class="slim-wrap" id="wrap-aux">
-                <input type="range" class="slim" id="slider-aux" min="-100" max="100" value="0" style="width:100%">
-              </div>
-              <div class="eng-label" id="eng-label">Имитация ДВС</div>
-            </div>
+           <div class="field" id="field-B">
+  <div class="row"><label>Мотор B</label><span class="val c" id="val-aux">0%</span></div>
+  <div class="slim-container">
+    <div class="slim-wrap" id="wrap-aux">
+      <input type="range" class="slim" id="slider-aux" min="-100" max="100" value="0" style="width:100%">
+    </div>
+    <div class="eng-label" id="eng-label">Имитация ДВС</div>
+  </div>
+</div>
             <div class="field" id="field-C">
               <div class="row"><label>Мотор C</label><span class="val a" id="val-C">0%</span></div>
               <div class="slim-wrap">
