@@ -27,6 +27,18 @@ jobs:
         run: |
           python3 extract_changelog.py lego_technic_esp32/app.cpp CHANGELOG.md
 
+- name: Update README version
+        run: |
+          python3 update_readme_version.py
+
+      - name: Commit updated files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html CHANGELOG.md README.md
+          git diff --quiet && git diff --staged --quiet || git commit -m "🤖 Auto-update GUI, CHANGELOG and README version [skip ci]"
+          git push
+
       - name: Commit updated files
         run: |
           git config user.name "github-actions[bot]"
