@@ -1,13 +1,11 @@
-// ESP32 Lego Technic motorization — Версия: 0.2.35
+// ESP32 Lego Technic motorization — Версия: 0.2.36
 // Библиотеки: ESPAsyncWebServer, AsyncTCP, ArduinoJson, Adafruit_SSD1306, Adafruit_GFX, ESP32Servo, ElegantOTA
 // ESP32 core: 2.0.9 (совместимость с LEDC и AsyncWebServer)
 
-// CHANGELOG 0.2.35:
-// - Восстановлены все иконки кнопок (💡, , ⚙️, 🎛️) и иконка настроек в шапке
-// - Восстановлен эмодзи  в кнопке "Классический"
-// - Добавлена иконка гаечного ключа на OLED для тестового режима (MODE_TEST)
-// - Плавный переход джойстик B ↔ баннер "Имитация ДВС" (fade-анимация через .slim-container)
-// - Абсолютное позиционирование применяется только к джойстику B, джойстик C остаётся в потоке
+// CHANGELOG 0.2.36:
+// - Плавная fade-анимация перехода джойстика мотора B в баннер "Имитация ДВС"
+// - Добавлен контейнер .slim-container для изоляции абсолютного позиционирования
+// - Абсолютное позиционирование применяется только к джойстику B, остальные элементы не затронуты
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -22,38 +20,31 @@
 #include <Preferences.h>
 #include <ElegantOTA.h>
 
-// ---------- Пины Драйверов и Периферии ----------
-#define COMMON_STBY 4   // Общий STBY для TB6612FNG и DRV8825 (HIGH = Включены, LOW = Сон)
+// ---------- Пины ----------
+#define TB_STBY   4
+#define TB_AIN1   16
+#define TB_AIN2   17
+#define TB_PWMA   18
+#define TB_BIN1   19
+#define TB_BIN2   21
+#define TB_PWMB   22
+#define LEDC_CH_A 4
+#define LEDC_CH_B 5
+#define SERVO_PIN 27
+#define OLED_SDA  25
+#define OLED_SCL  26
+#define BATT_PIN  34
+#define LED_FRONT_PIN 32
+#define LED_REAR_PIN  33
 
-// TB6612FNG — Моторы A и B
-#define TB_AIN1   16  
-#define TB_AIN2   17  
-#define TB_PWMA   18  
-#define TB_BIN1   19  
-#define TB_BIN2   21  
-#define TB_PWMB   22  
-
-// DRV8825 — Мотор C (управление через STEP/DIR)
-#define DRV_DIR   23  
-#define DRV_STEP  5   
-
-// LEDC Каналы (ШИМ)
-#define LEDC_CH_A 4   
-#define LEDC_CH_B 5   
-#define LEDC_CH_C 6   
-
-// Прочая периферия
-#define SERVO_PIN   27  
-#define OLED_SDA    25  
-#define OLED_SCL    26  
-#define BATT_PIN    34  
-#define LED_FRONT_PIN 32 
-#define LED_REAR_PIN  33 
+#define DRV_DIR   23
+#define DRV_STEP  5
+#define LEDC_CH_C 6
 
 #define BATT_DIVIDER_FACTOR 0.2680
 
-// ---------- Переменные Режимов и Состояния ----------
-enum Mode { MODE_TANK = 0, MODE_CAR = 1, MODE_TEST = 2 };
+// ---------- Режимы ----------
+enum Mode { MODE_TANK = 0, MODE_CAR = 1 };
 Mode currentMode = MODE_TANK;
 
 Preferences prefs;
@@ -64,12 +55,12 @@ AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
 unsigned long lastCmdMillis = 0;
-const unsigned long CMD_TIMEOUT_MS = 500; 
+const unsigned long CMD_TIMEOUT_MS = 500;
 
-int motorAVal = 0; 
-int motorBVal = 0; 
-int motorCVal = 0; 
-int servoVal  = 0; 
+int motorAVal = 0;
+int motorBVal = 0;
+int motorCVal = 0;
+int servoVal  = 0;
 
 bool reverseA = false;
 bool reverseB = false;
@@ -77,28 +68,32 @@ bool reverseC = false;
 
 bool ledFrontOn = false;
 bool ledRearOn  = false;
+
 bool engineSimOn = false;
 
-// Калибровка сервопривода
 const float US_PER_DEGREE = 1000.0 / 180.0;
-int steerCenterUs    = 1500;
+int steerCenterUs   = 1500;
 int steerMaxAngleDeg = 45;
 
-void loadPreferences() {
+void loadMotorRev() {
   reverseA = prefs.getUChar("revA", 0) != 0;
   reverseB = prefs.getUChar("revB", 0) != 0;
   reverseC = prefs.getUChar("revC", 0) != 0;
-  ledFrontOn = prefs.getUChar("ledF", 0) != 0;
-  ledRearOn  = prefs.getUChar("ledR", 0) != 0;
-  steerCenterUs = prefs.getInt("steer_c", 1500);
-  steerMaxAngleDeg = prefs.getInt("steer_a", 45);
 }
 
+void loadLeds() {
+  ledFrontOn = prefs.getUChar("ledF", 0) != 0;
+  ledRearOn  = prefs.getUChar("ledR", 0) != 0;
+}
 void applyLeds() {
   digitalWrite(LED_FRONT_PIN, ledFrontOn ? HIGH : LOW);
   digitalWrite(LED_REAR_PIN, ledRearOn ? HIGH : LOW);
 }
 
+void loadSteerCal() {
+  steerCenterUs = prefs.getInt("steer_c", 1500);
+  steerMaxAngleDeg = prefs.getInt("steer_a", 45);
+}
 void applySteer(int val) {
   servoVal = val;
   int us = steerCenterUs + (int)((val / 100.0) * steerMaxAngleDeg * US_PER_DEGREE);
@@ -106,8 +101,7 @@ void applySteer(int val) {
   steerServo.writeMicroseconds(us);
 }
 
-// ---------- Управление Моторами ----------
-void setDCBridge(int in1, int in2, int pwmChannel, int val) {
+void setMotor(int in1, int in2, int pwmChannel, int val) {
   val = constrain(val, -100, 100);
   int duty = map(abs(val), 0, 100, 0, 255);
   if (val > 0) { digitalWrite(in1, HIGH); digitalWrite(in2, LOW); }
@@ -123,21 +117,23 @@ void setDRV8825Motor(int dirPin, int pwmChannel, int val) {
   ledcWrite(pwmChannel, duty);
 }
 
+void applyEngineSim() {
+  if (!engineSimOn || currentMode != MODE_CAR) return;
+  int aux = (int)(33.0 + 67.0 * abs(motorAVal) / 100.0 + 0.5);
+  int actualB = reverseB ? -aux : aux;
+  motorBVal = actualB;
+  setMotor(TB_BIN1, TB_BIN2, LEDC_CH_B, actualB);
+}
+
 void applyMotorA(int val) {
   motorAVal = val;
-  setDCBridge(TB_AIN1, TB_AIN2, LEDC_CH_A, reverseA ? -val : val);
-  
-  if (engineSimOn && currentMode == MODE_CAR) {
-    int aux = (int)(33.0 + 67.0 * abs(motorAVal) / 100.0 + 0.5);
-    int actualB = reverseB ? -aux : aux;
-    motorBVal = actualB; 
-    setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_B, actualB);
-  }
+  setMotor(TB_AIN1, TB_AIN2, LEDC_CH_A, reverseA ? -val : val);
+  applyEngineSim();
 }
 
 void applyMotorB(int val) {
   motorBVal = val;
-  setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_B, reverseB ? -val : val);
+  setMotor(TB_BIN1, TB_BIN2, LEDC_CH_B, reverseB ? -val : val);
 }
 
 void applyMotorC(int val) {
@@ -145,43 +141,32 @@ void applyMotorC(int val) {
   setDRV8825Motor(DRV_DIR, LEDC_CH_C, reverseC ? -val : val);
 }
 
-void updateDriverStandby() {
-  bool active = (motorAVal != 0) || (motorBVal != 0) || (motorCVal != 0) || (servoVal != 0) || engineSimOn;
-  digitalWrite(COMMON_STBY, active ? HIGH : LOW);
-}
-
 void stopAll() {
-  motorAVal = 0; 
-  motorCVal = 0;
-  applyMotorA(0); 
+  applyMotorA(0);
+  if (!engineSimOn) applyMotorB(0);
   applyMotorC(0);
-  applySteer(0);
-  
-  if (!engineSimOn) {
-    motorBVal = 0;
-    applyMotorB(0);
-  }
-  updateDriverStandby();
+  steerServo.writeMicroseconds(steerCenterUs);
+  servoVal = 0;
 }
-
-// ---------- Батарея и Мониторинг ----------
-float battV = 0.0;
-int   battPct = 0;
-int   wifiRssi = 0;
 
 #define LOW_BATTERY_THRESHOLD_V 6.0
 #define BATTERY_DISCONNECTED_V  0.5
-#define REST_SETTLE_MS 400 
+#define REST_SETTLE_MS 400
+
+float battV = 0.0;
+int   battPct = 0;
+int   wifiRssi = 0;
+int   lowBattCount = 0;
 
 bool wasAtRest = true;
 unsigned long restStartMillis = 0;
 bool firstStatusRun = true;
-int lowBattCount = 0;
 
 float readBatteryVoltage() {
   long sum = 0;
   for (int i = 0; i < 8; i++) sum += analogRead(BATT_PIN);
-  float vAdc = (sum / 8.0) / 4095.0 * 3.3;
+  float raw = sum / 8.0;
+  float vAdc = raw / 4095.0 * 3.3;
   return vAdc / BATT_DIVIDER_FACTOR;
 }
 
@@ -191,7 +176,9 @@ int batteryPercent(float v) {
   if (v <= PV[0]) return 0;
   if (v >= PV[5]) return 100;
   for (int i = 0; i < 5; i++) {
-    if (v < PV[i + 1]) return (int)(PP[i] + (PP[i + 1] - PP[i]) * (v - PV[i]) / (PV[i + 1] - PV[i]) + 0.5);
+    if (v < PV[i + 1]) {
+      return (int)(PP[i] + (PP[i + 1] - PP[i]) * (v - PV[i]) / (PV[i + 1] - PV[i]) + 0.5);
+    }
   }
   return 100;
 }
@@ -237,33 +224,18 @@ void buildStatus(char *buf, size_t n) {
            ledFrontOn ? 1 : 0, ledRearOn ? 1 : 0, engineSimOn ? 1 : 0);
 }
 
-// ---------- Display ----------
-// Иконка гаечного ключа для тестового режима
-void drawWrenchIcon(int x0, int y0) {
-  // Ручка ключа — наклонная линия
-  display.drawLine(x0 + 4, y0 + 18, x0 + 18, y0 + 4, SSD1306_WHITE);
-  // Головка ключа — круг с вырезом (рисуем как дугу)
-  display.drawCircle(x0 + 20, y0 + 4, 4, SSD1306_WHITE);
-  // Вырез в головке (стираем белым прямоугольником поверх)
-  display.drawLine(x0 + 18, y0 + 2, x0 + 22, y0 + 2, SSD1306_BLACK);
-  display.drawLine(x0 + 18, y0 + 3, x0 + 22, y0 + 3, SSD1306_BLACK);
-}
-
 void drawModeIcon() {
   int x0 = 96, y0 = 4;
   if (currentMode == MODE_TANK) {
-    display.fillRect(x0 + 4, y0 + 10, 20, 12, SSD1306_WHITE);   // корпус
-    display.fillRect(x0 + 10, y0 + 3, 8, 8, SSD1306_WHITE);     // башня
-    display.drawLine(x0 + 18, y0 + 6, x0 + 27, y0 + 6, SSD1306_WHITE); // ствол
-    display.fillRect(x0 + 1, y0 + 22, 26, 4, SSD1306_WHITE);    // гусеницы
-  } else if (currentMode == MODE_CAR) {
-    display.fillRoundRect(x0 + 2, y0 + 8, 24, 10, 3, SSD1306_WHITE);  // кузов
-    display.fillRoundRect(x0 + 8, y0 + 3, 12, 7, 2, SSD1306_WHITE);   // крыша/кабина
-    display.fillCircle(x0 + 7, y0 + 20, 3, SSD1306_WHITE);            // колесо
-    display.fillCircle(x0 + 21, y0 + 20, 3, SSD1306_WHITE);           // колесо
+    display.fillRect(x0 + 4, y0 + 10, 20, 12, SSD1306_WHITE);
+    display.fillRect(x0 + 10, y0 + 3, 8, 8, SSD1306_WHITE);
+    display.drawLine(x0 + 18, y0 + 6, x0 + 27, y0 + 6, SSD1306_WHITE);
+    display.fillRect(x0 + 1, y0 + 22, 26, 4, SSD1306_WHITE);
   } else {
-    // MODE_TEST — гаечный ключ
-    drawWrenchIcon(x0, y0);
+    display.fillRoundRect(x0 + 2, y0 + 8, 24, 10, 3, SSD1306_WHITE);
+    display.fillRoundRect(x0 + 8, y0 + 3, 12, 7, 2, SSD1306_WHITE);
+    display.fillCircle(x0 + 7, y0 + 20, 3, SSD1306_WHITE);
+    display.fillCircle(x0 + 21, y0 + 20, 3, SSD1306_WHITE);
   }
 }
 
@@ -271,7 +243,6 @@ void updateDisplay(int clients) {
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
 
-  // Предупреждение о разряде — перекрывает всё остальное на экране
   if (lowBattCount >= 3) {
     display.setTextSize(3);
     display.setCursor(37, 4);
@@ -286,17 +257,12 @@ void updateDisplay(int clients) {
     return;
   }
 
-  // Крупно — то, что нужно видеть одним взглядом, не всматриваясь
   display.setTextSize(2);
   display.setCursor(0, 0);
-  if (currentMode == MODE_TANK) display.print("TANK");
-  else if (currentMode == MODE_CAR) display.print("CAR");
-  else display.print("TEST");
-  
+  display.print(currentMode == MODE_TANK ? "TANK" : "CAR");
   display.setCursor(0, 20);
   display.printf("%d%%\n", battPct);
 
-  // Мелко — техническая информация для отладки
   display.setTextSize(1);
   display.setCursor(0, 44);
   display.printf("%.2fV\n", battV);
@@ -308,15 +274,23 @@ void updateDisplay(int clients) {
   display.display();
 }
 
-// ---------- WebSocket ----------
+void loadMode() {
+  prefs.begin("cfg", false);
+  currentMode = (Mode)prefs.getUChar("mode", MODE_TANK);
+}
+void saveMode(Mode m) {
+  currentMode = m;
+  prefs.putUChar("mode", (uint8_t)m);
+}
+
 void handleWsMessage(uint8_t *data, size_t len) {
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<128> doc;
   if (deserializeJson(doc, data, len) != DeserializationError::Ok) return;
 
   lastCmdMillis = millis();
 
   if (doc.containsKey("mode")) {
-    currentMode = (Mode)doc["mode"].as<int>();
+    saveMode((Mode)doc["mode"].as<int>());
     engineSimOn = false;
     stopAll();
     return;
@@ -328,7 +302,6 @@ void handleWsMessage(uint8_t *data, size_t len) {
     applySteer(servoVal);
     return;
   }
-
   if (doc.containsKey("maxdeg")) {
     steerMaxAngleDeg = constrain(doc["maxdeg"].as<int>(), 5, 90);
     prefs.putInt("steer_a", steerMaxAngleDeg);
@@ -336,37 +309,65 @@ void handleWsMessage(uint8_t *data, size_t len) {
     return;
   }
 
-  if (doc.containsKey("revA")) { reverseA = doc["revA"].as<int>() == 1; prefs.putUChar("revA", reverseA ? 1 : 0); }
-  if (doc.containsKey("revB")) { reverseB = doc["revB"].as<int>() == 1; prefs.putUChar("revB", reverseB ? 1 : 0); }
-  if (doc.containsKey("revC")) { reverseC = doc["revC"].as<int>() == 1; prefs.putUChar("revC", reverseC ? 1 : 0); }
+  if (doc.containsKey("rev")) {
+    const char* rch = doc["rev"] | "";
+    if (strcmp(rch, "A") == 0) {
+      reverseA = !reverseA;
+      prefs.putUChar("revA", reverseA ? 1 : 0);
+      applyMotorA(motorAVal);
+    } else if (strcmp(rch, "B") == 0) {
+      reverseB = !reverseB;
+      prefs.putUChar("revB", reverseB ? 1 : 0);
+      if (engineSimOn && currentMode == MODE_CAR) applyEngineSim();
+      else applyMotorB(motorBVal);
+    } else if (strcmp(rch, "C") == 0) {
+      reverseC = !reverseC;
+      prefs.putUChar("revC", reverseC ? 1 : 0);
+      applyMotorC(motorCVal);
+    }
+    return;
+  }
 
-  if (doc.containsKey("ledF")) { ledFrontOn = doc["ledF"].as<int>() == 1; prefs.putUChar("ledF", ledFrontOn ? 1 : 0); applyLeds(); }
-  if (doc.containsKey("ledR")) { ledRearOn = doc["ledR"].as<int>() == 1; prefs.putUChar("ledR", ledRearOn ? 1 : 0); applyLeds(); }
+  if (doc.containsKey("led")) {
+    const char* lch = doc["led"] | "";
+    if (strcmp(lch, "F") == 0) {
+      ledFrontOn = !ledFrontOn;
+      prefs.putUChar("ledF", ledFrontOn ? 1 : 0);
+    } else if (strcmp(lch, "R") == 0) {
+      ledRearOn = !ledRearOn;
+      prefs.putUChar("ledR", ledRearOn ? 1 : 0);
+    }
+    applyLeds();
+    return;
+  }
 
   if (doc.containsKey("eng")) {
-    engineSimOn = doc["eng"].as<int>() == 1;
-    if (!engineSimOn) {
-      motorBVal = 0;
-      applyMotorB(0);
-    } else {
-      applyMotorA(motorAVal);
+    if (currentMode == MODE_CAR) {
+      engineSimOn = !engineSimOn;
+      if (engineSimOn) applyEngineSim();
+      else applyMotorB(0);
     }
+    return;
   }
 
   const char* ch = doc["ch"] | "";
   int val = doc["val"] | 0;
 
-  if (strcmp(ch, "A") == 0) applyMotorA(val);
-  else if (strcmp(ch, "B") == 0 && !engineSimOn) applyMotorB(val);
-  else if (strcmp(ch, "C") == 0) applyMotorC(val);
-  else if (strcmp(ch, "S") == 0) applySteer(val);
-
-  updateDriverStandby();
+  if (currentMode == MODE_TANK) {
+    if (strcmp(ch, "A") == 0) applyMotorA(val);
+    else if (strcmp(ch, "B") == 0) applyMotorB(val);
+  } else {
+    if (strcmp(ch, "A") == 0) applyMotorA(val);
+    else if (strcmp(ch, "B") == 0 && !engineSimOn) applyMotorB(val);
+    else if (strcmp(ch, "C") == 0) applyMotorC(val);
+    else if (strcmp(ch, "S") == 0) applySteer(val);
+  }
 }
 
-void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
+void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client,
+               AwsEventType type, void *arg, uint8_t *data, size_t len) {
   if (type == WS_EVT_CONNECT) {
-    char buf[200];
+    char buf[160];
     buildStatus(buf, sizeof(buf));
     client->text(buf);
   } else if (type == WS_EVT_DATA) {
@@ -374,8 +375,8 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
   }
 }
 
-// ---------- HTML GUI v0.2.35 ----------
-const char PAGE_HTML[] PROGMEM = R"HTML(
+// ---------- HTML страница ----------
+const char PAGE_HTML[] = R"HTML(
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -387,14 +388,8 @@ const char PAGE_HTML[] PROGMEM = R"HTML(
   --bg:#0d0f12; --panel:#141820; --panel2:#1b2029; --border:#2a3140;
   --blue:#3b82f6; --blue-dk:#2563eb; --emerald:#10b981; --rose:#f43f5e; --amber:#f59e0b; --cyan:#22d3ee;
   --text:#e2e8f0; --muted:#94a3b8;
-  --track:#1b2029; --svg-fill:#1b2029; --svg-stroke:#2a3140; --svg-deep:#0d0f12;
-  --sh:180px; --T:64px;
-}
-[data-theme="light"]{
-  --bg:#e8eef5; --panel:#ffffff; --panel2:#eef2f7; --border:#c5d0de;
-  --blue:#2563eb; --blue-dk:#1d4ed8; --emerald:#059669; --rose:#e11d48; --amber:#d97706; --cyan:#0891b2;
-  --text:#0f172a; --muted:#64748b;
-  --track:#dbe3ee; --svg-fill:#dbe3ee; --svg-stroke:#94a3b8; --svg-deep:#cbd5e1;
+  --sh:200px;
+  --T:68px;
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none;touch-action:none;
@@ -402,95 +397,138 @@ html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none;touch-ac
   user-select:none;-webkit-user-select:none}
 body{padding:max(env(safe-area-inset-top,0px),6px) 10px max(env(safe-area-inset-bottom,0px),6px);
   display:flex;justify-content:center}
-.wrap{width:100%;max-width:1000px;height:100%;display:flex;flex-direction:column;gap:6px}
+.wrap{width:100%;max-width:1000px;height:100%;display:flex;flex-direction:column;gap:8px}
 
 .header{flex:none;display:flex;justify-content:space-between;align-items:center;gap:8px;
-  background:var(--panel);border:1px solid var(--border);padding:6px 10px;border-radius:14px}
-.brand{display:flex;align-items:center;gap:8px;min-width:0}
-.brand-icon{width:28px;height:28px;border-radius:8px;background:rgba(59,130,246,.15);
-  border:1px solid rgba(59,130,246,.4);display:flex;align-items:center;justify-content:center;color:var(--blue);flex-shrink:0}
-.brand-title{font-size:12px;font-weight:700;line-height:1}
-.brand-sub{display:flex;align-items:center;gap:5px;font-size:9px;color:var(--muted);margin-top:2px}
+  background:rgba(20,24,32,.85);border:1px solid var(--border);padding:8px 12px;border-radius:16px;box-shadow:0 4px 20px rgba(0,0,0,.3)}
+.brand{display:flex;align-items:center;gap:10px}
+.brand-icon{width:32px;height:32px;border-radius:10px;background:rgba(59,130,246,.15);
+  border:1px solid rgba(59,130,246,.4);display:flex;align-items:center;justify-content:center;font-size:16px}
+.brand-title{font-size:13px;font-weight:700;line-height:1}
+.brand-sub{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--muted);margin-top:3px}
 .brand-ver{font-size:9px;color:var(--muted);opacity:.7;margin-top:1px}
 .dot{width:6px;height:6px;border-radius:50%;background:var(--emerald);animation:pulse 1.5s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.mode-switch{display:flex;gap:3px;background:var(--panel2);border:1px solid var(--border);border-radius:11px;padding:3px;flex-shrink:0}
-.mode-btn{border:none;background:transparent;color:var(--muted);font-size:11px;font-weight:600;
-  padding:6px 10px;border-radius:8px;cursor:pointer;white-space:nowrap}
-.mode-btn.active{background:var(--blue-dk);color:#fff;box-shadow:0 0 12px rgba(59,130,246,.45)}
-.badge{font-size:9px;font-weight:700;padding:3px 7px;border-radius:7px;white-space:nowrap;
-  background:rgba(16,185,129,.12);color:var(--emerald);border:1px solid rgba(16,185,129,.3)}
-.icon-btn{width:30px;height:30px;border-radius:9px;background:var(--panel2);border:1px solid var(--border);
-  color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:13px;flex-shrink:0}
-.hstats{display:flex;align-items:center;gap:10px}
-.stat{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:600;white-space:nowrap}
-.bars{display:flex;align-items:flex-end;gap:2px;height:14px}
-.bars i{display:block;width:3px;border-radius:1px;background:var(--border)}
-.bars i:nth-child(1){height:4px}.bars i:nth-child(2){height:7px}
-.bars i:nth-child(3){height:11px}.bars i:nth-child(4){height:14px}
-.bars.w1 i.on{background:var(--rose)}.bars.w2 i.on{background:var(--amber)}
+.mode-switch{display:flex;gap:4px;background:rgba(2,6,15,.6);border:1px solid var(--border);border-radius:12px;padding:4px}
+.mode-btn{border:none;background:transparent;color:var(--muted);font-size:12px;font-weight:600;
+  padding:7px 12px;border-radius:9px;cursor:pointer}
+.mode-btn.active{background:var(--blue-dk);color:#fff;box-shadow:0 0 14px rgba(59,130,246,.5)}
+.badge{font-size:10px;font-weight:700;padding:4px 8px;border-radius:8px;white-space:nowrap;
+  background:rgba(16,185,129,.1);color:var(--emerald);border:1px solid rgba(16,185,129,.25)}
+.badge.bad{background:rgba(244,63,94,.12);color:var(--rose);border-color:rgba(244,63,94,.3)}
+.icon-btn{width:32px;height:32px;border-radius:10px;background:var(--panel2);border:1px solid var(--border);
+  color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:14px}
+
+.hstats{display:flex;align-items:center;gap:12px;transition:opacity .2s}
+.hstats.stale{opacity:.35}
+.stat{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:600;white-space:nowrap}
+.bars{display:flex;align-items:flex-end;gap:2px;height:16px}
+.bars i{display:block;width:4px;border-radius:1px;background:#2a3140}
+.bars i:nth-child(1){height:5px}.bars i:nth-child(2){height:9px}
+.bars i:nth-child(3){height:13px}.bars i:nth-child(4){height:16px}
+.bars.w1 i.on{background:var(--rose)}
+.bars.w2 i.on{background:var(--amber)}
 .bars.w3 i.on,.bars.w4 i.on{background:var(--emerald)}
-.bat{position:relative;width:24px;height:12px;border:2px solid var(--muted);border-radius:3px;padding:1px}
-.bat::after{content:"";position:absolute;right:-4px;top:2px;width:2px;height:5px;background:var(--muted);border-radius:0 1px 1px 0}
-.bat-fill{height:100%;width:70%;background:var(--emerald);border-radius:1px}
-.bat.warn .bat-fill{background:var(--amber)}.bat.crit .bat-fill{background:var(--rose)}
+.bat{position:relative;width:26px;height:13px;border:2px solid var(--muted);border-radius:3px;padding:1px}
+.bat::after{content:"";position:absolute;right:-5px;top:2px;width:3px;height:5px;background:var(--muted);border-radius:0 2px 2px 0}
+.bat-fill{height:100%;width:0;background:var(--emerald);border-radius:1px}
+.bat.warn .bat-fill{background:var(--amber)}
+.bat.crit .bat-fill{background:var(--rose)}
+
+.banner{flex:none;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:7px 12px;border-radius:12px;font-size:12px;font-weight:600}
+.banner.lvl1{background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.5);color:#fbbf24}
+.banner.lvl2{background:rgba(244,63,94,.16);border:1px solid rgba(244,63,94,.55);color:#fb7185}
+.banner-x{font-size:14px;opacity:.8;cursor:pointer}
 
 .panel{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
-  background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:10px;overflow:hidden}
-.cluster{display:flex;align-items:center;justify-content:center;gap:clamp(14px,4vw,40px);height:100%;width:100%}
-.col{display:flex;flex-direction:column;align-items:center;gap:3px;height:100%;justify-content:center}
-.lbl{font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
-.val{font-size:12px;font-weight:700;font-family:ui-monospace,monospace;color:var(--blue)}
-.val.g{color:var(--emerald)}.val.c{color:var(--cyan)}.val.a{color:var(--amber)}
+  background:rgba(20,24,32,.6);border:1px solid var(--border);border-radius:22px;
+  padding:14px;box-shadow:0 20px 40px rgba(0,0,0,.35);overflow:hidden}
+.cluster{display:flex;align-items:center;justify-content:center;gap:clamp(24px,7vw,70px)}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.col{display:flex;flex-direction:column;align-items:center;gap:4px}
+.lbl{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.val{font-size:12px;font-weight:700;font-family:monospace;color:var(--blue)}
+.val.g{color:var(--emerald)} .val.c{color:var(--cyan)}
 
 input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;touch-action:pan-y;margin:0}
-input[type=range]::-webkit-slider-runnable-track{
-  height:22px;cursor:pointer;background:#1b2029;border-radius:12px;border:1px solid var(--border)}
-[data-theme="light"] input[type=range]::-webkit-slider-runnable-track{background:#dbe3ee}
-input[type=range]::-webkit-slider-thumb{
-  -webkit-appearance:none;width:32px;height:60px;margin-top:-19px;
-  border-radius:12px;background:var(--blue);cursor:pointer;border:2px solid #fff;
-  box-shadow:0 0 14px rgba(59,130,246,.8)}
-input[type=range]:disabled::-webkit-slider-thumb{background:#475569;box-shadow:none;border-color:#64748b}
-input[type=range]:disabled::-webkit-slider-runnable-track{opacity:.4}
+input[type=range]::-webkit-slider-runnable-track{height:22px;cursor:pointer;background:#1b2029;border-radius:12px;border:1px solid var(--border)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:32px;height:60px;margin-top:-19px;
+  border-radius:12px;background:var(--blue);cursor:pointer;border:2px solid #fff;box-shadow:0 0 14px rgba(59,130,246,.8)}
 input.slim::-webkit-slider-runnable-track{height:14px}
-input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-radius:10px}
+input.slim::-webkit-slider-thumb{width:22px;height:34px;margin-top:-11px;border-radius:9px}
 
 .slider-v-container{height:var(--sh);width:var(--T);display:flex;align-items:center;justify-content:center;
   background:rgba(2,6,15,.7);border-radius:20px;border:1px solid var(--border);box-shadow:inset 0 2px 8px rgba(0,0,0,.4)}
-[data-theme="light"] .slider-v-container{background:#e2e8f0;box-shadow:inset 0 2px 6px rgba(0,0,0,.08)}
-.slider-v{flex:none;width:var(--sh)!important;height:var(--T)!important;transform:rotate(-90deg);transform-origin:center}
+.slider-v{flex:none;width:var(--sh) !important;height:var(--T) !important;transform:rotate(-90deg);transform-origin:center}
 .slider-h-container{width:100%;height:var(--T);display:flex;align-items:center;padding:0 8px;
   background:rgba(2,6,15,.7);border-radius:20px;border:1px solid var(--border);box-shadow:inset 0 2px 8px rgba(0,0,0,.4)}
-[data-theme="light"] .slider-h-container{background:#e2e8f0;box-shadow:inset 0 2px 6px rgba(0,0,0,.08)}
 .slider-h-container input{width:100%}
+.slim-wrap{height:36px;display:flex;align-items:center}
+.slim-wrap input{width:100%}
 
-.slider-v-container input.slider-v::-webkit-slider-thumb{
-  width:36px;height:90px;margin-top:-34px;border-radius:14px}
-.slider-v-container .slider-v{height:110px!important}
+.tank-svg{height:calc(var(--sh) - 24px);width:auto;aspect-ratio:240/280}
+.car-svg{height:calc(var(--sh) - 8px);width:auto;aspect-ratio:240/200}
+.btn-row{display:flex;gap:8px;margin-top:8px}
+.aux-btn{width:46px;height:36px;border-radius:12px;background:var(--panel2);border:1px solid var(--border);
+  color:var(--text);font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.aux-btn:active{background:var(--blue-dk)}
+
+.led-btn svg{color:#3a4252;transition:color .15s,filter .15s}
+.led-btn[data-ch="F"].active svg{color:#10b981;filter:drop-shadow(0 0 5px #10b981)}
+.led-btn[data-ch="R"].active svg{color:#f43f5e;filter:drop-shadow(0 0 5px #f43f5e)}
+
+.eng-btn svg{color:#3a4252;transition:color .15s,filter .15s}
+.eng-btn.active svg{color:#f59e0b;filter:drop-shadow(0 0 5px #f59e0b)}
+
+.rev-btn{margin-top:6px;padding:5px 10px;border-radius:10px;background:var(--panel2);border:1px solid var(--border);
+  color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.03em;cursor:pointer;white-space:nowrap}
+.rev-btn.active{background:rgba(59,130,246,.18);border-color:var(--blue);color:var(--blue)}
+
+.side{width:300px;align-self:stretch;display:flex;flex-direction:column;justify-content:space-between;gap:8px}
+.field{background:rgba(2,6,15,.55);padding:8px 10px;border-radius:16px;border:1px solid var(--border)}
+.field label{font-size:11px;font-weight:600;color:#cbd5e1}
+.field .row{margin-bottom:4px}
+.cal{display:flex;align-items:center;gap:6px;margin-top:6px}
+.mini-btn{width:30px;height:30px;border-radius:9px;background:var(--panel2);border:1px solid var(--border);
+  color:var(--text);font-size:16px;cursor:pointer;padding:0}
+.num{width:56px;height:30px;background:#0d0f12;color:#e2e8f0;border:1px solid var(--border);border-radius:8px;padding:4px}
+
+.hidden{display:none !important}
+.wheel{transform-box:fill-box;transform-origin:center;transition:transform .08s ease-out}
+
+@keyframes boltPulse{0%,100%{opacity:.55}50%{opacity:1}}
+.bolt-glow{filter:drop-shadow(0 0 5px #22d3ee)}
+.bolt-pulse{animation:boltPulse 1s ease-in-out infinite}
+
+.footer{flex:none;background:rgba(20,24,32,.9);border:1px solid var(--border);border-radius:14px;
+  padding:6px 12px;display:flex;justify-content:space-between;align-items:center}
+.footer span:first-child{font-size:10px;color:var(--muted)}
+.footer code{font-size:11px;color:var(--cyan);background:#020617;padding:2px 8px;border-radius:6px;border:1px solid var(--border)}
+
+.overlay{display:none;position:fixed;inset:0;z-index:50;background:rgba(2,6,15,.96);
+  flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+@media (orientation:portrait){.overlay{display:flex}}
+.overlay-icon{width:70px;height:70px;margin-bottom:20px;border-radius:20px;background:rgba(59,130,246,.15);
+  border:1px solid rgba(59,130,246,.4);display:flex;align-items:center;justify-content:center;font-size:34px}
+.overlay h2{font-size:18px;margin:0 0 8px}
+.overlay p{font-size:13px;color:var(--muted);max-width:280px;margin:0 0 24px;line-height:1.5}
+.fs-btn{padding:13px 22px;border-radius:16px;background:var(--blue-dk);color:#fff;border:none;
+  font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 0 20px rgba(59,130,246,.4)}
 
 /* ========== ПЛАВНЫЙ ПЕРЕХОД: ДЖОЙСТИК B ↔ БАННЕР "ИМИТАЦИЯ ДВС" ========== */
 /* Контейнер slim-container — обёртка только для джойстика B и баннера */
 .slim-container {
   position: relative;
-  min-height: 52px;
+  min-height: 36px;
   margin-top: 4px;
 }
 
-/* Обычный .slim-wrap (для джойстика C и других) — в нормальном потоке, без absolute */
+/* Обычный .slim-wrap (для джойстика C и других) — в нормальном потоке */
 .slim-wrap {
-  height: 52px;
+  height: 36px;
   display: flex;
   align-items: center;
-  padding: 0 8px;
-  background: rgba(2,6,15,.7);
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  box-shadow: inset 0 2px 8px rgba(0,0,0,.4);
-}
-[data-theme="light"] .slim-wrap {
-  background:#e2e8f0;
-  box-shadow: inset 0 2px 6px rgba(0,0,0,.08);
 }
 .slim-wrap input { width: 100%; }
 
@@ -500,7 +538,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   top: 0;
   left: 0;
   right: 0;
-  height: 52px;
+  height: 36px;
   opacity: 1;
   transform: scale(1);
   transition: opacity 0.35s ease, transform 0.35s ease;
@@ -518,11 +556,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   top: 0;
   left: 0;
   right: 0;
-  height: 52px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
   letter-spacing: .04em;
   text-transform: uppercase;
@@ -542,206 +580,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   pointer-events: auto;
 }
 /* ========== КОНЕЦ ПЛАВНОГО ПЕРЕХОДА ========== */
-
-.tank-svg{height:calc(var(--sh) - 8px);width:auto;aspect-ratio:240/280;max-height:100%}
-.car-svg{height:calc(var(--sh) - 4px);width:auto;aspect-ratio:240/200;max-height:100%}
-.car-wrap{position:relative;display:flex;flex-direction:column;align-items:center}
-
-.btn-row{display:flex;gap:8px;margin-top:6px;flex-shrink:0}
-
-#tank-panel .cluster{justify-content:space-evenly;width:100%;padding:0 8px}
-#tank-panel .slider-v-container{width:168px}
-#classic-panel .cluster{display:grid;grid-template-columns:1.15fr .85fr 1.15fr;align-items:center;width:100%}
-#classic-panel .col:first-child{justify-self:center}
-#classic-panel .slider-v-container{width:160px}
-#classic-panel .side{width:min(340px,36vw)}
-
-#test-panel .cluster{display:flex;align-items:center;justify-content:space-around;width:100%;height:100%;gap:clamp(16px,4vw,40px)}
-#test-panel .motors-group{display:flex;align-items:center;justify-content:center;gap:clamp(24px,5vw,48px)}
-#test-panel .servo-group{display:flex;flex-direction:column;align-items:center;justify-content:center;width:min(380px,40vw);gap:16px}
-
-/* ---------- Плавные анимации выезда панелей (Слайдеры B/C vs Тахометр) ---------- */
-.side-stack {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-  width: 100%;
-  overflow: hidden;
-}
-.dash{
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  opacity: 1; transform: translateY(0);
-  transition: transform 0.42s cubic-bezier(0.22, 0.9, 0.3, 1), opacity 0.35s ease;
-  pointer-events: auto;
-}
-.dash.hide{
-  opacity: 0; transform: translateY(-110%);
-  pointer-events: none;
-}
-.side-top{
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column; gap: 6px; justify-content: flex-start;
-  opacity: 0; transform: translateY(110%);
-  transition: transform 0.42s cubic-bezier(0.22, 0.9, 0.3, 1), opacity 0.35s ease;
-  pointer-events: none;
-}
-.side-top.open{
-  opacity: 1; transform: translateY(0);
-  pointer-events: auto;
-}
-.side-top .field{flex:1;display:flex;flex-direction:column;justify-content:center}
-
-.gauge{display:flex;flex-direction:column;align-items:center;width:46%}
-.gauge svg{width:100%;height:auto;max-height:118px}
-.dead-btn{opacity:.38;pointer-events:none;font-weight:800;font-size:14px;color:var(--muted)}
-
-.aux-btn{
-  width:44px;height:44px;border-radius:14px;
-  background:rgba(20,24,32,.85);border:1.5px solid #2a3140;
-  color:#64748b;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
-  transition:border-color .28s ease, box-shadow .28s ease, color .28s ease, background .28s ease, transform .18s ease;
-  font-size:20px;line-height:1;padding:0;
-}
-.aux-btn:active{transform:scale(.92)}
-[data-theme="light"] .aux-btn{background:#eef2f7;border-color:#c5d0de;color:#94a3b8}
-.aux-btn .ico{font-size:20px;line-height:1;filter:grayscale(.3) opacity(.75)}
-.aux-btn.active .ico{filter:none;opacity:1}
-
-.led-btn[data-ch="F"].active{
-  border-color:#eab308;color:#eab308;
-  box-shadow:0 0 14px rgba(234,179,8,.5), inset 0 0 8px rgba(234,179,8,.1);
-}
-.led-btn[data-ch="R"].active{
-  border-color:#f43f5e;color:#f43f5e;
-  box-shadow:0 0 14px rgba(244,63,94,.5), inset 0 0 8px rgba(244,63,94,.1);
-}
-.reset-btn:active{
-  border-color:var(--rose);color:var(--rose);
-  box-shadow:0 0 14px rgba(244,63,94,.5);
-}
-.eng-btn.active{
-  border-color:#f59e0b;color:#f59e0b;
-  box-shadow:0 0 12px rgba(245,158,11,.45), inset 0 0 8px rgba(245,158,11,.08);
-}
-.aux-mode-btn.active{
-  border-color:#22d3ee;color:#22d3ee;
-  box-shadow:0 0 12px rgba(34,211,238,.4), inset 0 0 8px rgba(34,211,238,.08);
-}
-
-.rev-btn{margin-top:4px;padding:4px 8px;border-radius:8px;background:var(--panel2);border:1px solid var(--border);
-  color:var(--muted);font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap}
-.rev-btn.active{background:rgba(59,130,246,.15);border-color:var(--blue);color:var(--blue)}
-
-.hold-btn{padding:4px 8px;border-radius:8px;background:var(--panel2);border:1px solid var(--border);
-  color:var(--muted);font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap}
-.hold-btn.active{background:rgba(16,185,129,.15);border-color:var(--emerald);color:var(--emerald)}
-
-.side{
-  width:min(260px,28vw);align-self:stretch;
-  display:flex;flex-direction:column;gap:6px;
-  min-height:0;
-}
-.side-bottom{flex:0 0 auto;margin-top:auto}
-.field{background:var(--panel2);padding:8px;border-radius:12px;border:1px solid var(--border)}
-.field label{font-size:11px;font-weight:600;color:var(--text)}
-.field .row{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
-
-.mini-btn{width:28px;height:28px;border-radius:8px;background:var(--panel2);border:1px solid var(--border);
-  color:var(--text);font-size:14px;cursor:pointer;padding:0}
-.sheet .mini-btn{width:52px;height:48px;font-size:22px;border-radius:12px}
-.sheet .rev-btn, .sheet .hold-btn{min-width:64px;min-height:44px;font-size:14px;padding:8px 12px;border-radius:12px}
-.sheet .num{width:72px;height:44px;font-size:16px}
-.num{width:48px;height:28px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:2px;text-align:center;font-weight:700;font-size:12px}
-
-.hidden{display:none!important}
-.wheel{transform-box:fill-box;transform-origin:center;transition:transform .08s ease-out}
-
-#t-left-body, #t-right-body, #t-left-f, #t-left-r, #t-right-f, #t-right-r, #w-rl, #w-rr, #c-fwd, #c-rev {
-  transition: stroke 0.36s ease, fill 0.36s ease, filter 0.36s ease;
-}
-#t-left-body.active-light, #t-right-body.active-light, 
-#t-left-f.active-light, #t-left-r.active-light, 
-#t-right-f.active-light, #t-right-r.active-light, 
-#w-rl.active-light, #w-rr.active-light, 
-#c-fwd.active-light, #c-rev.active-light {
-  transition: stroke 0.18s ease, fill 0.18s ease, filter 0.18s ease;
-}
-
-#car-body {
-  transition: stroke 1.00s cubic-bezier(.22,.9,.3,1), stroke-width 1.00s cubic-bezier(.22,.9,.3,1), filter 1.00s cubic-bezier(.22,.9,.3,1);
-}
-#car-body.eng-glow {
-  transition: stroke 0.50s cubic-bezier(.22,.9,.3,1), stroke-width 0.50s cubic-bezier(.22,.9,.3,1), filter 0.50s cubic-bezier(.22,.9,.3,1);
-}
-
-.sparks {
-  pointer-events:none;
-  opacity: 0;
-  transition: opacity 1.00s ease;
-}
-.sparks.on {
-  opacity: 1;
-  transition: opacity 0.50s ease;
-}
-
-/* Анимация проявления и плавной перестановки иконок моторов B и C */
-#motors-icon {
-  transition: opacity 0.40s ease;
-}
-#motor-b-group {
-  transition: opacity 0.40s ease, transform 0.40s cubic-bezier(0.22, 0.9, 0.3, 1);
-}
-#motor-c-group {
-  transition: opacity 0.40s ease, transform 0.40s cubic-bezier(0.22, 0.9, 0.3, 1);
-}
-#motor-c-group.centered {
-  transform: translateY(-28px);
-}
-
-@keyframes boltPulse{0%,100%{opacity:.55}50%{opacity:1}}
-.bolt-glow{filter:drop-shadow(0 0 5px #22d3ee)}
-.bolt-pulse{animation:boltPulse 1s ease-in-out infinite}
-@keyframes sparkFly{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--sx),var(--sy)) scale(.2);opacity:0}}
-.spark{position:absolute;width:3px;height:3px;border-radius:50%;background:var(--amber);
-  box-shadow:0 0 6px 2px rgba(245,158,11,.8);animation:sparkFly .9s ease-out infinite}
-
-.footer{flex:none;background:var(--panel);border:1px solid var(--border);border-radius:12px;
-  padding:5px 10px;display:flex;justify-content:space-between;align-items:center}
-.footer span:first-child{font-size:9px;color:var(--muted)}
-.footer code{font-size:10px;color:var(--cyan);background:var(--panel2);padding:2px 7px;border-radius:5px;border:1px solid var(--border)}
-
-.overlay{display:none;position:fixed;inset:0;z-index:50;background:var(--bg);
-  flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
-@media (orientation:portrait){.overlay{display:flex}}
-.overlay-icon{width:64px;height:64px;margin-bottom:16px;border-radius:16px;background:rgba(59,130,246,.15);
-  border:1px solid rgba(59,130,246,.4);display:flex;align-items:center;justify-content:center;font-size:28px}
-.overlay h2{font-size:16px;margin:0 0 6px}
-.overlay p{font-size:12px;color:var(--muted);max-width:260px;margin:0 0 18px;line-height:1.45}
-.fs-btn{padding:12px 20px;border-radius:14px;background:var(--blue-dk);color:#fff;border:none;
-  font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 0 16px rgba(59,130,246,.4)}
-
-.sbg{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.45);
-  opacity:0;pointer-events:none;transition:opacity .28s ease}
-.sbg.open{opacity:1;pointer-events:auto}
-.sheet{position:fixed;top:0;right:0;bottom:0;z-index:41;width:min(300px,85vw);
-  background:var(--panel);border-left:1px solid var(--border);
-  transform:translateX(105%);
-  transition:transform .34s cubic-bezier(.22,.9,.3,1);
-  display:flex;flex-direction:column;overflow:hidden;touch-action:pan-y;
-  will-change:transform;box-shadow:-12px 0 32px rgba(0,0,0,.35)}
-.sheet.open{transform:translateX(0)}
-.sheet-h{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border)}
-.sheet-b{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 12px 24px;
-  display:flex;flex-direction:column;gap:8px;touch-action:pan-y}
-.block{background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:10px;flex-shrink:0}
-.block h3{font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 8px}
-.line{display:flex;align-items:center;gap:6px;margin-bottom:6px;font-size:11px;font-weight:600;color:var(--muted)}
-.line:last-child{margin-bottom:0}
-.grow{flex:1}
-.svg-body{fill:var(--svg-fill);stroke:var(--svg-stroke)}
-.svg-deep{fill:var(--svg-deep);stroke:var(--svg-stroke)}
 </style>
 </head>
 <body>
@@ -749,49 +587,43 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 <div class="overlay" id="rotate-overlay">
   <div class="overlay-icon">📱</div>
   <h2>Поверните устройство</h2>
-  <p>Для управления переведите телефон в горизонтальное положение или включите полный экран.</p>
+  <p>Для управления моделью переведите телефон в горизонтальное положение или включите полноэкранный режим.</p>
   <button class="fs-btn" onclick="toggleFullscreen()">⛶ Включить полный экран</button>
 </div>
 
 <div class="wrap">
   <div class="header">
     <div class="brand">
-      <div class="brand-icon">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-          <rect x="2" y="5" width="20" height="15" rx="3" fill="none" stroke="currentColor" stroke-width="2"/>
-          <circle cx="7" cy="9" r="2"/>
-          <circle cx="17" cy="9" r="2"/>
-          <circle cx="7" cy="16" r="2"/>
-          <circle cx="17" cy="16" r="2"/>
-        </svg>
-      </div>
+      <div class="brand-icon">⚙</div>
       <div>
         <div class="brand-title">Lego Control Center</div>
-        <div class="brand-sub"><span class="dot"></span><span id="ip-addr">192.168.4.1</span></div>
-        <div class="brand-ver">0.2.35</div>
+        <div class="brand-sub"><span class="dot"></span><span id="ip-address">192.168.4.1</span></div>
+        <div class="brand-ver">(beta 0.2.36)</div>
       </div>
     </div>
     <div class="mode-switch">
-      <button id="btn-tank" class="mode-btn active" type="button">🛡 Танковый</button>
-      <button id="btn-classic" class="mode-btn" type="button">🚗 Классический</button>
-      <button id="btn-test" class="mode-btn" type="button"> Тестовый</button>
+      <button id="btn-tank" class="mode-btn active" onclick="switchMode(0)">🛡 Танковый</button>
+      <button id="btn-classic" class="mode-btn" onclick="switchMode(1)">🚗 Классический</button>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-      <div class="hstats">
-        <div class="stat">
+    <div class="row" style="gap:10px">
+      <div class="hstats stale" id="hstats">
+        <div class="stat" title="Уровень Wi-Fi">
           <div class="bars w0" id="wifi-bars"><i></i><i></i><i></i><i></i></div>
           <span id="wifi-txt">--</span>
         </div>
-        <div class="stat">
-          <div class="bat" id="bat-ic"><div class="bat-fill" id="bat-fill" style="width:0%"></div></div>
-          <span id="batt-txt">--% · --V</span>
+        <div class="stat" title="Аккумулятор">
+          <div class="bat" id="bat-ic"><div class="bat-fill" id="bat-fill"></div></div>
+          <span id="batt-txt">--</span>
         </div>
       </div>
-      <button class="icon-btn" type="button" onclick="toggleFullscreen()" title="Полный экран"></button>
-      <button class="icon-btn" type="button" id="themeBtn" title="Тема">🌙</button>
-      <button class="icon-btn" type="button" id="setBtn" title="Настройки">⚙</button>
-      <span class="badge" id="ws-status">ПОДКЛЮЧЕНИЕ</span>
+      <button class="icon-btn" onclick="toggleFullscreen()" title="На весь экран">⛶</button>
+      <span class="badge bad" id="link-badge">Нет связи</span>
     </div>
+  </div>
+
+  <div id="batt-banner" class="banner hidden" onclick="dismissBanner()">
+    <span id="banner-text"></span>
+    <span class="banner-x" id="banner-x">✕</span>
   </div>
 
   <main id="tank-panel" class="panel">
@@ -800,41 +632,57 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
         <span class="lbl">Левая гусеница</span>
         <span class="val" id="val-left">0%</span>
         <div class="slider-v-container">
-          <input type="range" id="slider-left" class="slider-v" min="-100" max="100" value="0">
+          <input type="range" id="slider-left" class="slider-v" min="-100" max="100" value="0"
+                 oninput="updateTank('A',this.value)"
+                 onmouseup="resetSlider('slider-left','A',updateTank)" ontouchend="resetSlider('slider-left','A',updateTank)">
         </div>
+        <button class="rev-btn" data-ch="A" onclick="toggleRev('A')">⇄ РЕВЕРС</button>
       </div>
+
       <div class="col">
         <svg class="tank-svg" viewBox="0 0 240 280">
-          <rect x="64" y="30" width="112" height="220" rx="20" class="svg-body" stroke-width="3"/>
-          <rect x="80" y="52" width="80" height="176" rx="12" class="svg-deep" stroke-width="2"/>
-          <rect x="112" y="24" width="16" height="96" rx="5" fill="var(--svg-stroke)" stroke="var(--blue)" stroke-width="1.5" opacity=".7"/>
-          <circle cx="120" cy="150" r="34" class="svg-body" stroke="var(--blue)" stroke-width="2.5" opacity=".9"/>
-          <g id="t-left-group">
-            <rect id="t-left-body" x="6" y="14" width="62" height="252" rx="14" class="svg-deep" stroke="var(--svg-stroke)" stroke-width="3"/>
-            <path d="M 6 32 H 68 M 6 52 H 68 M 6 72 H 68 M 6 92 H 68 M 6 112 H 68 M 6 132 H 68 M 6 152 H 68 M 6 172 H 68 M 6 192 H 68 M 6 212 H 68 M 6 232 H 68 M 6 248 H 68" stroke="var(--svg-stroke)" stroke-width="2" stroke-linecap="round"/>
-            <polygon id="t-left-f" points="37,42 18,72 56,72" fill="var(--svg-stroke)"/>
-            <polygon id="t-left-r" points="37,238 18,208 56,208" fill="var(--svg-stroke)"/>
+          <defs>
+            <pattern id="tread" width="62" height="16" patternUnits="userSpaceOnUse">
+              <rect width="62" height="16" fill="#090d16"/>
+              <rect y="12" width="62" height="4" fill="#1b2029"/>
+            </pattern>
+          </defs>
+          <rect x="64" y="30" width="112" height="220" rx="20" fill="#1b2029" stroke="#2a3140" stroke-width="3"/>
+          <rect x="80" y="52" width="80" height="176" rx="12" fill="#0d0f12" stroke="#1b2029" stroke-width="2"/>
+          <rect x="112" y="24" width="16" height="96" rx="5" fill="#2a3140" stroke="#3b82f6" stroke-width="1.5" opacity=".7"/>
+          <circle cx="120" cy="150" r="34" fill="#1b2029" stroke="#3b82f6" stroke-width="2.5" opacity=".9"/>
+          <g>
+            <rect id="t-left-body" x="6" y="14" width="62" height="252" rx="14" fill="url(#tread)" stroke="#2a3140" stroke-width="3"/>
+            <polygon id="t-left-f" points="37,50 18,84 56,84" fill="#2a3140"/>
+            <polygon id="t-left-r" points="37,230 18,196 56,196" fill="#2a3140"/>
           </g>
-          <g id="t-right-group">
-            <rect id="t-right-body" x="172" y="14" width="62" height="252" rx="14" class="svg-deep" stroke="var(--svg-stroke)" stroke-width="3"/>
-            <path d="M 172 32 H 234 M 172 52 H 234 M 172 72 H 234 M 172 92 H 234 M 172 112 H 234 M 172 132 H 234 M 172 152 H 234 M 172 172 H 234 M 172 192 H 234 M 172 212 H 234 M 172 232 H 234 M 172 248 H 234" stroke="var(--svg-stroke)" stroke-width="2" stroke-linecap="round"/>
-            <polygon id="t-right-f" points="203,42 184,72 222,72" fill="var(--svg-stroke)"/>
-            <polygon id="t-right-r" points="203,238 184,208 222,208" fill="var(--svg-stroke)"/>
+          <g>
+            <rect id="t-right-body" x="172" y="14" width="62" height="252" rx="14" fill="url(#tread)" stroke="#2a3140" stroke-width="3"/>
+            <polygon id="t-right-f" points="203,50 184,84 222,84" fill="#2a3140"/>
+            <polygon id="t-right-r" points="203,230 184,196 222,196" fill="#2a3140"/>
           </g>
         </svg>
         <div class="btn-row">
-          <button class="aux-btn led-btn" data-ch="F" type="button" title="Передние фары"><span class="ico">💡</span></button>
-          <button class="aux-btn led-btn" data-ch="R" type="button" title="Задние фонари"><span class="ico">🛑</span></button>
-          <button class="aux-btn eng-btn" id="tank-eng-btn" type="button" title="Имитация ДВС"><span class="ico">⚙️</span></button>
-          <button class="aux-btn aux-mode-btn" id="tank-aux-btn" type="button" title="Доп. моторы"><span class="ico">️</span></button>
+          <button class="aux-btn led-btn" data-ch="F" onclick="toggleLed('F')" title="Передние фары">
+            <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="10" r="7" fill="currentColor"/><rect x="9" y="17" width="6" height="4" rx="1" fill="currentColor"/></svg>
+          </button>
+          <button class="aux-btn led-btn" data-ch="R" onclick="toggleLed('R')" title="Задние фонари">
+            <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="10" r="7" fill="currentColor"/><rect x="9" y="17" width="6" height="4" rx="1" fill="currentColor"/></svg>
+          </button>
+          <button class="aux-btn" onclick="auxBtn(3)">3</button>
+          <button class="aux-btn" onclick="auxBtn(4)">4</button>
         </div>
       </div>
+
       <div class="col">
         <span class="lbl">Правая гусеница</span>
         <span class="val" id="val-right">0%</span>
         <div class="slider-v-container">
-          <input type="range" id="slider-right" class="slider-v" min="-100" max="100" value="0">
+          <input type="range" id="slider-right" class="slider-v" min="-100" max="100" value="0"
+                 oninput="updateTank('B',this.value)"
+                 onmouseup="resetSlider('slider-right','B',updateTank)" ontouchend="resetSlider('slider-right','B',updateTank)">
         </div>
+        <button class="rev-btn" data-ch="B" onclick="toggleRev('B')">⇄ РЕВЕРС</button>
       </div>
     </div>
   </main>
@@ -845,152 +693,80 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
         <span class="lbl">Газ (A)</span>
         <span class="val g" id="val-drive">0%</span>
         <div class="slider-v-container">
-          <input type="range" id="slider-drive" class="slider-v" min="-100" max="100" value="0">
+          <input type="range" id="slider-drive" class="slider-v" min="-100" max="100" value="0"
+                 oninput="updateDrive('A',this.value)"
+                 onmouseup="resetSlider('slider-drive','A',updateDrive)" ontouchend="resetSlider('slider-drive','A',updateDrive)">
         </div>
+        <button class="rev-btn" data-ch="A" onclick="toggleRev('A')">⇄ РЕВЕРС</button>
       </div>
-      <div class="col">
-        <div class="car-wrap">
-          <div class="sparks" id="sparks" style="position:absolute;inset:0">
-            <i class="spark" style="left:30%;top:40%;--sx:-18px;--sy:-22px;animation-delay:0s"></i>
-            <i class="spark" style="left:70%;top:35%;--sx:16px;--sy:-20px;animation-delay:.15s"></i>
-            <i class="spark" style="left:45%;top:55%;--sx:-12px;--sy:18px;animation-delay:.3s"></i>
-            <i class="spark" style="left:60%;top:50%;--sx:14px;--sy:16px;animation-delay:.45s"></i>
-            <i class="spark" style="left:35%;top:28%;--sx:-8px;--sy:-24px;animation-delay:.6s"></i>
-            <i class="spark" style="left:55%;top:70%;--sx:10px;--sy:20px;animation-delay:.75s"></i>
-          </div>
-          <svg class="car-svg" viewBox="0 0 240 200">
-            <rect id="car-body" x="70" y="20" width="100" height="160" rx="18" class="svg-body" stroke-width="3"/>
-            <polygon id="c-fwd" points="120,38 105,55 135,55" fill="var(--svg-stroke)"/>
-            <polygon id="c-rev" points="120,162 105,145 135,145" fill="var(--svg-stroke)"/>
-            <g id="motors-icon" opacity="0">
-              <g id="motor-b-group" opacity="1">
-                <polygon id="b-al" points="76,72 90,63 90,81" fill="var(--svg-stroke)"/>
-                <rect x="104" y="58" width="32" height="28" rx="7" class="svg-deep" stroke-width="2"/>
-                <polygon id="b-bolt" points="121,62 114,74 120,74 117,82 127,69 121,69" fill="var(--svg-stroke)"/>
-                <polygon id="b-ar" points="164,72 150,63 150,81" fill="var(--svg-stroke)"/>
-              </g>
-              <g id="motor-c-group">
-                <polygon id="c-al" points="76,128 90,119 90,137" fill="var(--svg-stroke)"/>
-                <rect x="104" y="114" width="32" height="28" rx="7" class="svg-deep" stroke-width="2"/>
-                <polygon id="c-bolt" points="121,118 114,130 120,130 117,138 127,125 121,125" fill="var(--svg-stroke)"/>
-                <polygon id="c-ar" points="164,128 150,119 150,137" fill="var(--svg-stroke)"/>
-              </g>
-            </g>
-            <circle id="hl-fl" cx="88" cy="32" r="5" fill="#3a4252"/>
-            <circle id="hl-fr" cx="152" cy="32" r="5" fill="#3a4252"/>
-            <circle id="hl-rl" cx="88" cy="168" r="5" fill="#3a4252"/>
-            <circle id="hl-rr" cx="152" cy="168" r="5" fill="#3a4252"/>
-            <g id="c-fl" class="wheel" transform="translate(36,45)">
-              <rect id="w-fl" x="-11" y="-20" width="22" height="40" rx="6" class="svg-deep" stroke="var(--blue)" stroke-width="2"/>
-            </g>
-            <g id="c-fr" class="wheel" transform="translate(204,45)">
-              <rect id="w-fr" x="-11" y="-20" width="22" height="40" rx="6" class="svg-deep" stroke="var(--blue)" stroke-width="2"/>
-            </g>
-            <g id="c-rl" transform="translate(36,155)">
-              <rect id="w-rl" x="-11" y="-22" width="22" height="45" rx="6" class="svg-deep" stroke="var(--svg-stroke)" stroke-width="2"/>
-            </g>
-            <g id="c-rr" transform="translate(204,155)">
-              <rect id="w-rr" x="-11" y="-22" width="22" height="45" rx="6" class="svg-deep" stroke="var(--svg-stroke)" stroke-width="2"/>
-            </g>
-          </svg>
-        </div>
-        <div class="btn-row">
-          <button class="aux-btn led-btn" data-ch="F" type="button" title="Передние фары"><span class="ico"></span></button>
-          <button class="aux-btn led-btn" data-ch="R" type="button" title="Задние фонари"><span class="ico">🛑</span></button>
-          <button class="aux-btn eng-btn" id="eng-btn" type="button" title="Имитация ДВС → мотор B"><span class="ico">️</span></button>
-          <button class="aux-btn aux-mode-btn" id="aux-mode-btn" type="button" title="Доп. моторы B/C"><span class="ico">️</span></button>
-        </div>
-      </div>
-      <div class="side">
-        <div class="side-stack">
-          <div class="dash" id="dash">
-            <div class="gauge">
-              <svg viewBox="0 0 120 100">
-                <path d="M18 78 A42 42 0 0 1 102 78" fill="none" stroke="var(--border)" stroke-width="8" stroke-linecap="round"/>
-                <path id="rpm-arc" d="M18 78 A42 42 0 0 1 102 78" fill="none" stroke="#f59e0b" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 200"/>
-                <g id="rpm-ticks"></g>
-                <line id="rpm-needle" x1="60" y1="78" x2="60" y2="40" stroke="var(--text)" stroke-width="2.5" stroke-linecap="round"/>
-                <circle cx="60" cy="78" r="4" fill="#f59e0b"/>
-                <text x="60" y="94" text-anchor="middle" fill="var(--muted)" font-size="9" font-weight="700">×1000</text>
-              </svg>
-            </div>
-            <div class="gauge">
-              <svg viewBox="0 0 120 100">
-                <path d="M18 78 A42 42 0 0 1 102 78" fill="none" stroke="var(--border)" stroke-width="8" stroke-linecap="round"/>
-                <path id="spd-arc" d="M18 78 A42 42 0 0 1 102 78" fill="none" stroke="#22d3ee" stroke-width="8" stroke-linecap="round" stroke-dasharray="0 200"/>
-                <line id="spd-needle" x1="60" y1="78" x2="60" y2="40" stroke="var(--text)" stroke-width="2.5" stroke-linecap="round"/>
-                <circle cx="60" cy="78" r="4" fill="#22d3ee"/>
-                <text x="60" y="94" text-anchor="middle" fill="var(--muted)" font-size="9" font-weight="700">м/с</text>
-              </svg>
-            </div>
-          </div>
-          <div class="side-top" id="aux-panel">
-            <div class="field" id="field-B">
-              <div class="row"><label>Мотор B</label><span class="val c" id="val-aux">0%</span></div>
-              <div class="slim-container">
-                <div class="slim-wrap" id="wrap-aux">
-                  <input type="range" class="slim" id="slider-aux" min="-100" max="100" value="0" style="width:100%">
-                </div>
-                <div class="eng-label" id="eng-label">Имитация ДВС</div>
-              </div>
-            </div>
-            <div class="field" id="field-C">
-              <div class="row"><label>Мотор C</label><span class="val a" id="val-C">0%</span></div>
-              <div class="slim-wrap">
-                <input type="range" class="slim" id="slider-C" min="-100" max="100" value="0" style="width:100%">
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="side-bottom">
-          <div class="row" style="display:flex;justify-content:space-between;margin-bottom:4px">
-            <span class="lbl">Руль (Servo)</span><span class="val" id="val-steer">0%</span>
-          </div>
-          <div class="slider-h-container">
-            <input type="range" id="slider-steer" min="-100" max="100" value="0">
-          </div>
-        </div>
-      </div>
-    </div>
-  </main>
 
-  <main id="test-panel" class="panel hidden">
-    <div class="cluster">
-      <div class="motors-group">
-        <div class="col">
-          <span class="lbl">Мотор A</span>
-          <span class="val g" id="val-test-A">0%</span>
-          <div class="slider-v-container">
-            <input type="range" id="slider-test-A" class="slider-v" min="-100" max="100" value="0">
-          </div>
-        </div>
-        <div class="col">
-          <span class="lbl">Мотор B</span>
-          <span class="val c" id="val-test-B">0%</span>
-          <div class="slider-v-container">
-            <input type="range" id="slider-test-B" class="slider-v" min="-100" max="100" value="0">
-          </div>
-        </div>
-        <div class="col">
-          <span class="lbl">Мотор C</span>
-          <span class="val a" id="val-test-C">0%</span>
-          <div class="slider-v-container">
-            <input type="range" id="slider-test-C" class="slider-v" min="-100" max="100" value="0">
-          </div>
+      <div class="col">
+        <svg class="car-svg" viewBox="0 0 240 200">
+          <rect x="70" y="20" width="100" height="160" rx="18" fill="#1b2029" stroke="#2a3140" stroke-width="3"/>
+          <polygon id="c-fwd" points="120,38 105,55 135,55" fill="#2a3140"/>
+          <polygon id="c-rev" points="120,162 105,145 135,145" fill="#2a3140"/>
+
+          <g transform="translate(120,100)">
+            <polygon id="aux-arrow-l" points="-44,0 -30,-9 -30,9" fill="#2a3140"/>
+            <rect x="-16" y="-14" width="32" height="28" rx="8" fill="#1b2029" stroke="#2a3140" stroke-width="2"/>
+            <polygon id="aux-bolt" points="1,-10 -6,2 0,2 -3,10 7,-3 1,-3" fill="#2a3140"/>
+            <polygon id="aux-arrow-r" points="44,0 30,-9 30,9" fill="#2a3140"/>
+          </g>
+
+          <g id="c-fl" class="wheel" transform="translate(36,45)"><rect x="-11" y="-20" width="22" height="40" rx="6" fill="#0d0f12" stroke="#3b82f6" stroke-width="2"/></g>
+          <g id="c-fr" class="wheel" transform="translate(204,45)"><rect x="-11" y="-20" width="22" height="40" rx="6" fill="#0d0f12" stroke="#3b82f6" stroke-width="2"/></g>
+          <g><rect x="25" y="135" width="22" height="45" rx="6" fill="#0d0f12" stroke="#2a3140" stroke-width="2"/></g>
+          <g><rect x="193" y="135" width="22" height="45" rx="6" fill="#0d0f12" stroke="#2a3140" stroke-width="2"/></g>
+        </svg>
+        <div class="btn-row">
+          <button class="aux-btn led-btn" data-ch="F" onclick="toggleLed('F')" title="Передние фары">
+            <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="10" r="7" fill="currentColor"/><rect x="9" y="17" width="6" height="4" rx="1" fill="currentColor"/></svg>
+          </button>
+          <button class="aux-btn led-btn" data-ch="R" onclick="toggleLed('R')" title="Задние фонари">
+            <svg viewBox="0 0 24 24" width="18" height="18"><circle cx="12" cy="10" r="7" fill="currentColor"/><rect x="9" y="17" width="6" height="4" rx="1" fill="currentColor"/></svg>
+          </button>
+          <button class="aux-btn eng-btn" id="eng-btn" onclick="toggleEngine()" title="Имитация оборотов двигателя">
+            <svg viewBox="0 0 24 24" width="18" height="18">
+              <rect x="4" y="9" width="13" height="9" rx="2" fill="currentColor"/>
+              <rect x="7" y="5" width="3" height="4" fill="currentColor"/>
+              <rect x="12" y="5" width="3" height="4" fill="currentColor"/>
+              <rect x="17" y="12" width="4" height="3" fill="currentColor"/>
+            </svg>
+          </button>
+          <button class="aux-btn" onclick="auxBtn(4)">4</button>
         </div>
       </div>
-      <div class="servo-group">
-        <div class="btn-row" style="margin-top:0; justify-content:center; gap:12px">
-          <button class="aux-btn led-btn" data-ch="F" type="button" title="Передние фары"><span class="ico">💡</span></button>
-          <button class="aux-btn led-btn" data-ch="R" type="button" title="Задние фонари"><span class="ico">🛑</span></button>
-          <button class="aux-btn reset-btn" id="test-reset-btn" type="button" title="Сбросить всё в 0"><span class="ico">🔄</span></button>
-        </div>
-        <div style="width:100%">
-          <div class="row" style="display:flex;justify-content:space-between;margin-bottom:4px">
-            <span class="lbl">Серво (Servo)</span><span class="val" id="val-test-S">0%</span>
+
+      <div class="side">
+        <div class="field">
+          <div class="row"><label>Доп. мотор (B)</label><span class="val c" id="val-aux">0%</span></div>
+          <div class="slim-container">
+            <div class="slim-wrap" id="wrap-aux">
+              <input type="range" class="slim" id="slider-aux" min="-100" max="100" value="0"
+                     oninput="updateAux('B',this.value)"
+                     onmouseup="resetSlider('slider-aux','B',updateAux)" ontouchend="resetSlider('slider-aux','B',updateAux)">
+            </div>
+            <div class="eng-label" id="eng-label">Имитация ДВС</div>
           </div>
+          <div class="cal">
+            <span class="lbl">Центр</span>
+            <button class="mini-btn" onclick="adjTrim(-10)">−</button>
+            <span class="val" id="val-trim">0</span>
+            <button class="mini-btn" onclick="adjTrim(10)">+</button>
+            <span class="lbl" style="margin-left:6px">Макс.°</span>
+            <input type="number" class="num" id="maxdeg-input" min="5" max="90" value="45" onchange="setMaxDeg(this.value)">
+          </div>
+          <div class="cal">
+            <span class="lbl">Реверс мотора B</span>
+            <button class="rev-btn" data-ch="B" onclick="toggleRev('B')"></button>
+          </div>
+        </div>
+        <div>
+          <div class="row"><label class="lbl">Руль (Servo)</label><span class="val" id="val-steer">0%</span></div>
           <div class="slider-h-container">
-            <input type="range" id="slider-test-S" min="-100" max="100" value="0">
+            <input type="range" id="slider-steer" min="-100" max="100" value="0"
+                   oninput="updateSteer('S',this.value)"
+                   onmouseup="resetSlider('slider-steer','S',updateSteer)" ontouchend="resetSlider('slider-steer','S',updateSteer)">
           </div>
         </div>
       </div>
@@ -999,602 +775,323 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 
   <div class="footer">
     <span>Монитор порта (TX):</span>
-    <code id="telemetry">{"ch":"—","val":0}</code>
+    <code id="telemetry">{"ch":"A","val":0}</code>
   </div>
 </div>
 
-<div class="sbg" id="sbg"></div>
-<aside class="sheet" id="sheet">
-  <div class="sheet-h">
-    <b style="font-size:13px">Настройки</b>
-    <button class="icon-btn" type="button" id="sheetX"></button>
-  </div>
-  <div class="sheet-b" id="sheetBody">
-    <div class="block">
-      <h3>Удержание (Cruise Control)</h3>
-      <div class="line"><span>Мотор A</span><span class="grow"></span><button class="hold-btn" data-ch="A" type="button">ВЫКЛ</button></div>
-      <div class="line"><span>Мотор B</span><span class="grow"></span><button class="hold-btn" data-ch="B" type="button">ВЫКЛ</button></div>
-      <div class="line"><span>Мотор C</span><span class="grow"></span><button class="hold-btn" data-ch="C" type="button">ВЫКЛ</button></div>
-    </div>
-    <div class="block">
-      <h3>Калибровка руля</h3>
-      <div class="line">
-        <span>Центр</span><span class="grow"></span>
-        <button class="mini-btn" type="button" id="trimM">−</button>
-        <span class="val" id="val-trim">0</span>
-        <button class="mini-btn" type="button" id="trimP">+</button>
-      </div>
-      <div class="line">
-        <span>Макс.°</span><span class="grow"></span>
-        <input class="num" id="maxdeg-input" type="number" min="5" max="90" value="45">
-      </div>
-    </div>
-    <div class="block">
-      <h3>Реверс моторов</h3>
-      <div class="line"><span>Канал A</span><span class="grow"></span><button class="rev-btn" data-ch="A" type="button">⇄</button></div>
-      <div class="line"><span>Канал B</span><span class="grow"></span><button class="rev-btn" data-ch="B" type="button">⇄</button></div>
-      <div class="line"><span>Канал C</span><span class="grow"></span><button class="rev-btn" data-ch="C" type="button">⇄</button></div>
-    </div>
-    <div class="block">
-      <h3>Кнопки</h3>
-      <div style="font-size:13px;color:var(--text);line-height:1.85">
-        <div>💡 <b style="color:#eab308">Свет</b></div>
-        <div> <b style="color:#f43f5e">Стоп</b></div>
-        <div>⚙️ <b style="color:var(--amber)">Имитация ДВС</b></div>
-        <div>🎛️ <b style="color:var(--cyan)">Доп. моторы</b></div>
-      </div>
-    </div>
-  </div>
-</aside>
-
 <script>
-(function(){
-  function $(id){ return document.getElementById(id); }
-  var ws = null;
+document.addEventListener('touchmove', function(e){ if (e.target.tagName !== 'INPUT') e.preventDefault(); }, {passive:false});
+
+async function toggleFullscreen(){
+  try{
+    if(!document.fullscreenElement){
+      await document.documentElement.requestFullscreen();
+      if(screen.orientation && screen.orientation.lock) await screen.orientation.lock('landscape').catch(()=>{});
+    } else { document.exitFullscreen(); }
+  }catch(e){}
+}
+
+function fitSliders(){
+  var p = document.querySelector('.panel:not(.hidden)');
+  if (!p) return;
+  var h = Math.max(110, Math.min(240, p.clientHeight - 96));
+  document.documentElement.style.setProperty('--sh', h + 'px');
+}
+window.addEventListener('resize', fitSliders);
+window.addEventListener('load', fitSliders);
+
+var ws = null;
+var state = {A:0, B:0, S:0};
+var curMode = 0, modeHoldUntil = 0;
+
+function wsOpen(){ return ws && ws.readyState === WebSocket.OPEN; }
+
+function connectWS(){
+  ws = new WebSocket('ws://' + location.host + '/ws');
+  ws.onopen = function(){ setLink(true); stopAll(); loadCalib(); };
+  ws.onclose = function(){ setLink(false); setTimeout(connectWS, 1000); };
+  ws.onmessage = onStatus;
+}
+
+function setLink(ok){
+  var b = document.getElementById('link-badge');
+  b.textContent = ok ? 'ESP32' : 'Нет связи';
+  b.classList.toggle('bad', !ok);
+  document.getElementById('hstats').classList.toggle('stale', !ok);
+  if (!ok) updateWifi(0);
+}
+
+function send(ch, val){
+  state[ch] = parseInt(val);
+  var data = {ch:ch, val:state[ch]};
+  document.getElementById('telemetry').textContent = JSON.stringify(data);
+  if (wsOpen()) ws.send(JSON.stringify(data));
+}
+
+setInterval(function(){
+  if (!wsOpen()) return;
+  for (var ch in state) ws.send(JSON.stringify({ch:ch, val:state[ch]}));
+}, 150);
+
+function onStatus(ev){
+  var d;
+  try { d = JSON.parse(ev.data); } catch(e){ return; }
+  if (!d.st) return;
+  updateWifi(d.r);
+  updateBattery(d.v, d.p);
+  if (typeof d.m === 'number' && d.m !== curMode && Date.now() > modeHoldUntil) applyMode(d.m);
+  if (typeof d.ra === 'number') { revState.A = !!d.ra; updateRevButtons(); }
+  if (typeof d.rb === 'number') { revState.B = !!d.rb; updateRevButtons(); }
+  if (typeof d.rc === 'number') { revState.C = !!d.rc; updateRevButtons(); }
+  if (typeof d.lf === 'number') { ledState.F = !!d.lf; updateLedButtons(); }
+  if (typeof d.lr === 'number') { ledState.R = !!d.lr; updateLedButtons(); }
+  if (typeof d.es === 'number') { engineOn = !!d.es; updateEngineButton(); applyEngGate(); }
+}
+
+function updateWifi(r){
+  var n = 0, txt = '--';
+  if (r < 0){
+    n = r > -55 ? 4 : (r > -65 ? 3 : (r > -75 ? 2 : 1));
+    txt = r + ' dBm';
+  }
+  var bars = document.getElementById('wifi-bars');
+  bars.className = 'bars w' + n;
+  for (var i = 0; i < 4; i++) bars.children[i].classList.toggle('on', i < n);
+  document.getElementById('wifi-txt').textContent = txt;
+}
+
+var battLevel = 0;
+var dismissedLvl = 0;
+var bannerShown = false;
+
+function updateBattery(v, p){
+  var fill = document.getElementById('bat-fill');
+  var txt = document.getElementById('batt-txt');
+  var ic = document.getElementById('bat-ic');
+  if (v < 0.5){
+    fill.style.width = '0%';
+    txt.textContent = 'USB';
+    ic.className = 'bat';
+    battLevel = 0;
+    showBanner(p);
+    return;
+  }
+  txt.textContent = p + '% · ' + v.toFixed(1) + 'V';
+  fill.style.width = p + '%';
+  ic.className = 'bat' + (p <= 10 ? ' crit' : (p <= 30 ? ' warn' : ''));
+
+  var lvl = battLevel;
+  if (p <= 1) lvl = 2;
+  else if (p <= 10 && lvl < 1) lvl = 1;
+  else if (lvl === 2 && p >= 4) lvl = 1;
+  if (lvl >= 1 && p >= 13) lvl = 0;
+  battLevel = lvl;
+  showBanner(p);
+}
+
+function showBanner(p){
+  if (battLevel === 0) dismissedLvl = 0;
+  var show = (battLevel === 2) || (battLevel === 1 && dismissedLvl !== 1);
+  var el = document.getElementById('batt-banner');
+  if (show){
+    el.className = 'banner lvl' + battLevel;
+    document.getElementById('banner-text').textContent = (battLevel === 2)
+      ? 'Аккумулятор почти разряжен (' + p + '%). Остановите модель и зарядите батарею!'
+      : 'Низкий заряд аккумулятора (' + p + '%). Скоро потребуется зарядка.';
+    document.getElementById('banner-x').style.display = (battLevel === 1) ? '' : 'none';
+  } else {
+    el.className = 'banner hidden';
+  }
+  if (show !== bannerShown){ bannerShown = show; fitSliders(); }
+}
+
+function dismissBanner(){
+  if (battLevel === 1){ dismissedLvl = 1; showBanner(0); }
+}
+
+function applyMode(m){
+  curMode = m;
+  document.getElementById('tank-panel').classList.toggle('hidden', m !== 0);
+  document.getElementById('classic-panel').classList.toggle('hidden', m !== 1);
+  document.getElementById('btn-tank').classList.toggle('active', m === 0);
+  document.getElementById('btn-classic').classList.toggle('active', m === 1);
+  if (m !== 1) { engineOn = false; updateEngineButton(); }
+  fitSliders();
+}
+
+function switchMode(m){
+  modeHoldUntil = Date.now() + 1500;
+  if (wsOpen()) ws.send(JSON.stringify({mode:m}));
+  applyMode(m);
+  stopAll();
+}
+
+function updateTank(ch, val){
+  send(ch, val);
+  var n = parseInt(val), s = (ch === 'A') ? 'left' : 'right';
+  document.getElementById('val-' + s).textContent = val + '%';
+  document.getElementById('t-' + s + '-f').setAttribute('fill', n > 0 ? '#3b82f6' : '#2a3140');
+  document.getElementById('t-' + s + '-r').setAttribute('fill', n < 0 ? '#3b82f6' : '#2a3140');
+  document.getElementById('t-' + s + '-body').setAttribute('stroke', n !== 0 ? '#3b82f6' : '#2a3140');
+}
+
+function updateDrive(ch, val){
+  send(ch, val);
+  document.getElementById('val-drive').textContent = val + '%';
+  var n = parseInt(val);
+  document.getElementById('c-fwd').setAttribute('fill', n > 0 ? '#10b981' : '#2a3140');
+  document.getElementById('c-rev').setAttribute('fill', n < 0 ? '#10b981' : '#2a3140');
+  if (engineOn) renderAuxFromEngine(n);
+}
+
+function updateSteer(ch, val){
+  send(ch, val);
+  document.getElementById('val-steer').textContent = val + '%';
+  var deg = val * 0.35;
+  document.getElementById('c-fl').style.transform = 'translate(36px,45px) rotate(' + deg + 'deg)';
+  document.getElementById('c-fr').style.transform = 'translate(204px,45px) rotate(' + deg + 'deg)';
+}
+
+function renderAux(n){
+  document.getElementById('val-aux').textContent = n + '%';
+  var active = n !== 0;
+  var bolt = document.getElementById('aux-bolt');
+  bolt.classList.toggle('bolt-glow', active);
+  bolt.classList.toggle('bolt-pulse', active);
+  document.getElementById('aux-arrow-l').setAttribute('fill', n < 0 ? '#22d3ee' : '#2a3140');
+  document.getElementById('aux-arrow-r').setAttribute('fill', n > 0 ? '#22d3ee' : '#2a3140');
+}
+function updateAux(ch, val){
+  if (engineOn) return;
+  send(ch, val);
+  renderAux(parseInt(val));
+}
+function renderAuxFromEngine(driveVal){
+  var auxPct = Math.round(33 + 67 * Math.abs(driveVal) / 100);
+  var signed = revState.B ? -auxPct : auxPct;
+  document.getElementById('val-aux').textContent = auxPct + '%';
+  var bolt = document.getElementById('aux-bolt');
+  bolt.classList.add('bolt-glow', 'bolt-pulse');
+  document.getElementById('aux-arrow-l').setAttribute('fill', signed < 0 ? '#22d3ee' : '#2a3140');
+  document.getElementById('aux-arrow-r').setAttribute('fill', signed > 0 ? '#22d3ee' : '#2a3140');
+}
+
+function auxBtn(n){ }
+
+var engineOn = false;
+
+function toggleEngine(){
+  if (curMode !== 1) return;
+  engineOn = !engineOn;
+  updateEngineButton();
+  if (wsOpen()) ws.send(JSON.stringify({eng: 1}));
+  if (engineOn) renderAuxFromEngine(state.A || 0);
+  else renderAux(0);
+}
+function updateEngineButton(){
+  var b = document.getElementById('eng-btn');
+  if (b) b.classList.toggle('active', engineOn);
+}
+
+// ---------- ПЛАВНЫЙ ПЕРЕХОД: джойстик B ↔ баннер "Имитация ДВС" ----------
+function applyEngGate(){
+  var wrap = document.getElementById('wrap-aux');
+  var lab = document.getElementById('eng-label');
+  if (!wrap || !lab) return;
   
-  function txWS(obj){
-    $('telemetry').textContent = JSON.stringify(obj);
-    if(ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+  if (engineOn){
+    wrap.classList.add('hidden');
+    lab.classList.add('visible');
+  } else {
+    wrap.classList.remove('hidden');
+    lab.classList.remove('visible');
   }
+}
 
-  var mode=0, rev={A:0,B:0,C:0}, led={F:0,R:0};
-  var eng=false, auxMode=false, trim=0;
-  var drive=0, auxB=0, auxC=0, steer=0;
-  
-  var holdConfig = { A: false, B: false, C: false };
-  var holdActive = { A: false, B: false, C: false };
-  var holdTimer = { A: null, B: null, C: null };
-  var holdStartVal = { A: 0, B: 0, C: 0 };
+var ledState = {F:false, R:false};
 
-  function initWS(){
-    ws = new WebSocket('ws://' + location.host + '/ws');
-    ws.onopen = function(){ $('ws-status').textContent='ESP32'; $('ws-status').style.color='var(--emerald)'; };
-    ws.onclose = function(){ 
-      $('ws-status').textContent='НЕТ СВЯЗИ'; 
-      $('ws-status').style.color='var(--rose)'; 
-      updateWifi(0);
-      setTimeout(initWS,1000); 
-    };
-    ws.onmessage = function(e){
-      try{
-        var d = JSON.parse(e.data);
-        if(d.st){
-          $('batt-txt').textContent = d.p + '% · ' + d.v.toFixed(1) + 'V';
-          $('bat-fill').style.width = d.p + '%';
-          updateWifi(d.r);
-          
-          if(typeof d.ra !== 'undefined') { rev.A = !!d.ra; updateRevUI('A'); }
-          if(typeof d.rb !== 'undefined') { rev.B = !!d.rb; updateRevUI('B'); }
-          if(typeof d.rc !== 'undefined') { rev.C = !!d.rc; updateRevUI('C'); }
-          if(typeof d.lf !== 'undefined') { led.F = !!d.lf; updateLedUI('F'); }
-          if(typeof d.lr !== 'undefined') { led.R = !!d.lr; updateLedUI('R'); }
-          if(typeof d.es !== 'undefined') { eng = !!d.es; updateEngUI(); applyEngGate(); }
-        }
-      }catch(err){}
-    };
-  }
+function toggleLed(ch){
+  ledState[ch] = !ledState[ch];
+  updateLedButtons();
+  if (wsOpen()) ws.send(JSON.stringify({led: ch}));
+}
+function updateLedButtons(){
+  document.querySelectorAll('.led-btn[data-ch="F"]').forEach(function(b){ b.classList.toggle('active', ledState.F); });
+  document.querySelectorAll('.led-btn[data-ch="R"]').forEach(function(b){ b.classList.toggle('active', ledState.R); });
+}
 
-  function updateWifi(r){
-    var n = 0, txt = '--';
-    if (r < 0){
-      n = r > -55 ? 4 : (r > -65 ? 3 : (r > -75 ? 2 : 1));
-      txt = r + ' dBm';
-    }
-    var bars = document.getElementById('wifi-bars');
-    if(bars){
-      bars.className = 'bars w' + n;
-      for (var i = 0; i < 4; i++) bars.children[i].classList.toggle('on', i < n);
-    }
-    var wtxt = document.getElementById('wifi-txt');
-    if(wtxt) wtxt.textContent = txt;
-  }
+var revState = {A:false, B:false, C:false};
 
-  function updateRevUI(ch){
-    document.querySelectorAll('.rev-btn[data-ch="'+ch+'"]').forEach(function(b){
-      b.classList.toggle('active', rev[ch]);
-    });
-  }
+function toggleRev(ch){
+  revState[ch] = !revState[ch];
+  updateRevButtons();
+  if (wsOpen()) ws.send(JSON.stringify({rev: ch}));
+}
+function updateRevButtons(){
+  document.querySelectorAll('.rev-btn[data-ch="A"]').forEach(function(b){ b.classList.toggle('active', revState.A); });
+  document.querySelectorAll('.rev-btn[data-ch="B"]').forEach(function(b){ b.classList.toggle('active', revState.B); });
+  document.querySelectorAll('.rev-btn[data-ch="C"]').forEach(function(b){ b.classList.toggle('active', revState.C); });
+}
 
-  function updateLedUI(ch){
-    document.querySelectorAll('.led-btn[data-ch="'+ch+'"]').forEach(function(b){
-      b.classList.toggle('active', led[ch]);
-    });
-    paintLights();
-  }
+var trimValue = 0;
 
-  var th=localStorage.getItem('lcc_th')||'dark';
-  function setTh(t){
-    th=t; document.documentElement.setAttribute('data-theme', t==='light'?'light':'dark');
-    $('themeBtn').textContent=t==='light'?'☀️':'🌙';
-    localStorage.setItem('lcc_th',t);
-  }
-  setTh(th);
-  $('themeBtn').onclick=function(){ setTh(th==='dark'?'light':'dark'); };
+function adjTrim(delta){
+  trimValue = Math.max(-400, Math.min(400, trimValue + delta));
+  document.getElementById('val-trim').textContent = trimValue;
+  if (wsOpen()) ws.send(JSON.stringify({trim: trimValue}));
+}
 
-  window.toggleFullscreen=async function(){
-    try{
-      if(!document.fullscreenElement){
-        await document.documentElement.requestFullscreen();
-        if(screen.orientation&&screen.orientation.lock) await screen.orientation.lock('landscape').catch(function(){});
-      } else document.exitFullscreen();
-    }catch(e){}
-  };
+function setMaxDeg(v){
+  var deg = Math.max(5, Math.min(90, parseInt(v) || 45));
+  document.getElementById('maxdeg-input').value = deg;
+  if (wsOpen()) ws.send(JSON.stringify({maxdeg: deg}));
+}
 
-  function fitSliders(){
-    var p=document.querySelector('.panel:not(.hidden)');
-    if(!p) return;
-    document.documentElement.style.setProperty('--sh', Math.max(100, Math.min(220, p.clientHeight-88))+'px');
-  }
-  window.addEventListener('resize', fitSliders);
-  window.addEventListener('load', fitSliders);
+function loadCalib(){
+  fetch('/calib').then(function(r){ return r.json(); }).then(function(c){
+    trimValue = c.trim;
+    document.getElementById('val-trim').textContent = trimValue;
+    document.getElementById('maxdeg-input').value = c.maxdeg;
+    revState.A = !!c.revA;
+    revState.B = !!c.revB;
+    revState.C = !!c.revC;
+    updateRevButtons();
+    ledState.F = !!c.ledF;
+    ledState.R = !!c.ledR;
+    updateLedButtons();
+  }).catch(function(){});
+}
 
-  function switchMode(m){
-    mode=m;
-    $('btn-tank').classList.toggle('active', m===0);
-    $('btn-classic').classList.toggle('active', m===1);
-    $('btn-test').classList.toggle('active', m===2);
-    
-    $('tank-panel').classList.toggle('hidden', m!==0);
-    $('classic-panel').classList.toggle('hidden', m!==1);
-    $('test-panel').classList.toggle('hidden', m!==2);
+function resetSlider(id, ch, fn){ var s = document.getElementById(id); s.value = 0; fn(ch, 0); }
 
-    if(m===0){ eng=false; updateEngUI(); applyEngGate(); }
-    txWS({mode: m});
-    zeroAll(); setTimeout(fitSliders,30);
-  }
-  $('btn-tank').onclick=function(){ switchMode(0); };
-  $('btn-classic').onclick=function(){ switchMode(1); };
-  $('btn-test').onclick=function(){ switchMode(2); };
+function stopAll(){
+  resetSlider('slider-left','A',updateTank);
+  resetSlider('slider-right','B',updateTank);
+  resetSlider('slider-drive','A',updateDrive);
+  resetSlider('slider-steer','S',updateSteer);
+  if (!engineOn) resetSlider('slider-aux','B',updateAux);
+}
 
-  function zeroAll(){
-    drive=auxB=auxC=steer=0;
-    ['A','B','C'].forEach(function(ch){ clearHoldState(ch); });
-    ['slider-left','slider-right','slider-drive','slider-aux','slider-C','slider-steer',
-     'slider-test-A','slider-test-B','slider-test-C','slider-test-S'].forEach(function(id){ var e=$(id); if(e) e.value=0; });
-    ['val-left','val-right','val-drive','val-aux','val-C','val-steer',
-     'val-test-A','val-test-B','val-test-C','val-test-S'].forEach(function(id){ var e=$(id); if(e) e.textContent='0%'; });
-    
-    led.F = 0; led.R = 0;
-    updateLedUI('F'); updateLedUI('R');
-    txWS({ledF: 0}); txWS({ledR: 0});
-
-    txWS({ch:'A', val:0}); txWS({ch:'B', val:0}); txWS({ch:'C', val:0}); txWS({ch:'S', val:0});
-    paintTank(0,0); paintCar();
-  }
-
-  function toggleLightState(el, active){
-    if(!el) return;
-    el.classList.toggle('active-light', active);
-  }
-
-  function paintTank(L,R){
-    var green='#10b981', red='#f43f5e', off='var(--svg-stroke)';
-    var lf=$('t-left-f'),lr=$('t-left-r'),rf=$('t-right-f'),rr=$('t-right-r');
-    if(lf){ 
-      toggleLightState(lf, L>8);
-      toggleLightState(lr, L<-8);
-      lf.setAttribute('fill', L>8 ? green : off); 
-      lr.setAttribute('fill', L<-8 ? red : off); 
-    }
-    if(rf){ 
-      toggleLightState(rf, R>8);
-      toggleLightState(rr, R<-8);
-      rf.setAttribute('fill', R>8 ? green : off); 
-      rr.setAttribute('fill', R<-8 ? red : off); 
-    }
-    var lb=$('t-left-body'),rb=$('t-right-body');
-    if(lb){
-      toggleLightState(lb, Math.abs(L)>8);
-      lb.setAttribute('stroke', L>8 ? green : (L<-8 ? red : 'var(--svg-stroke)'));
-      lb.style.filter = L>8 ? 'drop-shadow(0 0 6px #10b981)' : (L<-8 ? 'drop-shadow(0 0 6px #f43f5e)' : '');
-    }
-    if(rb){
-      toggleLightState(rb, Math.abs(R)>8);
-      rb.setAttribute('stroke', R>8 ? green : (R<-8 ? red : 'var(--svg-stroke)'));
-      rb.style.filter = R>8 ? 'drop-shadow(0 0 6px #10b981)' : (R<-8 ? 'drop-shadow(0 0 6px #f43f5e)' : '');
-    }
-  }
-
-  function paintCar(){
-    var A=drive, S=steer, B=auxB, C=auxC;
-    var fwd=$('c-fwd'), revp=$('c-rev');
-    if(fwd){
-      toggleLightState(fwd, A>8);
-      fwd.setAttribute('fill', A>8?'var(--blue)':'var(--svg-stroke)');
-    }
-    if(revp){
-      toggleLightState(revp, A<-8);
-      revp.setAttribute('fill', A<-8?'var(--blue)':'var(--svg-stroke)');
-    }
-
-    var body=$('car-body');
-    if(body){
-      body.classList.toggle('eng-glow', eng);
-      if(eng){
-        body.setAttribute('stroke', '#f59e0b');
-        body.setAttribute('stroke-width', '4');
-        body.style.filter = 'drop-shadow(0 0 8px rgba(245,158,11,.7))';
-      } else {
-        body.setAttribute('stroke', 'var(--svg-stroke)');
-        body.setAttribute('stroke-width', '3');
-        body.style.filter = '';
-      }
-    }
-
-    var ang = S * 0.28;
-    var fl=$('c-fl'), fr=$('c-fr');
-    if(fl) fl.setAttribute('transform', 'translate(36,45) rotate('+ang+')');
-    if(fr) fr.setAttribute('transform', 'translate(204,45) rotate('+ang+')');
-    var wfl=$('w-fl'), wfr=$('w-fr');
-    var steerOn = Math.abs(S)>5;
-    if(wfl && wfr){
-      wfl.setAttribute('stroke', steerOn ? '#3b82f6' : 'var(--svg-stroke)');
-      wfl.style.filter = steerOn ? 'drop-shadow(0 0 6px #3b82f6)' : '';
-      wfr.setAttribute('stroke', steerOn ? '#3b82f6' : 'var(--svg-stroke)');
-      wfr.style.filter = steerOn ? 'drop-shadow(0 0 6px #3b82f6)' : '';
-    }
-
-    var wrl=$('w-rl'), wrr=$('w-rr');
-    if(wrl && wrr){
-      toggleLightState(wrl, Math.abs(A)>8);
-      toggleLightState(wrr, Math.abs(A)>8);
-      var col = 'var(--svg-stroke)', filt = '';
-      if(A>8){ col='#10b981'; filt='drop-shadow(0 0 6px #10b981)'; }
-      else if(A<-8){ col='#f43f5e'; filt='drop-shadow(0 0 6px #f43f5e)'; }
-      wrl.setAttribute('stroke', col); wrl.style.filter=filt;
-      wrr.setAttribute('stroke', col); wrr.style.filter=filt;
-    }
-
-    var icon=$('motors-icon');
-    if(icon) icon.setAttribute('opacity', auxMode ? '1' : '0');
-    if(auxMode){
-      var bGroup = document.getElementById('motor-b-group');
-      var cGroup = document.getElementById('motor-c-group');
-      
-      if(bGroup) bGroup.setAttribute('opacity', eng ? '0' : '1');
-      if(cGroup) cGroup.classList.toggle('centered', eng);
-
-      if(!eng) setMotorViz('b', B);
-      setMotorViz('c', C);
-    }
-  }
-
-  function setMotorViz(prefix, val){
-    var al=$(prefix+'-al'), ar=$(prefix+'-ar'), bolt=$(prefix+'-bolt');
-    if(!al) return;
-    al.setAttribute('fill', val<-8?'#22d3ee':'var(--svg-stroke)');
-    ar.setAttribute('fill', val>8?'#22d3ee':'var(--svg-stroke)');
-    if(bolt){
-      bolt.setAttribute('fill', Math.abs(val)>8?'#22d3ee':'var(--svg-stroke)');
-      bolt.setAttribute('class', Math.abs(val)>8?'bolt-glow bolt-pulse':'');
-    }
-  }
-
-  function paintLights(){
-    var yOn='#eab308', rOn='#f43f5e', off='#3a4252';
-    var fl=$('hl-fl'),fr=$('hl-fr'),rl=$('hl-rl'),rr=$('hl-rr');
-    if(fl){
-      fl.setAttribute('fill', led.F?yOn:off); fr.setAttribute('fill', led.F?yOn:off);
-      fl.style.filter = fr.style.filter = led.F?'drop-shadow(0 0 5px #eab308)':'';
-    }
-    if(rl){
-      rl.setAttribute('fill', led.R?rOn:off); rr.setAttribute('fill', led.R?rOn:off);
-      rl.style.filter = rr.style.filter = led.R?'drop-shadow(0 0 5px #f43f5e)':'';
-    }
-  }
-
-  function engineBFromDrive(){ return Math.round(33+67*Math.abs(drive)/100); }
-
-  function updateEngUI(){
-    var b=$('eng-btn'); if(b) b.classList.toggle('active', eng);
-    var s=$('sparks'); if(s) s.classList.toggle('on', eng);
-    paintCar();
-  }
-  
-  // ---------- ПЛАВНЫЙ ПЕРЕХОД: джойстик B ↔ баннер "Имитация ДВС" ----------
-  function applyEngGate(){
-    var slB=$('slider-aux'), wrap=$('wrap-aux'), lab=$('eng-label');
-    if(!slB || !wrap || !lab) return;
-    
-    if(eng){
-      // Скрываем джойстик, показываем баннер — через классы с CSS-transition
-      wrap.classList.add('hidden');
-      lab.classList.add('visible');
-      auxB=engineBFromDrive();
-      slB.value=auxB; $('val-aux').textContent=auxB+'%';
-    } else {
-      // Показываем джойстик, скрываем баннер
-      wrap.classList.remove('hidden');
-      lab.classList.remove('visible');
-      slB.disabled=false;
-      auxB=0; slB.value=0; $('val-aux').textContent='0%';
-    }
-    paintCar();
-  }
-  
-  function updateAuxModeUI(){
-    var b=$('aux-mode-btn'); if(b) b.classList.toggle('active', auxMode);
-    var pan=$('aux-panel');
-    if(!pan) return;
-    var dash=$('dash');
-    if(auxMode){
-      if(dash) dash.classList.add('hide');
-      pan.classList.add('open');
-    } else {
-      if(dash) dash.classList.remove('hide');
-      pan.classList.remove('open');
-      if(!eng){ auxB=0; var slB=$('slider-aux'); if(slB) slB.value=0; $('val-aux').textContent='0%'; txWS({ch:'B',val:0}); }
-      auxC=0; var slC=$('slider-C'); if(slC) slC.value=0; $('val-C').textContent='0%'; txWS({ch:'C',val:0});
-    }
-    paintCar();
-  }
-
-  $('eng-btn').onclick=function(){ eng=!eng; updateEngUI(); applyEngGate(); txWS({eng: eng?1:0}); };
-  $('aux-mode-btn').onclick=function(){ auxMode=!auxMode; updateAuxModeUI(); applyEngGate(); };
-
-  var springs = {};
-  function springTo(el, target, onFrame){
-    if(!el) return;
-    if(springs[el.id]) cancelAnimationFrame(springs[el.id]);
-    var from = +el.value;
-    var t0 = performance.now();
-    var dur = 220;
-    function step(now){
-      var k = Math.min(1, (now-t0)/dur);
-      var e = 1 - Math.pow(1-k, 3);
-      var v = Math.round(from + (target-from)*e);
-      el.value = v;
-      onFrame(v, k>=1);
-      if(k<1) springs[el.id] = requestAnimationFrame(step);
-      else delete springs[el.id];
-    }
-    springs[el.id] = requestAnimationFrame(step);
-  }
-  function cancelSpring(el){
-    if(el && springs[el.id]){ cancelAnimationFrame(springs[el.id]); delete springs[el.id]; }
-  }
-
-  function clearHoldState(ch){
-    if(holdTimer[ch]){ clearTimeout(holdTimer[ch]); holdTimer[ch] = null; }
-    holdActive[ch] = false;
-  }
-
-  function handleInputHold(ch, val){
-    if(!holdConfig[ch]) return;
-    if(holdActive[ch]){
-      holdActive[ch] = false;
-    }
-    if(Math.abs(val) > 50){
-      if(!holdTimer[ch] || Math.abs(val - holdStartVal[ch]) > 5){
-        if(holdTimer[ch]) clearTimeout(holdTimer[ch]);
-        holdStartVal[ch] = val;
-        holdTimer[ch] = setTimeout(function(){
-          holdActive[ch] = true;
-          holdTimer[ch] = null;
-        }, 1500);
-      }
-    } else {
-      if(holdTimer[ch]){ clearTimeout(holdTimer[ch]); holdTimer[ch] = null; }
-    }
-  }
-
-  function bindSpring(el, ch, onFrame){
-    function start(){ 
-      cancelSpring(el); 
-      if(ch) clearHoldState(ch);
-    }
-    el.addEventListener('mousedown', start);
-    el.addEventListener('touchstart', start, {passive:true});
-    function release(){
-      if(el.disabled || mode===2) return;
-      var target = (ch && holdActive[ch]) ? +el.value : 0;
-      springTo(el, target, onFrame);
-    }
-    el.addEventListener('mouseup', release);
-    el.addEventListener('touchend', release);
-    el.addEventListener('touchcancel', release);
-  }
-
-  $('slider-left').oninput=function(){
-    cancelSpring(this);
-    var v=+this.value; 
-    handleInputHold('A', v);
-    $('val-left').textContent=v+'%'; txWS({ch:'A',val:v}); 
-    paintTank(v,+$('slider-right').value);
-  };
-  bindSpring($('slider-left'), 'A', function(v){
-    $('val-left').textContent=v+'%'; txWS({ch:'A',val:v}); 
-    paintTank(v,+$('slider-right').value);
-  });
-
-  $('slider-right').oninput=function(){
-    cancelSpring(this);
-    var v=+this.value; 
-    if(mode===0) handleInputHold('B', v);
-    $('val-right').textContent=v+'%'; txWS({ch:'B',val:v}); 
-    paintTank(+$('slider-left').value,v);
-  };
-  bindSpring($('slider-right'), 'B', function(v){
-    $('val-right').textContent=v+'%'; txWS({ch:'B',val:v}); 
-    paintTank(+$('slider-left').value,v);
-  });
-
-  $('slider-drive').oninput=function(){
-    cancelSpring(this);
-    drive=+this.value; 
-    handleInputHold('A', drive);
-    $('val-drive').textContent=drive+'%'; txWS({ch:'A',val:drive});
-    if(eng){ auxB=engineBFromDrive(); $('slider-aux').value=auxB; $('val-aux').textContent=auxB+'%'; }
-    paintCar();
-  };
-  bindSpring($('slider-drive'), 'A', function(v){
-    drive=v; $('val-drive').textContent=v+'%'; txWS({ch:'A',val:v});
-    if(eng){ auxB=engineBFromDrive(); $('slider-aux').value=auxB; $('val-aux').textContent=auxB+'%'; }
-    paintCar();
-  });
-
-  $('slider-aux').oninput=function(){
-    if(eng) return;
-    cancelSpring(this);
-    auxB=+this.value; 
-    handleInputHold('B', auxB);
-    $('val-aux').textContent=auxB+'%'; txWS({ch:'B',val:auxB}); 
-    paintCar();
-  };
-  bindSpring($('slider-aux'), 'B', function(v){
-    if(eng) return;
-    auxB=v; $('val-aux').textContent=v+'%'; txWS({ch:'B',val:v}); 
-    paintCar();
-  });
-
-  $('slider-C').oninput=function(){
-    cancelSpring(this);
-    auxC=+this.value; 
-    handleInputHold('C', auxC);
-    $('val-C').textContent=auxC+'%'; txWS({ch:'C',val:auxC}); 
-    paintCar();
-  };
-  bindSpring($('slider-C'), 'C', function(v){
-    auxC=v; $('val-C').textContent=v+'%'; txWS({ch:'C',val:v}); 
-    paintCar();
-  });
-
-  $('slider-steer').oninput=function(){
-    cancelSpring(this);
-    steer=+this.value; $('val-steer').textContent=steer+'%'; txWS({ch:'S',val:steer}); paintCar();
-  };
-  bindSpring($('slider-steer'), null, function(v){
-    steer=v; $('val-steer').textContent=v+'%'; txWS({ch:'S',val:v}); paintCar();
-  });
-
-  $('slider-test-A').oninput=function(){ var v=+this.value; $('val-test-A').textContent=v+'%'; txWS({ch:'A',val:v}); };
-  $('slider-test-B').oninput=function(){ var v=+this.value; $('val-test-B').textContent=v+'%'; txWS({ch:'B',val:v}); };
-  $('slider-test-C').oninput=function(){ var v=+this.value; $('val-test-C').textContent=v+'%'; txWS({ch:'C',val:v}); };
-  $('slider-test-S').oninput=function(){ var v=+this.value; $('val-test-S').textContent=v+'%'; txWS({ch:'S',val:v}); };
-  
-  $('test-reset-btn').onclick=function(){ zeroAll(); };
-
-  document.querySelectorAll('.rev-btn').forEach(function(b){
-    b.addEventListener('click', function(){
-      var ch=b.getAttribute('data-ch'); if(!ch) return;
-      rev[ch]=!rev[ch];
-      updateRevUI(ch);
-      var obj = {}; obj['rev' + ch] = rev[ch] ? 1 : 0;
-      txWS(obj);
-    });
-  });
-
-  document.querySelectorAll('.hold-btn').forEach(function(b){
-    b.addEventListener('click', function(){
-      var ch=b.getAttribute('data-ch'); if(!ch) return;
-      holdConfig[ch] = !holdConfig[ch];
-      clearHoldState(ch);
-      b.classList.toggle('active', holdConfig[ch]);
-      b.textContent = holdConfig[ch] ? 'ВКЛ' : 'ВЫКЛ';
-    });
-  });
-
-  document.querySelectorAll('.led-btn').forEach(function(b){
-    b.addEventListener('click', function(){
-      var c=b.getAttribute('data-ch');
-      led[c]=!led[c];
-      updateLedUI(c);
-      var obj = {}; obj['led' + c] = led[c] ? 1 : 0;
-      txWS(obj);
-    });
-  });
-
-  function openS(v){ $('sheet').classList.toggle('open',v); $('sbg').classList.toggle('open',v); }
-  $('setBtn').onclick=function(){ openS(true); };
-  $('sheetX').onclick=function(){ openS(false); };
-  $('sbg').onclick=function(){ openS(false); };
-  $('sheetBody').addEventListener('touchmove', function(e){ e.stopPropagation(); }, {passive:true});
-
-  $('trimM').onclick=function(){ trim=Math.max(-40,trim-5); $('val-trim').textContent=trim; txWS({trim:trim}); };
-  $('trimP').onclick=function(){ trim=Math.min(40,trim+5); $('val-trim').textContent=trim; txWS({trim:trim}); };
-  $('maxdeg-input').onchange=function(){ txWS({maxdeg: +this.value||45}); };
-
-  var speedMs = 0, rpmShown = 0, moveDir = 0;
-  function setNeedle(id, t){
-    var el=$(id); if(!el) return;
-    var ang = -90 + Math.max(0, Math.min(1, t))*180;
-    el.setAttribute('transform', 'rotate('+ang+' 60 78)');
-  }
-  function setArc(id, t){
-    var el=$(id); if(!el) return;
-    var len = 132;
-    var v = Math.max(0, Math.min(1, t))*len;
-    el.setAttribute('stroke-dasharray', v+' '+(200-v));
-  }
-  setInterval(function(){
-    var dir = drive>6 ? 1 : (drive<-6 ? -1 : 0);
-    var braking = (dir !== 0 && moveDir !== 0 && dir !== moveDir) || (dir === 0 && (speedMs>0.15 || rpmShown>40));
-    if(braking){
-      speedMs += (0 - speedMs) * 0.22;
-      rpmShown += (0 - rpmShown) * 0.22;
-      if(speedMs < 0.2 && rpmShown < 30){ speedMs = 0; rpmShown = 0; moveDir = dir; }
-    } else {
-      if(dir) moveDir = dir;
-      var targetRpm = eng ? (980 + (6000-980)*(Math.abs(drive)/100)) : 0;
-      rpmShown += (targetRpm - rpmShown) * 0.045;
-      var targetSpd = (Math.abs(drive)/100)*10;
-      speedMs += (targetSpd - speedMs) * 0.04;
-      if(!eng && rpmShown < 8) rpmShown = 0;
-      if(targetSpd===0 && speedMs<0.05) speedMs = 0;
-    }
-    setNeedle('rpm-needle', rpmShown/7000);
-    setArc('rpm-arc', rpmShown/7000);
-    setNeedle('spd-needle', speedMs/10);
-    setArc('spd-arc', speedMs/10);
-  }, 50);
-
-  document.addEventListener('touchmove', function(e){
-    if(e.target.closest && e.target.closest('.sheet-b')) return;
-    if(e.target.tagName!=='INPUT') e.preventDefault();
-  }, {passive:false});
-
-  initWS();
-  updateEngUI(); applyEngGate(); paintLights();
-  switchMode(0); fitSliders();
-})();
+fitSliders();
+connectWS();
 </script>
 </body>
 </html>
 )HTML";
 
-// ---------- Setup / Loop ----------
 void setup() {
   Serial.begin(115200);
 
-  pinMode(COMMON_STBY, OUTPUT); digitalWrite(COMMON_STBY, LOW); 
-
+  pinMode(TB_STBY, OUTPUT); digitalWrite(TB_STBY, HIGH);
   pinMode(TB_AIN1, OUTPUT); pinMode(TB_AIN2, OUTPUT);
   pinMode(TB_BIN1, OUTPUT); pinMode(TB_BIN2, OUTPUT);
   pinMode(DRV_DIR, OUTPUT);
-
-  ledcSetup(LEDC_CH_A, 5000, 8); ledcAttachPin(TB_PWMA, LEDC_CH_A);
-  ledcSetup(LEDC_CH_B, 5000, 8); ledcAttachPin(TB_PWMB, LEDC_CH_B);
-  ledcSetup(LEDC_CH_C, 5000, 8); ledcAttachPin(DRV_STEP, LEDC_CH_C);
+  ledcSetup(LEDC_CH_A, 5000, 8);
+  ledcAttachPin(TB_PWMA, LEDC_CH_A);
+  ledcSetup(LEDC_CH_B, 5000, 8);
+  ledcAttachPin(TB_PWMB, LEDC_CH_B);
+  ledcSetup(LEDC_CH_C, 5000, 8);
+  ledcAttachPin(DRV_STEP, LEDC_CH_C);
 
   pinMode(LED_FRONT_PIN, OUTPUT);
   pinMode(LED_REAR_PIN, OUTPUT);
@@ -1605,8 +1102,10 @@ void setup() {
   Wire.begin(OLED_SDA, OLED_SCL);
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
 
-  prefs.begin("cfg", false);
-  loadPreferences();
+  loadMode();
+  loadSteerCal();
+  loadMotorRev();
+  loadLeds();
   applyLeds();
 
   WiFi.softAP("LegoTechnic", "12345678");
@@ -1615,6 +1114,16 @@ void setup() {
   server.addHandler(&ws);
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
     req->send(200, "text/html", PAGE_HTML);
+  });
+  server.on("/calib", HTTP_GET, [](AsyncWebServerRequest *req) {
+    String json = "{\"trim\":" + String(steerCenterUs - 1500) +
+                  ",\"maxdeg\":" + String(steerMaxAngleDeg) +
+                  ",\"revA\":" + String(reverseA ? 1 : 0) +
+                  ",\"revB\":" + String(reverseB ? 1 : 0) +
+                  ",\"revC\":" + String(reverseC ? 1 : 0) +
+                  ",\"ledF\":" + String(ledFrontOn ? 1 : 0) +
+                  ",\"ledR\":" + String(ledRearOn ? 1 : 0) + "}";
+    req->send(200, "application/json", json);
   });
 
   ElegantOTA.begin(&server, "admin", "admin");
@@ -1629,16 +1138,14 @@ void setup() {
 void loop() {
   static unsigned long lastStatus = 0;
 
-  if (millis() - lastCmdMillis > CMD_TIMEOUT_MS) {
-    stopAll();
-  }
+  if (millis() - lastCmdMillis > CMD_TIMEOUT_MS) stopAll();
 
   if (millis() - lastStatus > 1000) {
     lastStatus = millis();
     updateStatus();
     updateDisplay(ws.count());
     if (ws.count() > 0) {
-      char buf[200];
+      char buf[160];
       buildStatus(buf, sizeof(buf));
       ws.textAll(buf);
     }
