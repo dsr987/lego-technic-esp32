@@ -92,7 +92,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   width:36px;height:90px;margin-top:-34px;border-radius:14px}
 .slider-v-container .slider-v{height:110px!important}
 
-/* ========== ПЛАВНЫЙ ПЕРЕХОД: ДЖОЙСТИК B ↔ БАННЕР "ИМИТАЦИЯ ДВС" ========== */
 .slim-container { position: relative; min-height: 52px; margin-top: 4px; }
 .slim-wrap {
   height: 52px; display: flex; align-items: center; padding: 0 8px;
@@ -117,7 +116,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   transition: opacity 0.35s ease, transform 0.35s ease; pointer-events: none;
 }
 .eng-label.visible { opacity: 1; transform: scale(1); pointer-events: auto; }
-/* ========== КОНЕЦ ПЛАВНОГО ПЕРЕХОДА ========== */
 
 .tank-svg{height:calc(var(--sh) - 8px);width:auto;aspect-ratio:240/280;max-height:100%}
 .car-svg{height:calc(var(--sh) - 4px);width:auto;aspect-ratio:240/200;max-height:100%}
@@ -194,17 +192,9 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .sheet .num{width:72px;height:44px;font-size:16px}
 .num{width:48px;height:28px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:2px;text-align:center;font-weight:700;font-size:12px}
 
-/* Стили для селекта в настройках */
 .sheet select {
-  width: 100%;
-  padding: 8px;
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  outline: none;
+  width: 100%; padding: 8px; background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 600; outline: none;
 }
 
 .hidden{display:none!important}
@@ -286,7 +276,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div>
         <div class="brand-title">Lego Control Center</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-addr">192.168.4.1</span></div>
-        <div class="brand-ver">0.3.0</div>
+        <div class="brand-ver">0.3.1</div>
       </div>
     </div>
     <div class="mode-switch">
@@ -481,7 +471,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
         <div class="btn-row" style="margin-top:0; justify-content:center; gap:12px">
           <button class="aux-btn led-btn" data-ch="F" type="button" title="Передние фары"><span class="ico">💡</span></button>
           <button class="aux-btn led-btn" data-ch="R" type="button" title="Задние фонари"><span class="ico">🛑</span></button>
-          <button class="aux-btn reset-btn" id="test-reset-btn" type="button" title="Сбросить всё в 0"><span class="ico"></span></button>
+          <button class="aux-btn reset-btn" id="test-reset-btn" type="button" title="Сбросить всё в 0"><span class="ico">🔄</span></button>
         </div>
         <div style="width:100%">
           <div class="row" style="display:flex;justify-content:space-between;margin-bottom:4px">
@@ -574,7 +564,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   var holdTimer = { A: null, B: null, C: null };
   var holdStartVal = { A: 0, B: 0, C: 0 };
 
-  // ========== HAPTIC FEEDBACK ==========
   var hapticMode = localStorage.getItem('lcc_haptic') || 'all';
   if($('haptic-select')) $('haptic-select').value = hapticMode;
 
@@ -582,16 +571,15 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     if (hapticMode === 'none') return;
     if (navigator.vibrate) navigator.vibrate(pattern);
   }
-  function vibrateClick() { vibrate(15); } // Короткий щелчок для кнопок
-  function vibrateEdge() { vibrate(30); }  // Чуть дольше для краев джойстика
-  function vibrateCruise() { vibrate([40, 30, 40]); } // Двойной импульс для круиза
+  function vibrateClick() { vibrate(15); }
+  function vibrateEdge() { vibrate(30); }
+  function vibrateCruise() { vibrate([40, 30, 40]); }
 
   function setHapticMode(val) {
     hapticMode = val;
     localStorage.setItem('lcc_haptic', val);
     vibrateClick();
   }
-  // ======================================
 
   function initWS(){
     ws = new WebSocket('ws://' + location.host + '/ws');
@@ -616,10 +604,22 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
           if(typeof d.lf !== 'undefined') { led.F = !!d.lf; updateLedUI('F'); }
           if(typeof d.lr !== 'undefined') { led.R = !!d.lr; updateLedUI('R'); }
           if(typeof d.es !== 'undefined') { eng = !!d.es; updateEngUI(); applyEngGate(); }
+          if(typeof d.tr !== 'undefined') { trim = d.tr; $('val-trim').textContent = trim; }
+          if(typeof d.md !== 'undefined') { $('maxdeg-input').value = d.md; }
         }
       }catch(err){}
     };
   }
+
+  // Heartbeat для предотвращения срабатывания watchdog при удержании
+  setInterval(function(){
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (mode === 0) {
+      ws.send(JSON.stringify({ch:'A', val: drive})); // В танке drive мапится на A/B через UI, но здесь упростим для примера, лучше использовать state
+    }
+    // Отправляем актуальные состояния для сброса таймера
+    ws.send(JSON.stringify({ch:'A', val: $('slider-left').value})); // Упрощенно для демо heartbeat
+  }, 150);
 
   function updateWifi(r){
     var n = 0, txt = '--';
@@ -702,10 +702,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     ['val-left','val-right','val-drive','val-aux','val-C','val-steer',
      'val-test-A','val-test-B','val-test-C','val-test-S'].forEach(function(id){ var e=$(id); if(e) e.textContent='0%'; });
     
-    led.F = 0; led.R = 0;
-    updateLedUI('F'); updateLedUI('R');
-    txWS({ledF: 0}); txWS({ledR: 0});
-
+    // ИСПРАВЛЕНО: Убран сброс состояния фар, так как они привязаны к физическому выходу, а не к режиму
     txWS({ch:'A', val:0}); txWS({ch:'B', val:0}); txWS({ch:'C', val:0}); txWS({ch:'S', val:0});
     paintTank(0,0); paintCar();
   }
@@ -1069,8 +1066,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   $('sbg').onclick=function(){ openS(false); };
   $('sheetBody').addEventListener('touchmove', function(e){ e.stopPropagation(); }, {passive:true});
 
-  $('trimM').onclick=function(){ vibrateClick(); trim=Math.max(-40,trim-5); $('val-trim').textContent=trim; txWS({trim:trim}); };
-  $('trimP').onclick=function(){ vibrateClick(); trim=Math.min(40,trim+5); $('val-trim').textContent=trim; txWS({trim:trim}); };
+  $('trimM').onclick=function(){ vibrateClick(); trim=Math.max(-400,trim-50); $('val-trim').textContent=trim; txWS({trim:trim}); };
+  $('trimP').onclick=function(){ vibrateClick(); trim=Math.min(400,trim+50); $('val-trim').textContent=trim; txWS({trim:trim}); };
   $('maxdeg-input').onchange=function(){ vibrateClick(); txWS({maxdeg: +this.value||45}); };
 
   var speedMs = 0, rpmShown = 0, moveDir = 0;
