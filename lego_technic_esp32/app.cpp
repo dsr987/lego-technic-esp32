@@ -1,10 +1,10 @@
-// ESP32 Lego Technic motorization — Версия: 0.2.38
+// ESP32 Lego Technic motorization — Версия: 0.3.0
 // Библиотеки: ESPAsyncWebServer, AsyncTCP, ArduinoJson, Adafruit_SSD1306, Adafruit_GFX, ESP32Servo, ElegantOTA
 // ESP32 core: 2.0.9 (совместимость с LEDC и AsyncWebServer)
-// CHANGELOG 0.2.38:
-// - Интегрированы полноэкранные баннеры предупреждения о низком заряде (10%, 5%, 1%)
-// - Обновлен статус-бар: поддержка состояния USB (перечеркнутая иконка, текст "USB")
-// - Добавлена иконка гаечного ключа на OLED-дисплей для тестового режима (MODE_TEST)
+// CHANGELOG 0.3.0:
+// - Добавлен виброотклик (Haptic Feedback) через navigator.vibrate()
+// - Настройки вибрации в меню: "Вся", "Только кнопки", "Выключена" (сохраняется в localStorage)
+// - Вибрация на нажатие всех кнопок, крайние положения джойстиков и активацию круиз-контроля
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -235,32 +235,6 @@ void buildStatus(char *buf, size_t n) {
 }
 
 // ---------- Display ----------
-void drawModeIcon() {
-  int x0 = 96, y0 = 4;
-  if (currentMode == MODE_TANK) {
-    display.fillRect(x0 + 4, y0 + 10, 20, 12, SSD1306_WHITE);
-    display.fillRect(x0 + 10, y0 + 3, 8, 8, SSD1306_WHITE);
-    display.drawLine(x0 + 18, y0 + 6, x0 + 27, y0 + 6, SSD1306_WHITE);
-    display.fillRect(x0 + 1, y0 + 22, 26, 4, SSD1306_WHITE);
-  } else if (currentMode == MODE_CAR) {
-    display.fillRoundRect(x0 + 2, y0 + 8, 24, 10, 3, SSD1306_WHITE);
-    display.fillRoundRect(x0 + 8, y0 + 3, 12, 7, 2, SSD1306_WHITE);
-    display.fillCircle(x0 + 7, y0 + 20, 3, SSD1306_WHITE);
-    display.fillCircle(x0 + 21, y0 + 20, 3, SSD1306_WHITE);
-  } else {
-    // MODE_TEST: Рисуем гаечный ключ
-    int wx = x0 + 8, wy = y0 + 6;
-    display.fillCircle(wx + 6, wy + 18, 5, SSD1306_WHITE); // Головка
-    display.drawLine(wx + 10, wy + 14, wx + 20, wy + 4, SSD1306_WHITE); // Ручка
-    display.drawLine(wx + 11, wy + 15, wx + 21, wy + 5, SSD1306_WHITE);
-    display.drawLine(wx + 12, wy + 16, wx + 22, wy + 6, SSD1306_WHITE);
-    display.drawLine(wx + 13, wy + 17, wx + 23, wy + 7, SSD1306_WHITE);
-    // Вырез в головке
-    display.fillRect(wx + 2, wy + 16, 8, 2, SSD1306_BLACK);
-    display.fillRect(wx + 2, wy + 20, 8, 2, SSD1306_BLACK);
-  }
-}
-
 void updateDisplay() {
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
@@ -278,8 +252,6 @@ void updateDisplay() {
   display.printf("%.2fV\n", battV);
   display.setCursor(0, 54);
   display.printf("Clients: %d\n", ws.count());
-
-  drawModeIcon();
   display.display();
 }
 
@@ -349,7 +321,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
   }
 }
 
-// ---------- HTML GUI v0.2.38 ----------
+// ---------- HTML GUI v0.3.0 ----------
 const char PAGE_HTML[] PROGMEM = R"HTML(
 <!DOCTYPE html>
 <html lang="ru">
@@ -405,47 +377,10 @@ body{padding:max(env(safe-area-inset-top,0px),6px) 10px max(env(safe-area-inset-
 .bars i:nth-child(3){height:11px}.bars i:nth-child(4){height:14px}
 .bars.w1 i.on{background:var(--rose)}.bars.w2 i.on{background:var(--amber)}
 .bars.w3 i.on,.bars.w4 i.on{background:var(--emerald)}
-
-/* Иконка батареи с поддержкой USB состояния */
-.bat{
-  position:relative;
-  width:28px;height:14px;
-  border:2px solid var(--muted);
-  border-radius:3px;
-  display:inline-block;
-  vertical-align:middle;
-}
-.bat::after{
-  content:"";
-  position:absolute;
-  right:-5px;top:3px;
-  width:3px;height:6px;
-  background:var(--muted);
-  border-radius:0 2px 2px 0;
-}
-.bat-fill{
-  height:100%;
-  width:0;
-  background:var(--emerald);
-  transition:width 0.3s ease, background 0.3s ease;
-  border-radius:1px;
-}
-.bat.warn .bat-fill{background:var(--amber)}
-.bat.crit .bat-fill{background:var(--rose)}
-.bat.usb{border-color:#64748b;opacity:0.5}
-.bat.usb::after{background:#64748b}
-.bat.usb::before{
-  content:"";
-  position:absolute;
-  top:50%;left:50%;
-  width:130%;height:2px;
-  background:#64748b;
-  transform:translate(-50%,-50%) rotate(-45deg);
-  z-index:2;
-}
-.bat.usb .bat-fill{display:none}
-
-.bat-text{font-size:11px;font-weight:600;color:var(--text);margin-left:4px;white-space:nowrap}
+.bat{position:relative;width:24px;height:12px;border:2px solid var(--muted);border-radius:3px;padding:1px}
+.bat::after{content:"";position:absolute;right:-4px;top:2px;width:2px;height:5px;background:var(--muted);border-radius:0 1px 1px 0}
+.bat-fill{height:100%;width:70%;background:var(--emerald);border-radius:1px}
+.bat.warn .bat-fill{background:var(--amber)}.bat.crit .bat-fill{background:var(--rose)}
 
 .panel{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
   background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:10px;overflow:hidden}
@@ -583,6 +518,19 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .sheet .num{width:72px;height:44px;font-size:16px}
 .num{width:48px;height:28px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:2px;text-align:center;font-weight:700;font-size:12px}
 
+/* Стили для селекта в настройках */
+.sheet select {
+  width: 100%;
+  padding: 8px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+}
+
 .hidden{display:none!important}
 .wheel{transform-box:fill-box;transform-origin:center;transition:transform .08s ease-out}
 
@@ -639,63 +587,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .grow{flex:1}
 .svg-body{fill:var(--svg-fill);stroke:var(--svg-stroke)}
 .svg-deep{fill:var(--svg-deep);stroke:var(--svg-stroke)}
-
-/* ========== БАННЕРЫ ПРЕДУПРЕЖДЕНИЙ ========== */
-.warning-overlay{
-  position:fixed; top:0; left:0; right:0; bottom:0; z-index:100;
-  display:flex; align-items:center; justify-content:center; padding:20px;
-  pointer-events:none; background:rgba(0,0,0,0.3);
-  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
-  opacity:0; transition:opacity 0.3s ease;
-}
-.warning-overlay.active{pointer-events:auto;opacity:1}
-
-.warning-banner{
-  position:relative; background:rgba(20,24,32,0.98); border:2px solid; border-radius:20px;
-  padding:24px 28px; width:380px; height:320px; max-width:90%; display:none;
-  flex-direction:column; align-items:center; justify-content:center; text-align:center;
-  transform:scale(0.8); opacity:0; transition:all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  box-shadow:0 20px 60px rgba(0,0,0,0.6);
-}
-.warning-overlay.active .warning-banner{ transform:scale(1); opacity:1; }
-
-.warning-banner.level-10{border-color:var(--amber)}
-.warning-banner.level-5{border-color:var(--rose)}
-.warning-banner.level-1{border-color:var(--rose)} /* Убран полупрозрачный фон, теперь как у всех */
-
-.warning-icon{
-  position:relative; width:100%; height:90px; margin-bottom:4px; flex-shrink:0;
-}
-.warning-icon-emoji{
-  position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);
-  font-size:72px; line-height:1;
-}
-.warning-banner.level-5 .warning-icon-emoji,
-.warning-banner.level-1 .warning-icon-emoji{ animation:iconPulse 1.2s ease-in-out infinite; }
-@keyframes iconPulse{
-  0%,100%{transform:translate(-50%, -50%) scale(1)}
-  50%{transform:translate(-50%, -50%) scale(1.12)}
-}
-
-.warning-percent{
-  font-size:32px; font-weight:800; color:var(--amber); height:40px;
-  display:flex; align-items:center; justify-content:center; margin-bottom:4px; flex-shrink:0;
-}
-.warning-banner.level-5 .warning-percent{color:var(--rose)}
-.warning-banner.level-1 .warning-percent{color:var(--rose)}
-
-.warning-percent-placeholder{ height:40px; margin-bottom:4px; flex-shrink:0; }
-
-.warning-title{ font-size:20px; font-weight:700; margin-bottom:8px; color:var(--text); flex-shrink:0; }
-.warning-text{ font-size:14px; color:var(--muted); line-height:1.4; max-width:300px; flex-shrink:0; }
-
-.warning-btn{
-  padding:12px 32px; border-radius:12px; border:none; font-size:14px; font-weight:700;
-  cursor:pointer; transition:all 0.2s; margin-top:16px; flex-shrink:0;
-}
-.warning-btn.ok{background:var(--blue);color:#fff}
-.warning-btn.ok:hover{background:var(--blue-dk);transform:scale(1.05)}
-.warning-btn.disabled{background:var(--muted);color:var(--text);cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -719,7 +610,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div>
         <div class="brand-title">Lego Control Center</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-addr">192.168.4.1</span></div>
-        <div class="brand-ver">0.2.38</div>
+        <div class="brand-ver">0.3.0</div>
       </div>
     </div>
     <div class="mode-switch">
@@ -734,10 +625,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
           <span id="wifi-txt">--</span>
         </div>
         <div class="stat">
-          <div class="bat" id="bat-ic">
-            <div class="bat-fill" id="bat-fill" style="width:0%"></div>
-          </div>
-          <span class="bat-text" id="batt-txt">--% · --V</span>
+          <div class="bat" id="bat-ic"><div class="bat-fill" id="bat-fill" style="width:0%"></div></div>
+          <span id="batt-txt">--% · --V</span>
         </div>
       </div>
       <button class="icon-btn" type="button" onclick="toggleFullscreen()" title="Полный экран">⛶</button>
@@ -916,7 +805,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
         <div class="btn-row" style="margin-top:0; justify-content:center; gap:12px">
           <button class="aux-btn led-btn" data-ch="F" type="button" title="Передние фары"><span class="ico">💡</span></button>
           <button class="aux-btn led-btn" data-ch="R" type="button" title="Задние фонари"><span class="ico">🛑</span></button>
-          <button class="aux-btn reset-btn" id="test-reset-btn" type="button" title="Сбросить всё в 0"><span class="ico">🔄</span></button>
+          <button class="aux-btn reset-btn" id="test-reset-btn" type="button" title="Сбросить всё в 0"><span class="ico"></span></button>
         </div>
         <div style="width:100%">
           <div class="row" style="display:flex;justify-content:space-between;margin-bottom:4px">
@@ -943,6 +832,16 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     <button class="icon-btn" type="button" id="sheetX">✕</button>
   </div>
   <div class="sheet-b" id="sheetBody">
+    <div class="block">
+      <h3>Виброотклик (Haptic)</h3>
+      <div class="line" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <select id="haptic-select" onchange="setHapticMode(this.value)">
+          <option value="all">Вся вибрация (кнопки + джойстики)</option>
+          <option value="buttons">Только кнопки</option>
+          <option value="none">Выключена</option>
+        </select>
+      </div>
+    </div>
     <div class="block">
       <h3>Удержание (Cruise Control)</h3>
       <div class="line"><span>Мотор A</span><span class="grow"></span><button class="hold-btn" data-ch="A" type="button">ВЫКЛ</button></div>
@@ -980,33 +879,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   </div>
 </aside>
 
-<!-- БАННЕРЫ ПРЕДУПРЕЖДЕНИЙ -->
-<div class="warning-overlay" id="warning-overlay">
-  <div class="warning-banner level-10" id="warning-10">
-    <div class="warning-icon"><span class="warning-icon-emoji">🪫</span></div>
-    <div class="warning-percent" id="warning-10-percent">10%</div>
-    <div class="warning-title">Низкий заряд батареи</div>
-    <div class="warning-text">Рекомендуется зарядить аккумулятор</div>
-    <button class="warning-btn ok" onclick="dismissWarning(10)">ОК</button>
-  </div>
-
-  <div class="warning-banner level-5" id="warning-5">
-    <div class="warning-icon"><span class="warning-icon-emoji">⚠️</span></div>
-    <div class="warning-percent" id="warning-5-percent">5%</div>
-    <div class="warning-title">Критический заряд!</div>
-    <div class="warning-text">Зарядите батарею немедленно</div>
-    <button class="warning-btn ok" onclick="dismissWarning(5)">ОК</button>
-  </div>
-
-  <div class="warning-banner level-1" id="warning-1">
-    <div class="warning-icon"><span class="warning-icon-emoji">🔌</span></div>
-    <div class="warning-percent-placeholder"></div>
-    <div class="warning-title">Управление приостановлено</div>
-    <div class="warning-text">Для безопасности аккумуляторов функции управления отключены.<br>Зарядите батарею для продолжения.</div>
-    <button class="warning-btn disabled" disabled>Зарядите батарею</button>
-  </div>
-</div>
-
 <script>
 (function(){
   function $(id){ return document.getElementById(id); }
@@ -1025,9 +897,25 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   var holdActive = { A: false, B: false, C: false };
   var holdTimer = { A: null, B: null, C: null };
   var holdStartVal = { A: 0, B: 0, C: 0 };
-  
-  // Состояние для баннеров
-  var dismissedWarnings = {10: false, 5: false};
+
+  // ========== HAPTIC FEEDBACK ==========
+  var hapticMode = localStorage.getItem('lcc_haptic') || 'all';
+  if($('haptic-select')) $('haptic-select').value = hapticMode;
+
+  function vibrate(pattern) {
+    if (hapticMode === 'none') return;
+    if (navigator.vibrate) navigator.vibrate(pattern);
+  }
+  function vibrateClick() { vibrate(15); } // Короткий щелчок для кнопок
+  function vibrateEdge() { vibrate(30); }  // Чуть дольше для краев джойстика
+  function vibrateCruise() { vibrate([40, 30, 40]); } // Двойной импульс для круиза
+
+  function setHapticMode(val) {
+    hapticMode = val;
+    localStorage.setItem('lcc_haptic', val);
+    vibrateClick();
+  }
+  // ======================================
 
   function initWS(){
     ws = new WebSocket('ws://' + location.host + '/ws');
@@ -1042,7 +930,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       try{
         var d = JSON.parse(e.data);
         if(d.st){
-          updateBatteryUI(d.v, d.p);
+          $('batt-txt').textContent = d.p + '% · ' + d.v.toFixed(1) + 'V';
+          $('bat-fill').style.width = d.p + '%';
           updateWifi(d.r);
           
           if(typeof d.ra !== 'undefined') { rev.A = !!d.ra; updateRevUI('A'); }
@@ -1054,74 +943,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
         }
       }catch(err){}
     };
-  }
-
-  function updateBatteryUI(v, p) {
-    var batIcon = $('bat-ic');
-    var batFill = $('bat-fill');
-    var battTxt = $('batt-txt');
-    
-    if (v < 0.5) {
-      batIcon.className = 'bat usb';
-      batFill.style.width = '0%';
-      battTxt.textContent = 'USB';
-      hideAllWarnings();
-      $('test-panel').classList.remove('blurred');
-      return;
-    }
-
-    batIcon.className = 'bat';
-    batFill.style.width = p + '%';
-    
-    if (p <= 10) batIcon.classList.add('crit');
-    else if (p <= 30) batIcon.classList.add('warn');
-    
-    battTxt.textContent = p + '% · ' + v.toFixed(1) + 'V';
-    checkWarnings(p);
-  }
-
-  function checkWarnings(p) {
-    var activeBanner = 'Нет';
-    var isLocked = false;
-    hideAllWarnings();
-
-    if (p <= 1) {
-      $('warning-1').style.display = 'flex';
-      $('warning-overlay').classList.add('active');
-      $('test-panel').classList.add('blurred');
-      activeBanner = '1% (блокировка)';
-      isLocked = true;
-      dismissedWarnings[10] = false;
-      dismissedWarnings[5] = false;
-    }
-    else if (p <= 5 && !dismissedWarnings[5]) {
-      $('warning-5-percent').textContent = p + '%';
-      $('warning-5').style.display = 'flex';
-      $('warning-overlay').classList.add('active');
-      activeBanner = '5% (критический)';
-    }
-    else if (p <= 10 && !dismissedWarnings[10]) {
-      $('warning-10-percent').textContent = p + '%';
-      $('warning-10').style.display = 'flex';
-      $('warning-overlay').classList.add('active');
-      activeBanner = '10% (низкий)';
-    }
-    else {
-      $('warning-overlay').classList.remove('active');
-      $('test-panel').classList.remove('blurred');
-    }
-  }
-
-  function hideAllWarnings() {
-    $('warning-10').style.display = 'none';
-    $('warning-5').style.display = 'none';
-    $('warning-1').style.display = 'none';
-    $('warning-overlay').classList.remove('active');
-  }
-
-  function dismissWarning(level) {
-    dismissedWarnings[level] = true;
-    checkWarnings(parseInt($('batt-txt').textContent) || 0);
   }
 
   function updateWifi(r){
@@ -1179,6 +1000,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   window.addEventListener('load', fitSliders);
 
   function switchMode(m){
+    vibrateClick();
     mode=m;
     $('btn-tank').classList.toggle('active', m===0);
     $('btn-classic').classList.toggle('active', m===1);
@@ -1376,8 +1198,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     paintCar();
   }
 
-  $('eng-btn').onclick=function(){ eng=!eng; updateEngUI(); applyEngGate(); txWS({eng: eng?1:0}); };
-  $('aux-mode-btn').onclick=function(){ auxMode=!auxMode; updateAuxModeUI(); applyEngGate(); };
+  $('eng-btn').onclick=function(){ vibrateClick(); eng=!eng; updateEngUI(); applyEngGate(); txWS({eng: eng?1:0}); };
+  $('aux-mode-btn').onclick=function(){ vibrateClick(); auxMode=!auxMode; updateAuxModeUI(); applyEngGate(); };
 
   var springs = {};
   function springTo(el, target, onFrame){
@@ -1448,6 +1270,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     handleInputHold('A', v);
     $('val-left').textContent=v+'%'; txWS({ch:'A',val:v}); 
     paintTank(v,+$('slider-right').value);
+    if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge();
   };
   bindSpring($('slider-left'), 'A', function(v){
     $('val-left').textContent=v+'%'; txWS({ch:'A',val:v}); 
@@ -1460,6 +1283,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     if(mode===0) handleInputHold('B', v);
     $('val-right').textContent=v+'%'; txWS({ch:'B',val:v}); 
     paintTank(+$('slider-left').value,v);
+    if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge();
   };
   bindSpring($('slider-right'), 'B', function(v){
     $('val-right').textContent=v+'%'; txWS({ch:'B',val:v}); 
@@ -1473,6 +1297,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     $('val-drive').textContent=drive+'%'; txWS({ch:'A',val:drive});
     if(eng){ auxB=engineBFromDrive(); $('slider-aux').value=auxB; $('val-aux').textContent=auxB+'%'; }
     paintCar();
+    if ((drive === 100 || drive === -100) && hapticMode === 'all') vibrateEdge();
   };
   bindSpring($('slider-drive'), 'A', function(v){
     drive=v; $('val-drive').textContent=v+'%'; txWS({ch:'A',val:v});
@@ -1487,6 +1312,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     handleInputHold('B', auxB);
     $('val-aux').textContent=auxB+'%'; txWS({ch:'B',val:auxB}); 
     paintCar();
+    if ((auxB === 100 || auxB === -100) && hapticMode === 'all') vibrateEdge();
   };
   bindSpring($('slider-aux'), 'B', function(v){
     if(eng) return;
@@ -1500,6 +1326,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     handleInputHold('C', auxC);
     $('val-C').textContent=auxC+'%'; txWS({ch:'C',val:auxC}); 
     paintCar();
+    if ((auxC === 100 || auxC === -100) && hapticMode === 'all') vibrateEdge();
   };
   bindSpring($('slider-C'), 'C', function(v){
     auxC=v; $('val-C').textContent=v+'%'; txWS({ch:'C',val:v}); 
@@ -1509,20 +1336,22 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   $('slider-steer').oninput=function(){
     cancelSpring(this);
     steer=+this.value; $('val-steer').textContent=steer+'%'; txWS({ch:'S',val:steer}); paintCar();
+    if ((steer === 100 || steer === -100) && hapticMode === 'all') vibrateEdge();
   };
   bindSpring($('slider-steer'), null, function(v){
     steer=v; $('val-steer').textContent=v+'%'; txWS({ch:'S',val:v}); paintCar();
   });
 
-  $('slider-test-A').oninput=function(){ var v=+this.value; $('val-test-A').textContent=v+'%'; txWS({ch:'A',val:v}); };
-  $('slider-test-B').oninput=function(){ var v=+this.value; $('val-test-B').textContent=v+'%'; txWS({ch:'B',val:v}); };
-  $('slider-test-C').oninput=function(){ var v=+this.value; $('val-test-C').textContent=v+'%'; txWS({ch:'C',val:v}); };
-  $('slider-test-S').oninput=function(){ var v=+this.value; $('val-test-S').textContent=v+'%'; txWS({ch:'S',val:v}); };
+  $('slider-test-A').oninput=function(){ var v=+this.value; $('val-test-A').textContent=v+'%'; txWS({ch:'A',val:v}); if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge(); };
+  $('slider-test-B').oninput=function(){ var v=+this.value; $('val-test-B').textContent=v+'%'; txWS({ch:'B',val:v}); if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge(); };
+  $('slider-test-C').oninput=function(){ var v=+this.value; $('val-test-C').textContent=v+'%'; txWS({ch:'C',val:v}); if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge(); };
+  $('slider-test-S').oninput=function(){ var v=+this.value; $('val-test-S').textContent=v+'%'; txWS({ch:'S',val:v}); if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge(); };
   
-  $('test-reset-btn').onclick=function(){ zeroAll(); };
+  $('test-reset-btn').onclick=function(){ vibrateClick(); zeroAll(); };
 
   document.querySelectorAll('.rev-btn').forEach(function(b){
     b.addEventListener('click', function(){
+      vibrateClick();
       var ch=b.getAttribute('data-ch'); if(!ch) return;
       rev[ch]=!rev[ch];
       updateRevUI(ch);
@@ -1533,16 +1362,19 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 
   document.querySelectorAll('.hold-btn').forEach(function(b){
     b.addEventListener('click', function(){
+      vibrateClick();
       var ch=b.getAttribute('data-ch'); if(!ch) return;
       holdConfig[ch] = !holdConfig[ch];
       clearHoldState(ch);
       b.classList.toggle('active', holdConfig[ch]);
       b.textContent = holdConfig[ch] ? 'ВКЛ' : 'ВЫКЛ';
+      if (holdConfig[ch]) vibrateCruise();
     });
   });
 
   document.querySelectorAll('.led-btn').forEach(function(b){
     b.addEventListener('click', function(){
+      vibrateClick();
       var c=b.getAttribute('data-ch');
       led[c]=!led[c];
       updateLedUI(c);
@@ -1551,15 +1383,19 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     });
   });
 
-  function openS(v){ $('sheet').classList.toggle('open',v); $('sbg').classList.toggle('open',v); }
+  function openS(v){ 
+    vibrateClick();
+    $('sheet').classList.toggle('open',v); 
+    $('sbg').classList.toggle('open',v); 
+  }
   $('setBtn').onclick=function(){ openS(true); };
   $('sheetX').onclick=function(){ openS(false); };
   $('sbg').onclick=function(){ openS(false); };
   $('sheetBody').addEventListener('touchmove', function(e){ e.stopPropagation(); }, {passive:true});
 
-  $('trimM').onclick=function(){ trim=Math.max(-40,trim-5); $('val-trim').textContent=trim; txWS({trim:trim}); };
-  $('trimP').onclick=function(){ trim=Math.min(40,trim+5); $('val-trim').textContent=trim; txWS({trim:trim}); };
-  $('maxdeg-input').onchange=function(){ txWS({maxdeg: +this.value||45}); };
+  $('trimM').onclick=function(){ vibrateClick(); trim=Math.max(-40,trim-5); $('val-trim').textContent=trim; txWS({trim:trim}); };
+  $('trimP').onclick=function(){ vibrateClick(); trim=Math.min(40,trim+5); $('val-trim').textContent=trim; txWS({trim:trim}); };
+  $('maxdeg-input').onchange=function(){ vibrateClick(); txWS({maxdeg: +this.value||45}); };
 
   var speedMs = 0, rpmShown = 0, moveDir = 0;
   function setNeedle(id, t){
