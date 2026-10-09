@@ -1,11 +1,10 @@
-// ESP32 Lego Technic motorization — Версия: 0.2.37
+// ESP32 Lego Technic motorization — Версия: 0.2.38
 // Библиотеки: ESPAsyncWebServer, AsyncTCP, ArduinoJson, Adafruit_SSD1306, Adafruit_GFX, ESP32Servo, ElegantOTA
 // ESP32 core: 2.0.9 (совместимость с LEDC и AsyncWebServer)
-
-// CHANGELOG 0.2.37:
-// - Плавная fade-анимация перехода джойстика мотора B в баннер "Имитация ДВС"
-// - Добавлен изолированный контейнер .slim-container для точного позиционирования
-// - Абсолютное позиционирование и анимация применяются ТОЛЬКО к джойстику B, джойстик C и остальные элементы не затронуты
+// CHANGELOG 0.2.38:
+// - Интегрированы полноэкранные баннеры предупреждения о низком заряде (10%, 5%, 1%)
+// - Обновлен статус-бар: поддержка состояния USB (перечеркнутая иконка, текст "USB")
+// - Добавлена иконка гаечного ключа на OLED-дисплей для тестового режима (MODE_TEST)
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -236,6 +235,32 @@ void buildStatus(char *buf, size_t n) {
 }
 
 // ---------- Display ----------
+void drawModeIcon() {
+  int x0 = 96, y0 = 4;
+  if (currentMode == MODE_TANK) {
+    display.fillRect(x0 + 4, y0 + 10, 20, 12, SSD1306_WHITE);
+    display.fillRect(x0 + 10, y0 + 3, 8, 8, SSD1306_WHITE);
+    display.drawLine(x0 + 18, y0 + 6, x0 + 27, y0 + 6, SSD1306_WHITE);
+    display.fillRect(x0 + 1, y0 + 22, 26, 4, SSD1306_WHITE);
+  } else if (currentMode == MODE_CAR) {
+    display.fillRoundRect(x0 + 2, y0 + 8, 24, 10, 3, SSD1306_WHITE);
+    display.fillRoundRect(x0 + 8, y0 + 3, 12, 7, 2, SSD1306_WHITE);
+    display.fillCircle(x0 + 7, y0 + 20, 3, SSD1306_WHITE);
+    display.fillCircle(x0 + 21, y0 + 20, 3, SSD1306_WHITE);
+  } else {
+    // MODE_TEST: Рисуем гаечный ключ
+    int wx = x0 + 8, wy = y0 + 6;
+    display.fillCircle(wx + 6, wy + 18, 5, SSD1306_WHITE); // Головка
+    display.drawLine(wx + 10, wy + 14, wx + 20, wy + 4, SSD1306_WHITE); // Ручка
+    display.drawLine(wx + 11, wy + 15, wx + 21, wy + 5, SSD1306_WHITE);
+    display.drawLine(wx + 12, wy + 16, wx + 22, wy + 6, SSD1306_WHITE);
+    display.drawLine(wx + 13, wy + 17, wx + 23, wy + 7, SSD1306_WHITE);
+    // Вырез в головке
+    display.fillRect(wx + 2, wy + 16, 8, 2, SSD1306_BLACK);
+    display.fillRect(wx + 2, wy + 20, 8, 2, SSD1306_BLACK);
+  }
+}
+
 void updateDisplay() {
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
@@ -253,6 +278,8 @@ void updateDisplay() {
   display.printf("%.2fV\n", battV);
   display.setCursor(0, 54);
   display.printf("Clients: %d\n", ws.count());
+
+  drawModeIcon();
   display.display();
 }
 
@@ -322,7 +349,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
   }
 }
 
-// ---------- HTML GUI v0.2.37 ----------
+// ---------- HTML GUI v0.2.38 ----------
 const char PAGE_HTML[] PROGMEM = R"HTML(
 <!DOCTYPE html>
 <html lang="ru">
@@ -378,10 +405,47 @@ body{padding:max(env(safe-area-inset-top,0px),6px) 10px max(env(safe-area-inset-
 .bars i:nth-child(3){height:11px}.bars i:nth-child(4){height:14px}
 .bars.w1 i.on{background:var(--rose)}.bars.w2 i.on{background:var(--amber)}
 .bars.w3 i.on,.bars.w4 i.on{background:var(--emerald)}
-.bat{position:relative;width:24px;height:12px;border:2px solid var(--muted);border-radius:3px;padding:1px}
-.bat::after{content:"";position:absolute;right:-4px;top:2px;width:2px;height:5px;background:var(--muted);border-radius:0 1px 1px 0}
-.bat-fill{height:100%;width:70%;background:var(--emerald);border-radius:1px}
-.bat.warn .bat-fill{background:var(--amber)}.bat.crit .bat-fill{background:var(--rose)}
+
+/* Иконка батареи с поддержкой USB состояния */
+.bat{
+  position:relative;
+  width:28px;height:14px;
+  border:2px solid var(--muted);
+  border-radius:3px;
+  display:inline-block;
+  vertical-align:middle;
+}
+.bat::after{
+  content:"";
+  position:absolute;
+  right:-5px;top:3px;
+  width:3px;height:6px;
+  background:var(--muted);
+  border-radius:0 2px 2px 0;
+}
+.bat-fill{
+  height:100%;
+  width:0;
+  background:var(--emerald);
+  transition:width 0.3s ease, background 0.3s ease;
+  border-radius:1px;
+}
+.bat.warn .bat-fill{background:var(--amber)}
+.bat.crit .bat-fill{background:var(--rose)}
+.bat.usb{border-color:#64748b;opacity:0.5}
+.bat.usb::after{background:#64748b}
+.bat.usb::before{
+  content:"";
+  position:absolute;
+  top:50%;left:50%;
+  width:130%;height:2px;
+  background:#64748b;
+  transform:translate(-50%,-50%) rotate(-45deg);
+  z-index:2;
+}
+.bat.usb .bat-fill{display:none}
+
+.bat-text{font-size:11px;font-weight:600;color:var(--text);margin-left:4px;white-space:nowrap}
 
 .panel{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
   background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:10px;overflow:hidden}
@@ -418,83 +482,35 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .slider-v-container .slider-v{height:110px!important}
 
 /* ========== ПЛАВНЫЙ ПЕРЕХОД: ДЖОЙСТИК B ↔ БАННЕР "ИМИТАЦИЯ ДВС" ========== */
-/* Контейнер slim-container — обёртка только для джойстика B и баннера */
-.slim-container {
-  position: relative;
-  min-height: 52px;
-  margin-top: 4px;
-}
-
-/* Обычный .slim-wrap (для джойстика C и других) — в нормальном потоке, без absolute */
+.slim-container { position: relative; min-height: 52px; margin-top: 4px; }
 .slim-wrap {
-  height: 52px;
-  display: flex;
-  align-items: center;
-  padding: 0 8px;
-  background: rgba(2,6,15,.7);
-  border-radius: 12px;
-  border: 1px solid var(--border);
+  height: 52px; display: flex; align-items: center; padding: 0 8px;
+  background: rgba(2,6,15,.7); border-radius: 12px; border: 1px solid var(--border);
   box-shadow: inset 0 2px 8px rgba(0,0,0,.4);
 }
-[data-theme="light"] .slim-wrap {
-  background:#e2e8f0;
-  box-shadow: inset 0 2px 6px rgba(0,0,0,.08);
-}
+[data-theme="light"] .slim-wrap { background:#e2e8f0; box-shadow: inset 0 2px 6px rgba(0,0,0,.08); }
 .slim-wrap input { width: 100%; }
-
-/* .slim-wrap внутри .slim-container (только для джойстика B) — абсолютное позиционирование для анимации */
 .slim-container > .slim-wrap {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 52px;
-  opacity: 1;
-  transform: scale(1);
-  transition: opacity 0.35s ease, transform 0.35s ease;
-  pointer-events: auto;
+  position: absolute; top: 0; left: 0; right: 0; height: 52px;
+  opacity: 1; transform: scale(1);
+  transition: opacity 0.35s ease, transform 0.35s ease; pointer-events: auto;
 }
-.slim-container > .slim-wrap.hidden {
-  opacity: 0;
-  transform: scale(0.95);
-  pointer-events: none;
-}
-
-/* Баннер "Имитация ДВС" — по умолчанию скрыт, только внутри slim-container */
+.slim-container > .slim-wrap.hidden { opacity: 0; transform: scale(0.95); pointer-events: none; }
 .eng-label {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  font-weight: 800;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  color: var(--amber);
-  text-align: center;
-  background: rgba(245,158,11,.08);
-  border-radius: 12px;
-  border: 1px solid rgba(245,158,11,.35);
-  opacity: 0;
-  transform: scale(0.95);
-  transition: opacity 0.35s ease, transform 0.35s ease;
-  pointer-events: none;
+  position: absolute; top: 0; left: 0; right: 0; height: 52px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--amber); text-align: center;
+  background: rgba(245,158,11,.08); border-radius: 12px; border: 1px solid rgba(245,158,11,.35);
+  opacity: 0; transform: scale(0.95);
+  transition: opacity 0.35s ease, transform 0.35s ease; pointer-events: none;
 }
-.eng-label.visible {
-  opacity: 1;
-  transform: scale(1);
-  pointer-events: auto;
-}
+.eng-label.visible { opacity: 1; transform: scale(1); pointer-events: auto; }
 /* ========== КОНЕЦ ПЛАВНОГО ПЕРЕХОДА ========== */
 
 .tank-svg{height:calc(var(--sh) - 8px);width:auto;aspect-ratio:240/280;max-height:100%}
 .car-svg{height:calc(var(--sh) - 4px);width:auto;aspect-ratio:240/200;max-height:100%}
 .car-wrap{position:relative;display:flex;flex-direction:column;align-items:center}
-
 .btn-row{display:flex;gap:8px;margin-top:6px;flex-shrink:0}
 
 #tank-panel .cluster{justify-content:space-evenly;width:100%;padding:0 8px}
@@ -508,36 +524,19 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 #test-panel .motors-group{display:flex;align-items:center;justify-content:center;gap:clamp(24px,5vw,48px)}
 #test-panel .servo-group{display:flex;flex-direction:column;align-items:center;justify-content:center;width:min(380px,40vw);gap:16px}
 
-/* ---------- Плавные анимации выезда панелей (Слайдеры B/C vs Тахометр) ---------- */
-.side-stack {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-  width: 100%;
-  overflow: hidden;
-}
+.side-stack { position: relative; flex: 1 1 auto; min-height: 0; width: 100%; overflow: hidden; }
 .dash{
-  position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center; gap: 10px;
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px;
   opacity: 1; transform: translateY(0);
-  transition: transform 0.42s cubic-bezier(0.22, 0.9, 0.3, 1), opacity 0.35s ease;
-  pointer-events: auto;
+  transition: transform 0.42s cubic-bezier(0.22, 0.9, 0.3, 1), opacity 0.35s ease; pointer-events: auto;
 }
-.dash.hide{
-  opacity: 0; transform: translateY(-110%);
-  pointer-events: none;
-}
+.dash.hide{ opacity: 0; transform: translateY(-110%); pointer-events: none; }
 .side-top{
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column; gap: 6px; justify-content: flex-start;
+  position: absolute; inset: 0; display: flex; flex-direction: column; gap: 6px; justify-content: flex-start;
   opacity: 0; transform: translateY(110%);
-  transition: transform 0.42s cubic-bezier(0.22, 0.9, 0.3, 1), opacity 0.35s ease;
-  pointer-events: none;
+  transition: transform 0.42s cubic-bezier(0.22, 0.9, 0.3, 1), opacity 0.35s ease; pointer-events: none;
 }
-.side-top.open{
-  opacity: 1; transform: translateY(0);
-  pointer-events: auto;
-}
+.side-top.open{ opacity: 1; transform: translateY(0); pointer-events: auto; }
 .side-top .field{flex:1;display:flex;flex-direction:column;justify-content:center}
 
 .gauge{display:flex;flex-direction:column;align-items:center;width:46%}
@@ -557,26 +556,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .aux-btn .ico{font-size:20px;line-height:1;filter:grayscale(.3) opacity(.75)}
 .aux-btn.active .ico{filter:none;opacity:1}
 
-.led-btn[data-ch="F"].active{
-  border-color:#eab308;color:#eab308;
-  box-shadow:0 0 14px rgba(234,179,8,.5), inset 0 0 8px rgba(234,179,8,.1);
-}
-.led-btn[data-ch="R"].active{
-  border-color:#f43f5e;color:#f43f5e;
-  box-shadow:0 0 14px rgba(244,63,94,.5), inset 0 0 8px rgba(244,63,94,.1);
-}
-.reset-btn:active{
-  border-color:var(--rose);color:var(--rose);
-  box-shadow:0 0 14px rgba(244,63,94,.5);
-}
-.eng-btn.active{
-  border-color:#f59e0b;color:#f59e0b;
-  box-shadow:0 0 12px rgba(245,158,11,.45), inset 0 0 8px rgba(245,158,11,.08);
-}
-.aux-mode-btn.active{
-  border-color:#22d3ee;color:#22d3ee;
-  box-shadow:0 0 12px rgba(34,211,238,.4), inset 0 0 8px rgba(34,211,238,.08);
-}
+.led-btn[data-ch="F"].active{ border-color:#eab308;color:#eab308; box-shadow:0 0 14px rgba(234,179,8,.5), inset 0 0 8px rgba(234,179,8,.1); }
+.led-btn[data-ch="R"].active{ border-color:#f43f5e;color:#f43f5e; box-shadow:0 0 14px rgba(244,63,94,.5), inset 0 0 8px rgba(244,63,94,.1); }
+.reset-btn:active{ border-color:var(--rose);color:var(--rose); box-shadow:0 0 14px rgba(244,63,94,.5); }
+.eng-btn.active{ border-color:#f59e0b;color:#f59e0b; box-shadow:0 0 12px rgba(245,158,11,.45), inset 0 0 8px rgba(245,158,11,.08); }
+.aux-mode-btn.active{ border-color:#22d3ee;color:#22d3ee; box-shadow:0 0 12px rgba(34,211,238,.4), inset 0 0 8px rgba(34,211,238,.08); }
 
 .rev-btn{margin-top:4px;padding:4px 8px;border-radius:8px;background:var(--panel2);border:1px solid var(--border);
   color:var(--muted);font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap}
@@ -586,11 +570,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   color:var(--muted);font-size:9px;font-weight:700;cursor:pointer;white-space:nowrap}
 .hold-btn.active{background:rgba(16,185,129,.15);border-color:var(--emerald);color:var(--emerald)}
 
-.side{
-  width:min(260px,28vw);align-self:stretch;
-  display:flex;flex-direction:column;gap:6px;
-  min-height:0;
-}
+.side{ width:min(260px,28vw);align-self:stretch; display:flex;flex-direction:column;gap:6px; min-height:0; }
 .side-bottom{flex:0 0 auto;margin-top:auto}
 .field{background:var(--panel2);padding:8px;border-radius:12px;border:1px solid var(--border)}
 .field label{font-size:11px;font-weight:600;color:var(--text)}
@@ -606,47 +586,19 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .hidden{display:none!important}
 .wheel{transform-box:fill-box;transform-origin:center;transition:transform .08s ease-out}
 
-#t-left-body, #t-right-body, #t-left-f, #t-left-r, #t-right-f, #t-right-r, #w-rl, #w-rr, #c-fwd, #c-rev {
-  transition: stroke 0.36s ease, fill 0.36s ease, filter 0.36s ease;
-}
-#t-left-body.active-light, #t-right-body.active-light, 
-#t-left-f.active-light, #t-left-r.active-light, 
-#t-right-f.active-light, #t-right-r.active-light, 
-#w-rl.active-light, #w-rr.active-light, 
-#c-fwd.active-light, #c-rev.active-light {
-  transition: stroke 0.18s ease, fill 0.18s ease, filter 0.18s ease;
-}
+#t-left-body, #t-right-body, #t-left-f, #t-left-r, #t-right-f, #t-right-r, #w-rl, #w-rr, #c-fwd, #c-rev { transition: stroke 0.36s ease, fill 0.36s ease, filter 0.36s ease; }
+#t-left-body.active-light, #t-right-body.active-light, #t-left-f.active-light, #t-left-r.active-light, #t-right-f.active-light, #t-right-r.active-light, #w-rl.active-light, #w-rr.active-light, #c-fwd.active-light, #c-rev.active-light { transition: stroke 0.18s ease, fill 0.18s ease, filter 0.18s ease; }
 
-#car-body {
-  transition: stroke 1.00s cubic-bezier(.22,.9,.3,1), stroke-width 1.00s cubic-bezier(.22,.9,.3,1), filter 1.00s cubic-bezier(.22,.9,.3,1);
-}
-#car-body.eng-glow {
-  transition: stroke 0.50s cubic-bezier(.22,.9,.3,1), stroke-width 0.50s cubic-bezier(.22,.9,.3,1), filter 0.50s cubic-bezier(.22,.9,.3,1);
-}
+#car-body { transition: stroke 1.00s cubic-bezier(.22,.9,.3,1), stroke-width 1.00s cubic-bezier(.22,.9,.3,1), filter 1.00s cubic-bezier(.22,.9,.3,1); }
+#car-body.eng-glow { transition: stroke 0.50s cubic-bezier(.22,.9,.3,1), stroke-width 0.50s cubic-bezier(.22,.9,.3,1), filter 0.50s cubic-bezier(.22,.9,.3,1); }
 
-.sparks {
-  pointer-events:none;
-  opacity: 0;
-  transition: opacity 1.00s ease;
-}
-.sparks.on {
-  opacity: 1;
-  transition: opacity 0.50s ease;
-}
+.sparks { pointer-events:none; opacity: 0; transition: opacity 1.00s ease; }
+.sparks.on { opacity: 1; transition: opacity 0.50s ease; }
 
-/* Анимация проявления и плавной перестановки иконок моторов B и C */
-#motors-icon {
-  transition: opacity 0.40s ease;
-}
-#motor-b-group {
-  transition: opacity 0.40s ease, transform 0.40s cubic-bezier(0.22, 0.9, 0.3, 1);
-}
-#motor-c-group {
-  transition: opacity 0.40s ease, transform 0.40s cubic-bezier(0.22, 0.9, 0.3, 1);
-}
-#motor-c-group.centered {
-  transform: translateY(-28px);
-}
+#motors-icon { transition: opacity 0.40s ease; }
+#motor-b-group { transition: opacity 0.40s ease, transform 0.40s cubic-bezier(0.22, 0.9, 0.3, 1); }
+#motor-c-group { transition: opacity 0.40s ease, transform 0.40s cubic-bezier(0.22, 0.9, 0.3, 1); }
+#motor-c-group.centered { transform: translateY(-28px); }
 
 @keyframes boltPulse{0%,100%{opacity:.55}50%{opacity:1}}
 .bolt-glow{filter:drop-shadow(0 0 5px #22d3ee)}
@@ -670,14 +622,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .fs-btn{padding:12px 20px;border-radius:14px;background:var(--blue-dk);color:#fff;border:none;
   font-weight:700;font-size:13px;cursor:pointer;box-shadow:0 0 16px rgba(59,130,246,.4)}
 
-.sbg{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.45);
-  opacity:0;pointer-events:none;transition:opacity .28s ease}
+.sbg{position:fixed;inset:0;z-index:40;background:rgba(0,0,0,.45); opacity:0;pointer-events:none;transition:opacity .28s ease}
 .sbg.open{opacity:1;pointer-events:auto}
 .sheet{position:fixed;top:0;right:0;bottom:0;z-index:41;width:min(300px,85vw);
-  background:var(--panel);border-left:1px solid var(--border);
-  transform:translateX(105%);
-  transition:transform .34s cubic-bezier(.22,.9,.3,1);
-  display:flex;flex-direction:column;overflow:hidden;touch-action:pan-y;
+  background:var(--panel);border-left:1px solid var(--border); transform:translateX(105%);
+  transition:transform .34s cubic-bezier(.22,.9,.3,1); display:flex;flex-direction:column;overflow:hidden;touch-action:pan-y;
   will-change:transform;box-shadow:-12px 0 32px rgba(0,0,0,.35)}
 .sheet.open{transform:translateX(0)}
 .sheet-h{flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border)}
@@ -690,6 +639,63 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .grow{flex:1}
 .svg-body{fill:var(--svg-fill);stroke:var(--svg-stroke)}
 .svg-deep{fill:var(--svg-deep);stroke:var(--svg-stroke)}
+
+/* ========== БАННЕРЫ ПРЕДУПРЕЖДЕНИЙ ========== */
+.warning-overlay{
+  position:fixed; top:0; left:0; right:0; bottom:0; z-index:100;
+  display:flex; align-items:center; justify-content:center; padding:20px;
+  pointer-events:none; background:rgba(0,0,0,0.3);
+  backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  opacity:0; transition:opacity 0.3s ease;
+}
+.warning-overlay.active{pointer-events:auto;opacity:1}
+
+.warning-banner{
+  position:relative; background:rgba(20,24,32,0.98); border:2px solid; border-radius:20px;
+  padding:24px 28px; width:380px; height:320px; max-width:90%; display:none;
+  flex-direction:column; align-items:center; justify-content:center; text-align:center;
+  transform:scale(0.8); opacity:0; transition:all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:0 20px 60px rgba(0,0,0,0.6);
+}
+.warning-overlay.active .warning-banner{ transform:scale(1); opacity:1; }
+
+.warning-banner.level-10{border-color:var(--amber)}
+.warning-banner.level-5{border-color:var(--rose)}
+.warning-banner.level-1{border-color:var(--rose)} /* Убран полупрозрачный фон, теперь как у всех */
+
+.warning-icon{
+  position:relative; width:100%; height:90px; margin-bottom:4px; flex-shrink:0;
+}
+.warning-icon-emoji{
+  position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);
+  font-size:72px; line-height:1;
+}
+.warning-banner.level-5 .warning-icon-emoji,
+.warning-banner.level-1 .warning-icon-emoji{ animation:iconPulse 1.2s ease-in-out infinite; }
+@keyframes iconPulse{
+  0%,100%{transform:translate(-50%, -50%) scale(1)}
+  50%{transform:translate(-50%, -50%) scale(1.12)}
+}
+
+.warning-percent{
+  font-size:32px; font-weight:800; color:var(--amber); height:40px;
+  display:flex; align-items:center; justify-content:center; margin-bottom:4px; flex-shrink:0;
+}
+.warning-banner.level-5 .warning-percent{color:var(--rose)}
+.warning-banner.level-1 .warning-percent{color:var(--rose)}
+
+.warning-percent-placeholder{ height:40px; margin-bottom:4px; flex-shrink:0; }
+
+.warning-title{ font-size:20px; font-weight:700; margin-bottom:8px; color:var(--text); flex-shrink:0; }
+.warning-text{ font-size:14px; color:var(--muted); line-height:1.4; max-width:300px; flex-shrink:0; }
+
+.warning-btn{
+  padding:12px 32px; border-radius:12px; border:none; font-size:14px; font-weight:700;
+  cursor:pointer; transition:all 0.2s; margin-top:16px; flex-shrink:0;
+}
+.warning-btn.ok{background:var(--blue);color:#fff}
+.warning-btn.ok:hover{background:var(--blue-dk);transform:scale(1.05)}
+.warning-btn.disabled{background:var(--muted);color:var(--text);cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -707,16 +713,13 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="brand-icon">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
           <rect x="2" y="5" width="20" height="15" rx="3" fill="none" stroke="currentColor" stroke-width="2"/>
-          <circle cx="7" cy="9" r="2"/>
-          <circle cx="17" cy="9" r="2"/>
-          <circle cx="7" cy="16" r="2"/>
-          <circle cx="17" cy="16" r="2"/>
+          <circle cx="7" cy="9" r="2"/><circle cx="17" cy="9" r="2"/><circle cx="7" cy="16" r="2"/><circle cx="17" cy="16" r="2"/>
         </svg>
       </div>
       <div>
         <div class="brand-title">Lego Control Center</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-addr">192.168.4.1</span></div>
-        <div class="brand-ver">0.2.37</div>
+        <div class="brand-ver">0.2.38</div>
       </div>
     </div>
     <div class="mode-switch">
@@ -731,8 +734,10 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
           <span id="wifi-txt">--</span>
         </div>
         <div class="stat">
-          <div class="bat" id="bat-ic"><div class="bat-fill" id="bat-fill" style="width:0%"></div></div>
-          <span id="batt-txt">--% · --V</span>
+          <div class="bat" id="bat-ic">
+            <div class="bat-fill" id="bat-fill" style="width:0%"></div>
+          </div>
+          <span class="bat-text" id="batt-txt">--% · --V</span>
         </div>
       </div>
       <button class="icon-btn" type="button" onclick="toggleFullscreen()" title="Полный экран">⛶</button>
@@ -747,9 +752,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="col">
         <span class="lbl">Левая гусеница</span>
         <span class="val" id="val-left">0%</span>
-        <div class="slider-v-container">
-          <input type="range" id="slider-left" class="slider-v" min="-100" max="100" value="0">
-        </div>
+        <div class="slider-v-container"><input type="range" id="slider-left" class="slider-v" min="-100" max="100" value="0"></div>
       </div>
       <div class="col">
         <svg class="tank-svg" viewBox="0 0 240 280">
@@ -780,9 +783,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="col">
         <span class="lbl">Правая гусеница</span>
         <span class="val" id="val-right">0%</span>
-        <div class="slider-v-container">
-          <input type="range" id="slider-right" class="slider-v" min="-100" max="100" value="0">
-        </div>
+        <div class="slider-v-container"><input type="range" id="slider-right" class="slider-v" min="-100" max="100" value="0"></div>
       </div>
     </div>
   </main>
@@ -792,9 +793,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="col">
         <span class="lbl">Газ (A)</span>
         <span class="val g" id="val-drive">0%</span>
-        <div class="slider-v-container">
-          <input type="range" id="slider-drive" class="slider-v" min="-100" max="100" value="0">
-        </div>
+        <div class="slider-v-container"><input type="range" id="slider-drive" class="slider-v" min="-100" max="100" value="0"></div>
       </div>
       <div class="col">
         <div class="car-wrap">
@@ -828,18 +827,10 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
             <circle id="hl-fr" cx="152" cy="32" r="5" fill="#3a4252"/>
             <circle id="hl-rl" cx="88" cy="168" r="5" fill="#3a4252"/>
             <circle id="hl-rr" cx="152" cy="168" r="5" fill="#3a4252"/>
-            <g id="c-fl" class="wheel" transform="translate(36,45)">
-              <rect id="w-fl" x="-11" y="-20" width="22" height="40" rx="6" class="svg-deep" stroke="var(--blue)" stroke-width="2"/>
-            </g>
-            <g id="c-fr" class="wheel" transform="translate(204,45)">
-              <rect id="w-fr" x="-11" y="-20" width="22" height="40" rx="6" class="svg-deep" stroke="var(--blue)" stroke-width="2"/>
-            </g>
-            <g id="c-rl" transform="translate(36,155)">
-              <rect id="w-rl" x="-11" y="-22" width="22" height="45" rx="6" class="svg-deep" stroke="var(--svg-stroke)" stroke-width="2"/>
-            </g>
-            <g id="c-rr" transform="translate(204,155)">
-              <rect id="w-rr" x="-11" y="-22" width="22" height="45" rx="6" class="svg-deep" stroke="var(--svg-stroke)" stroke-width="2"/>
-            </g>
+            <g id="c-fl" class="wheel" transform="translate(36,45)"><rect id="w-fl" x="-11" y="-20" width="22" height="40" rx="6" class="svg-deep" stroke="var(--blue)" stroke-width="2"/></g>
+            <g id="c-fr" class="wheel" transform="translate(204,45)"><rect id="w-fr" x="-11" y="-20" width="22" height="40" rx="6" class="svg-deep" stroke="var(--blue)" stroke-width="2"/></g>
+            <g id="c-rl" transform="translate(36,155)"><rect id="w-rl" x="-11" y="-22" width="22" height="45" rx="6" class="svg-deep" stroke="var(--svg-stroke)" stroke-width="2"/></g>
+            <g id="c-rr" transform="translate(204,155)"><rect id="w-rr" x="-11" y="-22" width="22" height="45" rx="6" class="svg-deep" stroke="var(--svg-stroke)" stroke-width="2"/></g>
           </svg>
         </div>
         <div class="btn-row">
@@ -908,23 +899,17 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
         <div class="col">
           <span class="lbl">Мотор A</span>
           <span class="val g" id="val-test-A">0%</span>
-          <div class="slider-v-container">
-            <input type="range" id="slider-test-A" class="slider-v" min="-100" max="100" value="0">
-          </div>
+          <div class="slider-v-container"><input type="range" id="slider-test-A" class="slider-v" min="-100" max="100" value="0"></div>
         </div>
         <div class="col">
           <span class="lbl">Мотор B</span>
           <span class="val c" id="val-test-B">0%</span>
-          <div class="slider-v-container">
-            <input type="range" id="slider-test-B" class="slider-v" min="-100" max="100" value="0">
-          </div>
+          <div class="slider-v-container"><input type="range" id="slider-test-B" class="slider-v" min="-100" max="100" value="0"></div>
         </div>
         <div class="col">
           <span class="lbl">Мотор C</span>
           <span class="val a" id="val-test-C">0%</span>
-          <div class="slider-v-container">
-            <input type="range" id="slider-test-C" class="slider-v" min="-100" max="100" value="0">
-          </div>
+          <div class="slider-v-container"><input type="range" id="slider-test-C" class="slider-v" min="-100" max="100" value="0"></div>
         </div>
       </div>
       <div class="servo-group">
@@ -995,6 +980,33 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   </div>
 </aside>
 
+<!-- БАННЕРЫ ПРЕДУПРЕЖДЕНИЙ -->
+<div class="warning-overlay" id="warning-overlay">
+  <div class="warning-banner level-10" id="warning-10">
+    <div class="warning-icon"><span class="warning-icon-emoji">🪫</span></div>
+    <div class="warning-percent" id="warning-10-percent">10%</div>
+    <div class="warning-title">Низкий заряд батареи</div>
+    <div class="warning-text">Рекомендуется зарядить аккумулятор</div>
+    <button class="warning-btn ok" onclick="dismissWarning(10)">ОК</button>
+  </div>
+
+  <div class="warning-banner level-5" id="warning-5">
+    <div class="warning-icon"><span class="warning-icon-emoji">⚠️</span></div>
+    <div class="warning-percent" id="warning-5-percent">5%</div>
+    <div class="warning-title">Критический заряд!</div>
+    <div class="warning-text">Зарядите батарею немедленно</div>
+    <button class="warning-btn ok" onclick="dismissWarning(5)">ОК</button>
+  </div>
+
+  <div class="warning-banner level-1" id="warning-1">
+    <div class="warning-icon"><span class="warning-icon-emoji">🔌</span></div>
+    <div class="warning-percent-placeholder"></div>
+    <div class="warning-title">Управление приостановлено</div>
+    <div class="warning-text">Для безопасности аккумуляторов функции управления отключены.<br>Зарядите батарею для продолжения.</div>
+    <button class="warning-btn disabled" disabled>Зарядите батарею</button>
+  </div>
+</div>
+
 <script>
 (function(){
   function $(id){ return document.getElementById(id); }
@@ -1013,6 +1025,9 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   var holdActive = { A: false, B: false, C: false };
   var holdTimer = { A: null, B: null, C: null };
   var holdStartVal = { A: 0, B: 0, C: 0 };
+  
+  // Состояние для баннеров
+  var dismissedWarnings = {10: false, 5: false};
 
   function initWS(){
     ws = new WebSocket('ws://' + location.host + '/ws');
@@ -1027,8 +1042,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       try{
         var d = JSON.parse(e.data);
         if(d.st){
-          $('batt-txt').textContent = d.p + '% · ' + d.v.toFixed(1) + 'V';
-          $('bat-fill').style.width = d.p + '%';
+          updateBatteryUI(d.v, d.p);
           updateWifi(d.r);
           
           if(typeof d.ra !== 'undefined') { rev.A = !!d.ra; updateRevUI('A'); }
@@ -1040,6 +1054,74 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
         }
       }catch(err){}
     };
+  }
+
+  function updateBatteryUI(v, p) {
+    var batIcon = $('bat-ic');
+    var batFill = $('bat-fill');
+    var battTxt = $('batt-txt');
+    
+    if (v < 0.5) {
+      batIcon.className = 'bat usb';
+      batFill.style.width = '0%';
+      battTxt.textContent = 'USB';
+      hideAllWarnings();
+      $('test-panel').classList.remove('blurred');
+      return;
+    }
+
+    batIcon.className = 'bat';
+    batFill.style.width = p + '%';
+    
+    if (p <= 10) batIcon.classList.add('crit');
+    else if (p <= 30) batIcon.classList.add('warn');
+    
+    battTxt.textContent = p + '% · ' + v.toFixed(1) + 'V';
+    checkWarnings(p);
+  }
+
+  function checkWarnings(p) {
+    var activeBanner = 'Нет';
+    var isLocked = false;
+    hideAllWarnings();
+
+    if (p <= 1) {
+      $('warning-1').style.display = 'flex';
+      $('warning-overlay').classList.add('active');
+      $('test-panel').classList.add('blurred');
+      activeBanner = '1% (блокировка)';
+      isLocked = true;
+      dismissedWarnings[10] = false;
+      dismissedWarnings[5] = false;
+    }
+    else if (p <= 5 && !dismissedWarnings[5]) {
+      $('warning-5-percent').textContent = p + '%';
+      $('warning-5').style.display = 'flex';
+      $('warning-overlay').classList.add('active');
+      activeBanner = '5% (критический)';
+    }
+    else if (p <= 10 && !dismissedWarnings[10]) {
+      $('warning-10-percent').textContent = p + '%';
+      $('warning-10').style.display = 'flex';
+      $('warning-overlay').classList.add('active');
+      activeBanner = '10% (низкий)';
+    }
+    else {
+      $('warning-overlay').classList.remove('active');
+      $('test-panel').classList.remove('blurred');
+    }
+  }
+
+  function hideAllWarnings() {
+    $('warning-10').style.display = 'none';
+    $('warning-5').style.display = 'none';
+    $('warning-1').style.display = 'none';
+    $('warning-overlay').classList.remove('active');
+  }
+
+  function dismissWarning(level) {
+    dismissedWarnings[level] = true;
+    checkWarnings(parseInt($('batt-txt').textContent) || 0);
   }
 
   function updateWifi(r){
@@ -1259,19 +1341,16 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     paintCar();
   }
   
-  // ---------- ПЛАВНЫЙ ПЕРЕХОД: джойстик B ↔ баннер "Имитация ДВС" ----------
   function applyEngGate(){
     var slB=$('slider-aux'), wrap=$('wrap-aux'), lab=$('eng-label');
     if(!slB || !wrap || !lab) return;
     
     if(eng){
-      // Скрываем джойстик, показываем баннер — через классы с CSS-transition
       wrap.classList.add('hidden');
       lab.classList.add('visible');
       auxB=engineBFromDrive();
       slB.value=auxB; $('val-aux').textContent=auxB+'%';
     } else {
-      // Показываем джойстик, скрываем баннер
       wrap.classList.remove('hidden');
       lab.classList.remove('visible');
       slB.disabled=false;
