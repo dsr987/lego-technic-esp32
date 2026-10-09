@@ -15,7 +15,7 @@
 
 <div align="center">
 
-[![Попробовать GUI](https://img.shields.io/badge/🎮_Попробовать_GUI-открыть_в_браузере-blue?style=for-the-badge&logo=googlechrome)](https://dsr987.github.io/lego-technic-esp32/index.html)
+[![Попробовать GUI](https://img.shields.io/badge/🎮_Попробовать_GUI-открыть_в_браузере-blue?style=for-the-badge&logo=googlechrome)](https://dsr987.github.io/lego-technic-esp32/index.html?v=0.2.35)
 
 </div>
 
