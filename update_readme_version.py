@@ -1,26 +1,31 @@
 #!/usr/bin/env python3
 """
 Автоматически обновляет версию прошивки и ссылку на демо GUI в README.md
+Версию берёт из первой записи в CHANGELOG.md
 """
 
 import re
 from pathlib import Path
 
-def get_version_from_cpp(cpp_file="lego_technic_esp32/app.cpp"):
-    path = Path(cpp_file)
+def get_version_from_changelog(changelog_file="CHANGELOG.md"):
+    """Извлекает версию из первой записи CHANGELOG.md"""
+    path = Path(changelog_file)
     if not path.exists():
-        print(f"❌ Файл {cpp_file} не найден")
+        print(f"❌ Файл {changelog_file} не найден")
         return None
     
     content = path.read_text(encoding='utf-8')
-    match = re.search(r'Версия:\s*([\d.]+(?:\s+\w+)?)', content)
+    
+    # Ищем первую запись вида: ## 0.2.35 — 2026-10-09
+    # или ## 0.2.35 beta — 2026-10-09
+    match = re.search(r'^##\s+([\d.]+(?:\s+\w+)?)\s*[—-]', content, re.MULTILINE)
     
     if match:
         version = match.group(1).strip()
-        print(f"✅ Найдена версия в app.cpp: {version}")
+        print(f"✅ Найдена версия в CHANGELOG.md: {version}")
         return version
     else:
-        print("❌ Версия не найдена в app.cpp")
+        print("❌ Версия не найдена в CHANGELOG.md")
         return None
 
 def update_readme(readme_file="README.md", new_version=None):
@@ -30,35 +35,34 @@ def update_readme(readme_file="README.md", new_version=None):
     
     path = Path(readme_file)
     if not path.exists():
-        print(f"❌ Файл {readme_file} не найден")
+        print(f" Файл {readme_file} не найден")
         return False
     
     content = path.read_text(encoding='utf-8')
     
-    # 1. Обновляем текст версии
+    # 1. Обновляем текст версии (ищем "**X.Y.Z beta**" или "**X.Y.Z**")
     def replace_version_text(match):
-        prefix = match.group(1)
-        return prefix + new_version
+        # Сохраняем форматирование (жирный текст) и суффикс если есть
+        prefix = "**"
+        suffix = " beta**" if "beta" in match.group(0).lower() else "**"
+        return f"{prefix}{new_version}{suffix}"
     
-    pattern_version = r'(Текущая версия прошивки:\s*)([\d.]+\s*(?:beta|alpha|rc)?\s*)'
-    content = re.sub(pattern_version, replace_version_text, content, flags=re.IGNORECASE)
+    # Ищем: "**0.2.33 beta**" или "**0.2.33**"
+    pattern_version = r'\*\*[\d.]+(?:\s+\w+)?\*\*'
+    content = re.sub(pattern_version, replace_version_text, content, count=1)
     
     # 2. Обновляем ссылку на GitHub Pages (добавляем ?v=VERSION для обхода кэша)
     pages_url = f"https://dsr987.github.io/lego-technic-esp32/index.html?v={new_version}"
     
-    # Заменяем любую старую ссылку на index.html
-    old_links = [
-        r'https://raw\.githack\.com/dsr987/lego-technic-esp32/main/index\.html(?:\?v=[\d.]+)?',
-        r'https://dsr987\.github\.io/lego-technic-esp32/index\.html(?:\?v=[\d.]+)?',
-    ]
-    for old_link_pattern in old_links:
-        content = re.sub(old_link_pattern, pages_url, content)
+    # Заменяем любую старую ссылку на index.html с параметром ?v=
+    old_link_pattern = r'https://dsr987\.github\.io/lego-technic-esp32/index\.html\?v=[\d.]+'
+    content = re.sub(old_link_pattern, pages_url, content)
     
     path.write_text(content, encoding='utf-8')
     print(f"✅ README.md обновлен: версия {new_version}, ссылка на GUI обновлена")
     return True
 
 if __name__ == "__main__":
-    version = get_version_from_cpp()
+    version = get_version_from_changelog()
     if version:
         update_readme(new_version=version)
