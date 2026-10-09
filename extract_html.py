@@ -2,7 +2,6 @@
 """
 Извлекает HTML-страницу из app.cpp (константа PAGE_HTML)
 и сохраняет её как отдельный файл index.html.
-Запускается автоматически через GitHub Actions.
 """
 
 import sys
@@ -17,17 +16,50 @@ def extract_html(input_file, output_file):
 
     content = path.read_text(encoding='utf-8')
 
-    # Ищем блок между R"HTML( и )HTML";
-    pattern = re.compile(r'R"HTML\((.*?)\)HTML";', re.DOTALL)
-    match = pattern.search(content)
-
-    if not match:
-        print("❌ Не найден блок HTML между R\"HTML( и )HTML\";")
+    # Ищем начало блока HTML (гибкий поиск)
+    # Варианты: R"HTML(", R"html(", R"(...)", const char PAGE_HTML[] = R"HTML(
+    start_patterns = [
+        r'R"HTML\(',
+        r'R"html\(',
+        r'R"\(',
+        r'PAGE_HTML\[\]\s*(?:PROGMEM\s*)?=\s*R"HTML\(',
+    ]
+    
+    start_match = None
+    for pattern in start_patterns:
+        start_match = re.search(pattern, content)
+        if start_match:
+            break
+    
+    if not start_match:
+        print("❌ Не найдено начало HTML блока (R\"HTML(\" или аналог)")
+        print(" Проверьте, что в app.cpp есть строка вида: const char PAGE_HTML[] PROGMEM = R\"HTML(")
         sys.exit(1)
 
-    html = match.group(1)
+    # Ищем конец блока
+    end_patterns = [
+        r'\)HTML";',
+        r'\)html";',
+        r'\)";',
+    ]
+    
+    end_match = None
+    for pattern in end_patterns:
+        end_match = re.search(pattern, content[start_match.end():])
+        if end_match:
+            break
+    
+    if not end_match:
+        print("❌ Не найден конец HTML блока")
+        sys.exit(1)
+
+    # Извлекаем HTML между началом и концом
+    html_start = start_match.end()
+    html_end = html_start + end_match.start()
+    html = content[html_start:html_end]
+
     Path(output_file).write_text(html, encoding='utf-8')
-    print(f"✅ HTML извлечён: {output_file}")
+    print(f"✅ HTML успешно извлечён: {output_file}")
     print(f"   Размер: {len(html)} байт, строк: {html.count(chr(10)) + 1}")
 
 if __name__ == "__main__":
