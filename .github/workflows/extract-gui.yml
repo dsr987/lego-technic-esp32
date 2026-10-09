@@ -1,0 +1,33 @@
+name: Extract GUI HTML
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'lego_technic_esp32/app.cpp'   # Запускается только при изменении app.cpp
+  workflow_dispatch:                     # Можно запустить вручную из вкладки Actions
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write                  # Разрешение на коммит обратно в репо
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract HTML from app.cpp
+        run: |
+          python3 extract_html.py lego_technic_esp32/app.cpp index.html
+
+      - name: Commit updated index.html
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          # Коммитим только если файл реально изменился
+          git diff --quiet && git diff --staged --quiet || git commit -m "🤖 Auto-update GUI demo [skip ci]"
+          git push
