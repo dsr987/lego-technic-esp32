@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """
 Извлекает CHANGELOG из комментариев в app.cpp
-и добавляет новую секцию в CHANGELOG.md.
+и добавляет новую секцию В НАЧАЛО CHANGELOG.md (после заголовка).
+
+Старые записи сохраняются ниже — это полноценная история версий.
 
 Формат комментариев в app.cpp:
-// CHANGELOG 0.2.33:
+// CHANGELOG 0.2.34:
 // - Описание изменения 1
 // - Описание изменения 2
-
-Скрипт ищет блок, начинающийся с "// CHANGELOG X.Y.Z:" 
-и заканчивающийся следующей пустой строкой или другим комментарием.
 """
 
 import sys
@@ -18,7 +17,7 @@ from pathlib import Path
 from datetime import datetime
 
 def extract_changelog_from_cpp(cpp_file):
-    """Извлекает changelog из комментариев в app.cpp"""
+    """Извлекает самый верхний блок CHANGELOG из app.cpp"""
     path = Path(cpp_file)
     if not path.exists():
         print(f"❌ Файл не найден: {cpp_file}")
@@ -27,10 +26,9 @@ def extract_changelog_from_cpp(cpp_file):
     content = path.read_text(encoding='utf-8')
 
     # Ищем блок: // CHANGELOG X.Y.Z:
-    # followed by lines starting with // -
     pattern = re.compile(
-        r'//\s*CHANGELOG\s+([\d.]+(?:\s+\w+)?)\s*:\s*\n'  # Заголовок: CHANGELOG 0.2.33:
-        r'((?://.*\n)+)',  # Тело: строки, начинающиеся с //
+        r'//\s*CHANGELOG\s+([\d.]+(?:\s+\w+)?)\s*:\s*\n'
+        r'((?://.*\n)+)',
         re.MULTILINE
     )
     
@@ -58,7 +56,7 @@ def extract_changelog_from_cpp(cpp_file):
     return version, '\n'.join(lines)
 
 def update_changelog_md(md_file, version, changelog_text):
-    """Добавляет новую секцию в CHANGELOG.md"""
+    """Добавляет новую секцию В НАЧАЛО CHANGELOG.md (после заголовка)"""
     path = Path(md_file)
     
     if not path.exists():
@@ -68,31 +66,33 @@ def update_changelog_md(md_file, version, changelog_text):
         content = path.read_text(encoding='utf-8')
     
     # Проверяем, есть ли уже эта версия
-    if f"## {version}" in content:
+    if re.search(rf'^## {re.escape(version)}\b', content, re.MULTILINE):
         print(f"⚠️  Версия {version} уже есть в CHANGELOG.md, пропускаем")
         return False
     
     # Формируем новую секцию
     today = datetime.now().strftime("%Y-%m-%d")
-    new_section = f"""
-## {version} — {today}
-### Изменения
+    new_section = f"""## {version} — {today}
+### Изменено
 {changelog_text}
 
 """
     
-    # Вставляем после заголовка "# История версий"
-    # Ищем первую секцию ## и вставляем перед ней
+    # Ищем первую секцию ## (это самая свежая существующая версия)
     first_section = re.search(r'\n## ', content)
+    
     if first_section:
-        insert_pos = first_section.start()
+        # Вставляем новую секцию ПЕРЕД первой существующей
+        # То есть новая версия будет сверху, старые — ниже
+        insert_pos = first_section.start() + 1  # +1 чтобы не съесть перенос строки
         content = content[:insert_pos] + new_section + content[insert_pos:]
+        print(f"✅ Новая версия {version} добавлена В НАЧАЛО CHANGELOG.md")
     else:
-        # Если нет секций, добавляем в конец
-        content += new_section
+        # Если нет секций ##, добавляем в конец (после заголовка #)
+        content += "\n" + new_section
+        print(f"✅ Версия {version} добавлена в CHANGELOG.md")
     
     path.write_text(content, encoding='utf-8')
-    print(f"✅ CHANGELOG.md обновлён: добавлена версия {version}")
     return True
 
 if __name__ == "__main__":
