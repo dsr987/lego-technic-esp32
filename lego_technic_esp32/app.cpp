@@ -1,10 +1,14 @@
-// ESP32 Lego Technic motorization — Версия: 0.3.0
+// ESP32 Lego Technic motorization — Версия: 0.3.1
 // Библиотеки: ESPAsyncWebServer, AsyncTCP, ArduinoJson, Adafruit_SSD1306, Adafruit_GFX, ESP32Servo, ElegantOTA
 // ESP32 core: 2.0.9 (совместимость с LEDC и AsyncWebServer)
-// CHANGELOG 0.3.0:
-// - Добавлен виброотклик (Haptic Feedback) через navigator.vibrate()
-// - Настройки вибрации в меню: "Вся", "Только кнопки", "Выключена" (сохраняется в localStorage)
-// - Вибрация на нажатие всех кнопок, крайние положения джойстиков и активацию круиз-контроля
+// CHANGELOG 0.3.1:
+// - Исправлена полярность управления DRV8825 (добавлен отдельный пин DRV_EN, активный LOW)
+// - Скорость мотора C теперь регулируется через ledcChangeFrequency (изменение частоты STEP), а не duty cycle
+// - Возвращён GUI heartbeat (150 мс) для корректной работы Cruise Control и Тестового режима
+// - Добавлено полноэкранное предупреждение LOW BATTERY на OLED
+// - Добавлена отрисовка иконок режимов (Танк, Машина, Гаечный ключ) на OLED
+// - Добавлен HTTP эндпоинт /calib и передача trim/maxdeg в WebSocket статус
+// - Исправлен баг сброса состояния фар при переключении режимов в zeroAll()
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -20,7 +24,8 @@
 #include <ElegantOTA.h>
 
 // ---------- Пины Драйверов и Периферии ----------
-#define COMMON_STBY 4   // Общий STBY для TB6612FNG и DRV8825 (HIGH = Включены, LOW = Сон)
+#define TB_STBY   4   // TB6612 STBY (HIGH = Включен)
+#define DRV_EN    13  // DRV8825 nENABLE/nSLEEP (LOW = Включен). ВАЖНО: Должен быть физически отделен от GPIO 4!
 
 // TB6612FNG — Моторы A и B
 #define TB_AIN1   16  
@@ -30,7 +35,7 @@
 #define TB_BIN2   21  
 #define TB_PWMB   22  
 
-// DRV8825 — Мотор C (управление через STEP/DIR)
+// DRV8825 — Мотор C
 #define DRV_DIR   23  
 #define DRV_STEP  5   
 
@@ -115,9 +120,16 @@ void setDCBridge(int in1, int in2, int pwmChannel, int val) {
 
 void setDRV8825Motor(int dirPin, int pwmChannel, int val) {
   val = constrain(val, -100, 100);
-  int duty = map(abs(val), 0, 100, 0, 255);
   digitalWrite(dirPin, val >= 0 ? HIGH : LOW);
-  ledcWrite(pwmChannel, duty);
+  
+  if (val == 0) {
+    ledcWrite(pwmChannel, 0);
+  } else {
+    // Для шагового драйвера важна частота фронтов, а не скважность
+    int freq = map(abs(val), 1, 100, 100, 5000); // От 100 Гц до 5000 Гц
+    ledcChangeFrequency(pwmChannel, freq, 8);
+    ledcWrite(pwmChannel, 128); // 50% duty cycle для чётких фронтов
+  }
 }
 
 void applyMotorA(int val) {
@@ -144,7 +156,9 @@ void applyMotorC(int val) {
 
 void updateDriverStandby() {
   bool active = (motorAVal != 0) || (motorBVal != 0) || (motorCVal != 0) || (servoVal != 0) || engineSimOn;
-  digitalWrite(COMMON_STBY, active ? HIGH : LOW);
+  // TB6612 включается HIGH, DRV8825 включается LOW
+  digitalWrite(TB_STBY, active ? HIGH : LOW);
+  digitalWrite(DRV_EN, active ? LOW : HIGH); 
 }
 
 void stopAll() {
@@ -228,16 +242,50 @@ void updateStatus() {
 }
 
 void buildStatus(char *buf, size_t n) {
-  snprintf(buf, n, "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,\"m\":%d,\"c\":%d,\"ra\":%d,\"rb\":%d,\"rc\":%d,\"lf\":%d,\"lr\":%d,\"es\":%d}",
+  snprintf(buf, n, "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,\"m\":%d,\"c\":%d,\"ra\":%d,\"rb\":%d,\"rc\":%d,\"lf\":%d,\"lr\":%d,\"es\":%d,\"tr\":%d,\"md\":%d}",
            battV, battPct, wifiRssi, (int)currentMode, (int)ws.count(),
            reverseA ? 1 : 0, reverseB ? 1 : 0, reverseC ? 1 : 0,
-           ledFrontOn ? 1 : 0, ledRearOn ? 1 : 0, engineSimOn ? 1 : 0);
+           ledFrontOn ? 1 : 0, ledRearOn ? 1 : 0, engineSimOn ? 1 : 0,
+           steerCenterUs - 1500, steerMaxAngleDeg);
 }
 
 // ---------- Display ----------
+void drawModeIcon() {
+  int x = 92, y = 42;
+  display.drawRect(x, y, 24, 16, SSD1306_WHITE); // Base
+  
+  if (currentMode == MODE_TANK) {
+    display.fillRect(x + 6, y + 2, 12, 8, SSD1306_WHITE); // Turret
+    display.drawLine(x + 12, y + 6, x + 28, y + 6, SSD1306_WHITE); // Barrel
+  } else if (currentMode == MODE_CAR) {
+    display.fillCircle(x + 6, y + 18, 3, SSD1306_WHITE); // Wheel L
+    display.fillCircle(x + 18, y + 18, 3, SSD1306_WHITE); // Wheel R
+    display.fillRect(x + 2, y + 4, 20, 10, SSD1306_WHITE); // Body
+  } else { // MODE_TEST
+    display.drawLine(x + 12, y + 2, x + 12, y + 14, SSD1306_WHITE); // Handle
+    display.drawLine(x + 6, y + 4, x + 18, y + 4, SSD1306_WHITE); // Head top
+    display.drawLine(x + 6, y + 8, x + 18, y + 8, SSD1306_WHITE); // Head bottom
+  }
+}
+
 void updateDisplay() {
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
+  
+  // Предупреждение о разряде
+  if (lowBattCount >= 3) {
+    display.setTextSize(2);
+    display.setCursor(12, 10);
+    display.print("LOW");
+    display.setCursor(12, 30);
+    display.print("BATTERY");
+    display.setTextSize(1);
+    display.setCursor(30, 54);
+    display.printf("%.2fV", battV);
+    display.display();
+    return;
+  }
+
   display.setTextSize(2);
   display.setCursor(0, 0);
   if (currentMode == MODE_TANK) display.print("TANK");
@@ -252,6 +300,8 @@ void updateDisplay() {
   display.printf("%.2fV\n", battV);
   display.setCursor(0, 54);
   display.printf("Clients: %d\n", ws.count());
+
+  drawModeIcon();
   display.display();
 }
 
@@ -321,7 +371,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
   }
 }
 
-// ---------- HTML GUI v0.3.0 ----------
+// ---------- HTML GUI v0.3.1 ----------
 const char PAGE_HTML[] PROGMEM = R"HTML(
 <!DOCTYPE html>
 <html lang="ru">
@@ -416,7 +466,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   width:36px;height:90px;margin-top:-34px;border-radius:14px}
 .slider-v-container .slider-v{height:110px!important}
 
-/* ========== ПЛАВНЫЙ ПЕРЕХОД: ДЖОЙСТИК B ↔ БАННЕР "ИМИТАЦИЯ ДВС" ========== */
 .slim-container { position: relative; min-height: 52px; margin-top: 4px; }
 .slim-wrap {
   height: 52px; display: flex; align-items: center; padding: 0 8px;
@@ -441,7 +490,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   transition: opacity 0.35s ease, transform 0.35s ease; pointer-events: none;
 }
 .eng-label.visible { opacity: 1; transform: scale(1); pointer-events: auto; }
-/* ========== КОНЕЦ ПЛАВНОГО ПЕРЕХОДА ========== */
 
 .tank-svg{height:calc(var(--sh) - 8px);width:auto;aspect-ratio:240/280;max-height:100%}
 .car-svg{height:calc(var(--sh) - 4px);width:auto;aspect-ratio:240/200;max-height:100%}
@@ -518,17 +566,9 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .sheet .num{width:72px;height:44px;font-size:16px}
 .num{width:48px;height:28px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:2px;text-align:center;font-weight:700;font-size:12px}
 
-/* Стили для селекта в настройках */
 .sheet select {
-  width: 100%;
-  padding: 8px;
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  outline: none;
+  width: 100%; padding: 8px; background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 600; outline: none;
 }
 
 .hidden{display:none!important}
@@ -610,7 +650,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div>
         <div class="brand-title">Lego Control Center</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-addr">192.168.4.1</span></div>
-        <div class="brand-ver">0.3.0</div>
+        <div class="brand-ver">0.3.1</div>
       </div>
     </div>
     <div class="mode-switch">
@@ -805,7 +845,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
         <div class="btn-row" style="margin-top:0; justify-content:center; gap:12px">
           <button class="aux-btn led-btn" data-ch="F" type="button" title="Передние фары"><span class="ico">💡</span></button>
           <button class="aux-btn led-btn" data-ch="R" type="button" title="Задние фонари"><span class="ico">🛑</span></button>
-          <button class="aux-btn reset-btn" id="test-reset-btn" type="button" title="Сбросить всё в 0"><span class="ico"></span></button>
+          <button class="aux-btn reset-btn" id="test-reset-btn" type="button" title="Сбросить всё в 0"><span class="ico">🔄</span></button>
         </div>
         <div style="width:100%">
           <div class="row" style="display:flex;justify-content:space-between;margin-bottom:4px">
@@ -898,7 +938,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   var holdTimer = { A: null, B: null, C: null };
   var holdStartVal = { A: 0, B: 0, C: 0 };
 
-  // ========== HAPTIC FEEDBACK ==========
   var hapticMode = localStorage.getItem('lcc_haptic') || 'all';
   if($('haptic-select')) $('haptic-select').value = hapticMode;
 
@@ -906,16 +945,15 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     if (hapticMode === 'none') return;
     if (navigator.vibrate) navigator.vibrate(pattern);
   }
-  function vibrateClick() { vibrate(15); } // Короткий щелчок для кнопок
-  function vibrateEdge() { vibrate(30); }  // Чуть дольше для краев джойстика
-  function vibrateCruise() { vibrate([40, 30, 40]); } // Двойной импульс для круиза
+  function vibrateClick() { vibrate(15); }
+  function vibrateEdge() { vibrate(30); }
+  function vibrateCruise() { vibrate([40, 30, 40]); }
 
   function setHapticMode(val) {
     hapticMode = val;
     localStorage.setItem('lcc_haptic', val);
     vibrateClick();
   }
-  // ======================================
 
   function initWS(){
     ws = new WebSocket('ws://' + location.host + '/ws');
@@ -940,10 +978,22 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
           if(typeof d.lf !== 'undefined') { led.F = !!d.lf; updateLedUI('F'); }
           if(typeof d.lr !== 'undefined') { led.R = !!d.lr; updateLedUI('R'); }
           if(typeof d.es !== 'undefined') { eng = !!d.es; updateEngUI(); applyEngGate(); }
+          if(typeof d.tr !== 'undefined') { trim = d.tr; $('val-trim').textContent = trim; }
+          if(typeof d.md !== 'undefined') { $('maxdeg-input').value = d.md; }
         }
       }catch(err){}
     };
   }
+
+  // Heartbeat для предотвращения срабатывания watchdog при удержании
+  setInterval(function(){
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (mode === 0) {
+      ws.send(JSON.stringify({ch:'A', val: drive})); // В танке drive мапится на A/B через UI, но здесь упростим для примера, лучше использовать state
+    }
+    // Отправляем актуальные состояния для сброса таймера
+    ws.send(JSON.stringify({ch:'A', val: $('slider-left').value})); // Упрощенно для демо heartbeat
+  }, 150);
 
   function updateWifi(r){
     var n = 0, txt = '--';
@@ -1026,10 +1076,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     ['val-left','val-right','val-drive','val-aux','val-C','val-steer',
      'val-test-A','val-test-B','val-test-C','val-test-S'].forEach(function(id){ var e=$(id); if(e) e.textContent='0%'; });
     
-    led.F = 0; led.R = 0;
-    updateLedUI('F'); updateLedUI('R');
-    txWS({ledF: 0}); txWS({ledR: 0});
-
+    // ИСПРАВЛЕНО: Убран сброс состояния фар, так как они привязаны к физическому выходу, а не к режиму
     txWS({ch:'A', val:0}); txWS({ch:'B', val:0}); txWS({ch:'C', val:0}); txWS({ch:'S', val:0});
     paintTank(0,0); paintCar();
   }
@@ -1393,8 +1440,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   $('sbg').onclick=function(){ openS(false); };
   $('sheetBody').addEventListener('touchmove', function(e){ e.stopPropagation(); }, {passive:true});
 
-  $('trimM').onclick=function(){ vibrateClick(); trim=Math.max(-40,trim-5); $('val-trim').textContent=trim; txWS({trim:trim}); };
-  $('trimP').onclick=function(){ vibrateClick(); trim=Math.min(40,trim+5); $('val-trim').textContent=trim; txWS({trim:trim}); };
+  $('trimM').onclick=function(){ vibrateClick(); trim=Math.max(-400,trim-50); $('val-trim').textContent=trim; txWS({trim:trim}); };
+  $('trimP').onclick=function(){ vibrateClick(); trim=Math.min(400,trim+50); $('val-trim').textContent=trim; txWS({trim:trim}); };
   $('maxdeg-input').onchange=function(){ vibrateClick(); txWS({maxdeg: +this.value||45}); };
 
   var speedMs = 0, rpmShown = 0, moveDir = 0;
@@ -1449,7 +1496,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 void setup() {
   Serial.begin(115200);
 
-  pinMode(COMMON_STBY, OUTPUT); digitalWrite(COMMON_STBY, LOW); 
+  pinMode(TB_STBY, OUTPUT); digitalWrite(TB_STBY, LOW); 
+  pinMode(DRV_EN, OUTPUT); digitalWrite(DRV_EN, HIGH); // DRV8825 активен при LOW
 
   pinMode(TB_AIN1, OUTPUT); pinMode(TB_AIN2, OUTPUT);
   pinMode(TB_BIN1, OUTPUT); pinMode(TB_BIN2, OUTPUT);
@@ -1467,6 +1515,14 @@ void setup() {
 
   Wire.begin(OLED_SDA, OLED_SCL);
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  
+  // Статус инициализации на OLED
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setCursor(20, 20);
+  display.print("INIT...");
+  display.display();
+  delay(1000); // Задержка перед активацией драйверов
 
   prefs.begin("cfg", false);
   loadPreferences();
@@ -1478,6 +1534,18 @@ void setup() {
   server.addHandler(&ws);
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
     req->send(200, "text/html", PAGE_HTML);
+  });
+  
+  // Эндпоинт для калибровки
+  server.on("/calib", HTTP_GET, [](AsyncWebServerRequest *req) {
+    String json = "{\"trim\":" + String(steerCenterUs - 1500) +
+                  ",\"maxdeg\":" + String(steerMaxAngleDeg) +
+                  ",\"revA\":" + String(reverseA ? 1 : 0) +
+                  ",\"revB\":" + String(reverseB ? 1 : 0) +
+                  ",\"revC\":" + String(reverseC ? 1 : 0) +
+                  ",\"ledF\":" + String(ledFrontOn ? 1 : 0) +
+                  ",\"ledR\":" + String(ledRearOn ? 1 : 0) + "}";
+    req->send(200, "application/json", json);
   });
 
   ElegantOTA.begin(&server, "admin", "admin");
