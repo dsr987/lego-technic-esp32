@@ -16,47 +16,32 @@ def extract_html(input_file, output_file):
 
     content = path.read_text(encoding='utf-8')
 
-    # Ищем начало блока HTML (гибкий поиск)
-    # Варианты: R"HTML(", R"html(", R"(...)", const char PAGE_HTML[] = R"HTML(
-    start_patterns = [
-        r'R"HTML\(',
-        r'R"html\(',
-        r'R"\(',
-        r'PAGE_HTML\[\]\s*(?:PROGMEM\s*)?=\s*R"HTML\(',
-    ]
-    
-    start_match = None
-    for pattern in start_patterns:
-        start_match = re.search(pattern, content)
-        if start_match:
-            break
+    # Ищем начало блока HTML
+    start_match = re.search(r'R"HTML\(', content)
     
     if not start_match:
-        print("❌ Не найдено начало HTML блока (R\"HTML(\" или аналог)")
-        print(" Проверьте, что в app.cpp есть строка вида: const char PAGE_HTML[] PROGMEM = R\"HTML(")
+        print("❌ Не найдено начало HTML блока (R\"HTML(\")")
         sys.exit(1)
 
-    # Ищем конец блока
-    end_patterns = [
-        r'\)HTML";',
-        r'\)html";',
-        r'\)";',
-    ]
+    # Ищем конец блока - ищем первое вхождение )HTML" после начала
+    html_start = start_match.end()
+    remaining_content = content[html_start:]
     
-    end_match = None
-    for pattern in end_patterns:
-        end_match = re.search(pattern, content[start_match.end():])
-        if end_match:
-            break
+    # Ищем )HTML" с возможными символами после (точка с запятой, пробелы)
+    end_match = re.search(r'\)HTML"[;]?\s*\n', remaining_content)
+    
+    if not end_match:
+        # Пробуем найти просто )HTML"
+        end_match = re.search(r'\)HTML"', remaining_content)
     
     if not end_match:
         print("❌ Не найден конец HTML блока")
+        print("💡 Проверьте, что в app.cpp блок заканчивается строкой: )HTML\";")
+        print("💡 Или пришлите последние 5 строк HTML блока из app.cpp")
         sys.exit(1)
 
-    # Извлекаем HTML между началом и концом
-    html_start = start_match.end()
-    html_end = html_start + end_match.start()
-    html = content[html_start:html_end]
+    # Извлекаем HTML
+    html = remaining_content[:end_match.start()]
 
     Path(output_file).write_text(html, encoding='utf-8')
     print(f"✅ HTML успешно извлечён: {output_file}")
