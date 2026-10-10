@@ -254,7 +254,7 @@ void updateStatus() {
 }
 
 void buildStatus(char *buf, size_t n) {
-  snprintf(buf, n, "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,\"m\":%d,\"c\":%d,\"ra\":%d,\"rb\":%d,\"rc\":%d,\"rd\":%d\"lf\":%d,\"lr\":%d,\"es\":%d,\"tr\":%d,\"md\":%d}",
+  snprintf(buf, n, "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,\"m\":%d,\"c\":%d,\"ra\":%d,\"rb\":%d,\"rc\":%d,\"rd\":%d,\"lf\":%d,\"lr\":%d,\"es\":%d,\"tr\":%d,\"md\":%d}",
            battV, battPct, wifiRssi, (int)currentMode, (int)ws.count(),
            reverseA ? 1 : 0, reverseB ? 1 : 0, reverseC ? 1 : 0, reverseD ? 1 : 0,
            ledFrontOn ? 1 : 0, ledRearOn ? 1 : 0, engineSimOn ? 1 : 0,
