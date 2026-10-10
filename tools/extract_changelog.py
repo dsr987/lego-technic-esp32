@@ -10,7 +10,7 @@ from pathlib import Path
 
 CHANGELOG_PATTERN = re.compile(
     r"^[ \t]*(?://|/\*|\*)[ \t]*CHANGELOG[ \t]+"
-    r"([\d.]+(?:[ \t]+\w+)?)\s*:\s*$",
+    r"([\d.]+(?:[ \t]+\w+)?)[ \t]*:[ \t]*$",
     re.MULTILINE,
 )
 
