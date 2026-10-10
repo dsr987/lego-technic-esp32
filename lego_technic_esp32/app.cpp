@@ -10,6 +10,7 @@
 //--#include "battery_monitor.h"
 //--#include "display_control.h"
 //--#include "steering_control.h"
+//--#include "preferences_manager.h"
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -30,6 +31,7 @@
 #include "battery_monitor.h"
 #include "display_control.h"
 #include "steering_control.h"
+#include "preferences_manager.h"
 
 // Периферия
 #define SERVO_PIN      27
@@ -69,17 +71,6 @@ bool engineSimOn = false;
 // Калибровка сервопривода
 int steerCenterUs    = 1500;
 int steerMaxAngleDeg = 45;
-
-void loadPreferences() {
-  reverseA = prefs.getUChar("revA", 0) != 0;
-  reverseB = prefs.getUChar("revB", 0) != 0;
-  reverseC = prefs.getUChar("revC", 0) != 0;
-  reverseD = prefs.getUChar("revD", 0) != 0;
-  ledFrontOn = prefs.getUChar("ledF", 0) != 0;
-  ledRearOn  = prefs.getUChar("ledR", 0) != 0;
-  steerCenterUs = prefs.getInt("steer_c", 1500);
-  steerMaxAngleDeg = prefs.getInt("steer_a", 45);
-}
 
 void applyLeds() {
   // Свет временно отключён: GPIO32 и GPIO33 используются
