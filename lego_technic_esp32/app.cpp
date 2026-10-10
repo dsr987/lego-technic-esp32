@@ -25,32 +25,8 @@
 #include <ESP32Servo.h>
 #include <Preferences.h>
 #include <ElegantOTA.h>
-
-
- // ---------- Пины Драйверов и Периферии ----------
-#define TB_STBY   4   // Общий STBY обоих TB6612FNG
-
-// TB6612FNG №1 — моторы A и B
-#define TB_AIN1   16
-#define TB_AIN2   17
-#define TB_PWMA   18
-#define TB_BIN1   19
-#define TB_BIN2   21
-#define TB_PWMB   22
-
-// TB6612FNG №2 — моторы C и D
-#define TB2_AIN1  13
-#define TB2_AIN2  14
-#define TB2_PWMA  23
-#define TB2_BIN1  32
-#define TB2_BIN2  33
-#define TB2_PWMB  1
-
-// Каналы LEDC (ШИМ)
-#define LEDC_CH_A 4
-#define LEDC_CH_B 5
-#define LEDC_CH_C 6
-#define LEDC_CH_D 7
+#include "hardware_config.h"
+#include "motor_control.h"
 
 // Прочая периферия
 #define SERVO_PIN      27
@@ -62,7 +38,6 @@
 #define BATT_DIVIDER_FACTOR 0.2680
 
 // ---------- Переменные Режимов и Состояния ----------
-enum Mode { MODE_TANK = 0, MODE_CAR = 1, MODE_TEST = 2 };
 Mode currentMode = MODE_TANK;
 
 Preferences prefs;
@@ -119,58 +94,7 @@ void applySteer(int val) {
 }
 
 // ---------- Управление Моторами ----------
-void setDCBridge(int in1, int in2, int pwmChannel, int val) {
-  val = constrain(val, -100, 100);
-  int duty = map(abs(val), 0, 100, 0, 255);
-  if (val > 0) { digitalWrite(in1, HIGH); digitalWrite(in2, LOW); }
-  else if (val < 0) { digitalWrite(in1, LOW); digitalWrite(in2, HIGH); }
-  else { digitalWrite(in1, LOW); digitalWrite(in2, LOW); }
-  ledcWrite(pwmChannel, duty);
-}
-
-
-void applyMotorA(int val) {
-  motorAVal = constrain(val, -100, 100);
-  setDCBridge(TB_AIN1, TB_AIN2, LEDC_CH_A,
-              reverseA ? -motorAVal : motorAVal);
-
-  if (engineSimOn && currentMode == MODE_CAR) {
-    int aux = (int)(33.0 + 67.0 * abs(motorAVal) / 100.0 + 0.5);
-    int actualB = reverseB ? -aux : aux;
-    motorBVal = actualB;
-    setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_B, actualB);
-  }
-}
-
-void applyMotorB(int val) {
-  motorBVal = constrain(val, -100, 100);
-  setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_B,
-              reverseB ? -motorBVal : motorBVal);
-}
-
-void applyMotorC(int val) {
-  motorCVal = constrain(val, -100, 100);
-  setDCBridge(TB2_AIN1, TB2_AIN2, LEDC_CH_C,
-              reverseC ? -motorCVal : motorCVal);
-}
-
-void applyMotorD(int val) {
-  motorDVal = constrain(val, -100, 100);
-  setDCBridge(TB2_BIN1, TB2_BIN2, LEDC_CH_D,
-              reverseD ? -motorDVal : motorDVal);
-}
-
-void updateDriverStandby() {
-  bool active = motorAVal != 0 || motorBVal != 0 ||
-                motorCVal != 0 || motorDVal != 0 ||
-                servoVal != 0 || engineSimOn;
-
-  // Оба TB6612FNG используют общий STBY.
-  digitalWrite(TB_STBY, active ? HIGH : LOW);
-}
-
-void stopAll() {
-  // Сначала отключаем имитацию, чтобы она не включила B повторно.
+  //Управление моторами находится в motor_control.cpp
   engineSimOn = false;
 
   motorAVal = 0;
