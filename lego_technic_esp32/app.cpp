@@ -1,4 +1,3 @@
-
 /*
  * LEGO Technic ESP32
  * Версия разработки: 0.3.3 Refactoring
