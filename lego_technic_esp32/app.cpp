@@ -25,15 +25,14 @@
 #include "motor_control.h"
 #include "web_page.h"
 #include "web_control.h"
+#include "battery_monitor.h"
 
 // Периферия
 #define SERVO_PIN      27
 #define OLED_SDA       25
 #define OLED_SCL       26
-#define BATT_PIN       34
 #define LED_FRONT_PIN  32
 #define LED_REAR_PIN   33
-#define BATT_DIVIDER_FACTOR 0.2680
 
 // ---------- Переменные Режимов и Состояния ----------
 Mode currentMode = MODE_TANK;
@@ -91,71 +90,7 @@ void applySteer(int val) {
   steerServo.writeMicroseconds(us);
 }
 
-// ---------- Батарея и Мониторинг ----------
-float battV = 0.0;
-int   battPct = 0;
-int   wifiRssi = 0;
-
-#define LOW_BATTERY_THRESHOLD_V 6.0
-#define BATTERY_DISCONNECTED_V  0.5
-#define REST_SETTLE_MS 400
-
-bool wasAtRest = true;
-unsigned long restStartMillis = 0;
-bool firstStatusRun = true;
-int lowBattCount = 0;
-
-float readBatteryVoltage() {
-  long sum = 0;
-  for (int i = 0; i < 8; i++) sum += analogRead(BATT_PIN);
-  float vAdc = (sum / 8.0) / 4095.0 * 3.3;
-  return vAdc / BATT_DIVIDER_FACTOR;
-}
-
-int batteryPercent(float v) {
-  static const float PV[] = {6.0, 6.8, 7.0, 7.4, 7.8, 8.2};
-  static const float PP[] = {0,   10,  25,  50,  75,  100};
-  if (v <= PV[0]) return 0;
-  if (v >= PV[5]) return 100;
-  for (int i = 0; i < 5; i++) {
-    if (v < PV[i + 1]) return (int)(PP[i] + (PP[i + 1] - PP[i]) * (v - PV[i]) / (PV[i + 1] - PV[i]) + 0.5);
-  }
-  return 100;
-}
-
-int getBestRssi() {
-  wifi_sta_list_t list;
-  if (esp_wifi_ap_get_sta_list(&list) != ESP_OK || list.num == 0) return 0;
-  int best = -127;
-  for (int i = 0; i < list.num; i++) {
-    if (list.sta[i].rssi > best) best = list.sta[i].rssi;
-  }
-  return best;
-}
-
-void updateStatus() {
-  battV = readBatteryVoltage();
-
-  bool atRest = (engineSimOn && currentMode == MODE_CAR)
-                  ? (motorAVal == 0 && motorCVal == 0 && motorDVal == 0 && servoVal == 0)
-                  : (motorAVal == 0 && motorBVal == 0 && motorCVal == 0 && motorDVal == 0 && servoVal == 0);
-
-  if (atRest) {
-    if (!wasAtRest) { restStartMillis = millis(); wasAtRest = true; }
-    if (firstStatusRun || millis() - restStartMillis > REST_SETTLE_MS) {
-      battPct = batteryPercent(battV);
-      firstStatusRun = false;
-    }
-  } else {
-    wasAtRest = false;
-  }
-
-  wifiRssi = getBestRssi();
-
-  bool below = (battV > BATTERY_DISCONNECTED_V && battV < LOW_BATTERY_THRESHOLD_V);
-  if (below) { if (lowBattCount < 3) lowBattCount++; }
-  else if (battV > LOW_BATTERY_THRESHOLD_V + 0.3 || battV <= BATTERY_DISCONNECTED_V) lowBattCount = 0;
-}
+// ----------- Мониторинг ---------
 
 void buildStatus(char *buf, size_t n) {
   snprintf(buf, n, "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,\"m\":%d,\"c\":%d,\"ra\":%d,\"rb\":%d,\"rc\":%d,\"rd\":%d,\"lf\":%d,\"lr\":%d,\"es\":%d,\"tr\":%d,\"md\":%d}",
