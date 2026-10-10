@@ -1,40 +1,83 @@
-name: Extract GUI HTML and CHANGELOG
+
+name: Extract GUI and update project metadata
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
+      - feature/four-dc-motors
     paths:
-      - 'lego_technic_esp32/app.cpp'
+      - "lego_technic_esp32/app.cpp"
+      - "lego_technic_esp32/web_page.cpp"
+      - "extract_html.py"
+      - "extract_changelog.py"
+      - "update_readme_version.py"
   workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: extract-project-files-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   extract:
+    name: Generate HTML and project metadata
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          python-version: "3.12"
 
-      - name: Extract HTML from app.cpp
+      - name: Select HTML source
+        id: html_source
+        shell: bash
         run: |
-          python3 extract_html.py lego_technic_esp32/app.cpp index.html
+          if [ -f lego_technic_esp32/web_page.cpp ] && \
+             grep -q 'PAGE_HTML' lego_technic_esp32/web_page.cpp; then
+            echo "file=lego_technic_esp32/web_page.cpp" >> "$GITHUB_OUTPUT"
+          elif [ -f lego_technic_esp32/app.cpp ] && \
+               grep -q 'PAGE_HTML' lego_technic_esp32/app.cpp; then
+            echo "file=lego_technic_esp32/app.cpp" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::PAGE_HTML not found in web_page.cpp or app.cpp"
+            exit 1
+          fi
 
-      - name: Extract CHANGELOG from app.cpp
+      - name: Extract GUI HTML
         run: |
-          python3 extract_changelog.py lego_technic_esp32/app.cpp CHANGELOG.md
+          python3 extract_html.py \
+            "${{ steps.html_source.outputs.file }}" \
+            index.html
+
+      - name: Extract CHANGELOG
+        run: |
+          python3 extract_changelog.py \
+            lego_technic_esp32/app.cpp \
+            CHANGELOG.md
 
       - name: Update README version
-        run: |
-          python3 update_readme_version.py
+        run: python3 update_readme_version.py
 
-      - name: Commit updated files
+      - name: Commit generated files
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
           git add index.html CHANGELOG.md README.md
-          git diff --quiet && git diff --staged --quiet || git commit -m "🤖 Auto-update GUI, CHANGELOG and README version [skip ci]"
+
+          if git diff --cached --quiet; then
+            echo "Generated files have no changes."
+            exit 0
+          fi
+
+          git commit -m "Auto-update GUI and project metadata [skip ci]"
           git push
