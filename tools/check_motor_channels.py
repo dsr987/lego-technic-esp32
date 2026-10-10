@@ -5,6 +5,7 @@ import sys
 SOURCE_FILES = [
     Path("lego_technic_esp32/app.cpp"),
     Path("lego_technic_esp32/motor_control.cpp"),
+    Path("lego_technic_esp32/motor_control.h"),
     Path("lego_technic_esp32/hardware_config.h"),
 ]
 
@@ -66,7 +67,10 @@ def extract_block(code, marker):
 
 
 def main():
-        missing = [path for path in SOURCE_FILES if not path.is_file()]
+    missing = [
+        path for path in SOURCE_FILES
+        if not path.is_file()
+    ]
 
     if missing:
         for path in missing:
@@ -90,55 +94,74 @@ def main():
         "Motor B handler": "void applyMotorB(int val)" in code,
         "Motor C handler": "void applyMotorC(int val)" in code,
         "Motor D handler": "void applyMotorD(int val)" in code,
+
         "D command routing": handler is not None
             and 'strcmp(ch, "D")' in handler,
+
         "D PWM channel": "LEDC_CH_D" in code,
         "D reverse preference": 'prefs.getUChar("revD", 0)' in code,
         "D UI slider": 'id="slider-test-D"' in code,
         "D heartbeat": "D:0" in code,
 
         "stopAll block found": stop_all is not None,
+
         "Stop motor A inside stopAll": stop_all is not None
             and "setDCBridge(TB_AIN1, TB_AIN2, LEDC_CH_A, 0);" in stop_all,
+
         "Stop motor B inside stopAll": stop_all is not None
             and "setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_B, 0);" in stop_all,
+
         "Stop motor C inside stopAll": stop_all is not None
             and "setDCBridge(TB2_AIN1, TB2_AIN2, LEDC_CH_C, 0);" in stop_all,
+
         "Stop motor D inside stopAll": stop_all is not None
             and "setDCBridge(TB2_BIN1, TB2_BIN2, LEDC_CH_D, 0);" in stop_all,
+
         "Engine simulation disabled in stopAll": stop_all is not None
             and "engineSimOn = false;" in stop_all,
 
         "WebSocket disconnect handler": disconnect is not None,
+
         "Disconnect resets commands": disconnect is not None
             and "zeroAll();" in disconnect,
+
         "Disconnect reconnects": disconnect is not None
             and "setTimeout(initWS,1000);" in disconnect,
 
         "Mode switch block found": switch_mode is not None,
+
         "Mode switch disables engine simulation": switch_mode is not None
             and "if(m!==1)" in switch_mode,
+
         "Mode switch sends mode": switch_mode is not None
             and "txWS({mode: m});" in switch_mode,
+
         "Mode switch resets commands": switch_mode is not None
             and "zeroAll();" in switch_mode,
 
         "zeroAll block found": zero_all is not None,
+
         "zeroAll resets A": zero_all is not None
             and "txWS({ch:'A', val:0})" in zero_all,
+
         "zeroAll resets B": zero_all is not None
             and "txWS({ch:'B', val:0})" in zero_all,
+
         "zeroAll resets C": zero_all is not None
             and "txWS({ch:'C', val:0})" in zero_all,
+
         "zeroAll resets D": zero_all is not None
             and "txWS({ch:'D', val:0})" in zero_all,
+
         "zeroAll resets steering": zero_all is not None
             and "txWS({ch:'S', val:0})" in zero_all,
 
         "Mode command calls stopAll": handler is not None
             and 'doc.containsKey("mode")' in handler
             and "stopAll();" in handler,
+
         "Status JSON block found": status is not None,
+
         "Status JSON rd/lf separator": status is not None
             and r'\"rd\":%d,\"lf\":%d' in status,
     }
