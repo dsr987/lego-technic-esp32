@@ -6,151 +6,117 @@ import sys
 from datetime import date
 from pathlib import Path
 
-VERSION_MARKER = "CHANGELOG_VERSION:"
-START_MARKER = "CHANGELOG_START"
-END_MARKER = "CHANGELOG_END"
 
-VERSION_PATTERN = re.compile(
-r"^##\s+([\d.]+(?:\s+\w+)?)\s*[—-]",
-re.MULTILINE,
-)
+def clean_line(raw):
+    line = raw.strip()
 
-def normalize_comment_line(raw_line):
-"""Remove C/C++ comment prefixes from one line."""
-line = raw_line.strip()
+    if line.startswith("/*"):
+        line = line[2:].strip()
 
-if line.startswith("/*"):
-    line = line[2:].strip()
-elif line.startswith("*/"):
-    line = line[2:].strip()
+    if line.startswith("*/"):
+        line = line[2:].strip()
 
-if line.startswith("*"):
-    line = line[1:].strip()
-elif line.startswith("//"):
-    line = line[2:].strip()
+    if line.startswith("*"):
+        line = line[1:].strip()
+    elif line.startswith("//"):
+        line = line[2:].strip()
 
-return line
+    return line
 
-def extract_changelog_from_cpp(cpp_file):
-"""Extract entries between CHANGELOG_START and CHANGELOG_END."""
-path = Path(cpp_file)
 
-if not path.is_file():
-    raise SystemExit(f"ERROR: File not found: {path}")
+def extract_changelog(cpp_file):
+    path = Path(cpp_file)
 
-content = path.read_text(encoding="utf-8")
-version = None
-started = False
-ended = False
-entries = []
+    if not path.is_file():
+        raise SystemExit(f"ERROR: File not found: {path}")
 
-for raw_line in content.splitlines():
-    line = normalize_comment_line(raw_line)
+    version = None
+    started = False
+    ended = False
+    entries = []
 
-    if line.startswith(VERSION_MARKER):
-        version = line[len(VERSION_MARKER):].strip()
-        continue
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = clean_line(raw)
 
-    if line == START_MARKER:
-        if started:
-            raise SystemExit("ERROR: Duplicate CHANGELOG_START marker")
-        started = True
-        continue
-
-    if line == END_MARKER:
-        if not started:
-            raise SystemExit("ERROR: CHANGELOG_END before CHANGELOG_START")
-        ended = True
-        break
-
-    if started:
-        if not line:
+        if line.startswith("CHANGELOG_VERSION:"):
+            version = line.split(":", 1)[1].strip()
             continue
-        if line.startswith("- "):
+
+        if line == "CHANGELOG_START":
+            started = True
+            continue
+
+        if line == "CHANGELOG_END":
+            ended = True
+            break
+
+        if started and line.startswith("- "):
             entries.append(line)
-        else:
-            raise SystemExit(
-                f"ERROR: Unexpected line inside CHANGELOG block: {line}"
-            )
 
-if not version:
-    raise SystemExit(
-        f"ERROR: {VERSION_MARKER} marker not found in {path}"
-    )
+    if not version:
+        raise SystemExit("ERROR: CHANGELOG_VERSION marker not found")
 
-if not started:
-    raise SystemExit(
-        f"ERROR: {START_MARKER} marker not found in {path}"
-    )
+    if not started:
+        raise SystemExit("ERROR: CHANGELOG_START marker not found")
 
-if not ended:
-    raise SystemExit(
-        f"ERROR: {END_MARKER} marker not found in {path}"
-    )
+    if not ended:
+        raise SystemExit("ERROR: CHANGELOG_END marker not found")
 
-if not entries:
-    raise SystemExit(
-        f"ERROR: No changelog entries found for version {version}"
-    )
+    if not entries:
+        raise SystemExit(f"ERROR: No entries found for version {version}")
 
-return version, "\n".join(entries)
+    return version, "\n".join(entries)
 
-def update_changelog_md(md_file, version, changelog_text):
-"""Insert a new version after the main heading, preserving history."""
-path = Path(md_file)
 
-if path.exists():
-    content = path.read_text(encoding="utf-8")
-else:
-    content = "# История версий\n\n"
-
-existing_versions = {
-    match.group(1).strip()
-    for match in VERSION_PATTERN.finditer(content)
-}
-
-if version in existing_versions:
-    print(f"OK: Version {version} already exists; no changes.")
-    return False
-
-new_section = (
-    f"## {version} — {date.today().isoformat()}\n"
-    f"### Изменено\n"
-    f"{changelog_text}\n\n"
-)
-
-heading = re.search(r"^# .+$", content, re.MULTILINE)
-
-if heading:
-    insert_pos = heading.end()
+def update_changelog(md_file, version, entries):
+    path = Path(md_file)
     content = (
-        content[:insert_pos]
-        + "\n\n"
-        + new_section
-        + content[insert_pos:].lstrip("\n")
+        path.read_text(encoding="utf-8")
+        if path.exists()
+        else "# История версий\n\n"
     )
-else:
-    content = "# История версий\n\n" + new_section + content
 
-path.write_text(content, encoding="utf-8", newline="\n")
-print(f"OK: Added CHANGELOG version {version}")
-return True
+    version_pattern = re.compile(
+        r"^##\s+" + re.escape(version) + r"\s*[—-]",
+        re.MULTILINE,
+    )
 
-if name == "main":
-cpp_file = (
-sys.argv[1]
-if len(sys.argv) > 1
-else "lego_technic_esp32/app.cpp"
-)
-md_file = (
-sys.argv[2]
-if len(sys.argv) > 2
-else "CHANGELOG.md"
-)
+    if version_pattern.search(content):
+        print(f"OK: Version {version} already exists; no changes.")
+        return
 
-version, changelog = extract_changelog_from_cpp(cpp_file)
+    section = (
+        f"## {version} — {date.today().isoformat()}\n"
+        f"### Изменено\n"
+        f"{entries}\n\n"
+    )
 
-print(f"Version: {version}")
-print(changelog)
+    heading = re.search(r"^# .+$", content, re.MULTILINE)
 
-update_changelog_md(md_file, version, changelog)
+    if heading:
+        position = heading.end()
+        content = (
+            content[:position]
+            + "\n\n"
+            + section
+            + content[position:].lstrip("\n")
+        )
+    else:
+        content = "# История версий\n\n" + section + content
+
+    path.write_text(content, encoding="utf-8", newline="\n")
+    print(f"OK: Added CHANGELOG version {version}")
+
+
+if __name__ == "__main__":
+    cpp_file = (
+        sys.argv[1]
+        if len(sys.argv) > 1
+        else "lego_technic_esp32/app.cpp"
+    )
+    md_file = sys.argv[2] if len(sys.argv) > 2 else "CHANGELOG.md"
+
+    version, entries = extract_changelog(cpp_file)
+    print(f"Version: {version}")
+    print(entries)
+    update_changelog(md_file, version, entries)
