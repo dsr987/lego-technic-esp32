@@ -7,7 +7,9 @@
 //--#include "motor_control.h"
 //--#include "web_page.h"
 //--#include "web_control.h"
- 
+//--#include "battery_monitor.h"
+//--#include "display_control.h"
+
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -26,6 +28,7 @@
 #include "web_page.h"
 #include "web_control.h"
 #include "battery_monitor.h"
+#include "display_control.h"
 
 // Периферия
 #define SERVO_PIN      27
@@ -98,62 +101,6 @@ void buildStatus(char *buf, size_t n) {
            reverseA ? 1 : 0, reverseB ? 1 : 0, reverseC ? 1 : 0, reverseD ? 1 : 0,
            ledFrontOn ? 1 : 0, ledRearOn ? 1 : 0, engineSimOn ? 1 : 0,
            steerCenterUs - 1500, steerMaxAngleDeg);
-}
-
-// ---------- Display ----------
-void drawModeIcon() {
-  int x = 92, y = 42;
-  display.drawRect(x, y, 24, 16, SSD1306_WHITE); // Base
-
-  if (currentMode == MODE_TANK) {
-    display.fillRect(x + 6, y + 2, 12, 8, SSD1306_WHITE); // Turret
-    display.drawLine(x + 12, y + 6, x + 28, y + 6, SSD1306_WHITE); // Barrel
-  } else if (currentMode == MODE_CAR) {
-    display.fillCircle(x + 6, y + 18, 3, SSD1306_WHITE); // Wheel L
-    display.fillCircle(x + 18, y + 18, 3, SSD1306_WHITE); // Wheel R
-    display.fillRect(x + 2, y + 4, 20, 10, SSD1306_WHITE); // Body
-  } else { // MODE_TEST
-    display.drawLine(x + 12, y + 2, x + 12, y + 14, SSD1306_WHITE); // Handle
-    display.drawLine(x + 6, y + 4, x + 18, y + 4, SSD1306_WHITE); // Head top
-    display.drawLine(x + 6, y + 8, x + 18, y + 8, SSD1306_WHITE); // Head bottom
-  }
-}
-
-void updateDisplay() {
-  display.clearDisplay();
-  display.setTextColor(SSD1306_WHITE);
-
-  // Предупреждение о разряде
-  if (lowBattCount >= 3) {
-    display.setTextSize(2);
-    display.setCursor(12, 10);
-    display.print("LOW");
-    display.setCursor(12, 30);
-    display.print("BATTERY");
-    display.setTextSize(1);
-    display.setCursor(30, 54);
-    display.printf("%.2fV", battV);
-    display.display();
-    return;
-  }
-
-  display.setTextSize(2);
-  display.setCursor(0, 0);
-  if (currentMode == MODE_TANK) display.print("TANK");
-  else if (currentMode == MODE_CAR) display.print("CAR");
-  else display.print("TEST");
-
-  display.setCursor(0, 20);
-  display.printf("%d%%\n", battPct);
-
-  display.setTextSize(1);
-  display.setCursor(0, 44);
-  display.printf("%.2fV\n", battV);
-  display.setCursor(0, 54);
-  display.printf("Clients: %d\n", ws.count());
-
-  drawModeIcon();
-  display.display();
 }
 
 // ---------- Setup / Loop ----------
