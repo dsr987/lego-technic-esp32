@@ -10,9 +10,9 @@ on:
     paths:
       - "lego_technic_esp32/app.cpp"
       - "lego_technic_esp32/web_page.cpp"
-      - "extract_html.py"
-      - "extract_changelog.py"
-      - "update_readme_version.py"
+      - "tools/extract_html.py"
+      - "tools/extract_changelog.py"
+      - "tools/update_readme_version.py"
   workflow_dispatch:
 
 permissions:
@@ -53,18 +53,18 @@ jobs:
 
       - name: Extract GUI HTML
         run: |
-          python3 extract_html.py \
+          python3 tools/extract_html.py \
             "${{ steps.html_source.outputs.file }}" \
             index.html
 
       - name: Extract CHANGELOG
         run: |
-          python3 extract_changelog.py \
+          python3 tools/extract_changelog.py \
             lego_technic_esp32/app.cpp \
             CHANGELOG.md
 
       - name: Update README version
-        run: python3 update_readme_version.py
+        run: python3 tools/update_readme_version.py
 
       - name: Commit generated files
         shell: bash
