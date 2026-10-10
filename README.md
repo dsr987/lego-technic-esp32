@@ -20,7 +20,7 @@
 
 ## Демо
 
-[**Открыть веб-пульт**](https://dsr987.github.io/lego-technic-esp32/index.html)
+<a href="https://dsr987.github.io/lego-technic-esp32/index.html?v=0.3.3%20Refactoring"><img src="https://img.shields.io/badge/Попробовать-WebGUI-blue?style=for-the-badge" alt="Попробовать WebGUI"></a>
 
 Демо позволяет изучить интерфейс без подключения к физической модели.
 
