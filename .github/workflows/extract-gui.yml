@@ -79,5 +79,5 @@ jobs:
             exit 0
           fi
 
-          git commit -m "Auto-update GUI and project metadata [skip ci]"
+          git commit -m "Auto-update GUI and project metadata"
           git push
