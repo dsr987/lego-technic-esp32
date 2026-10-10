@@ -1713,7 +1713,14 @@ void loop() {
   static unsigned long lastStatus = 0;
 
   if (millis() - lastCmdMillis > CMD_TIMEOUT_MS) {
+  if (motorAVal != 0 ||
+      motorBVal != 0 ||
+      motorCVal != 0 ||
+      motorDVal != 0 ||
+      servoVal != 0 ||
+      engineSimOn) {
     stopAll();
+  }
   }
 
   if (millis() - lastStatus > 1000) {
