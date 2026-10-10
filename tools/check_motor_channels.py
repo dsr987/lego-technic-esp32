@@ -66,11 +66,17 @@ def extract_block(code, marker):
 
 
 def main():
-    if not SOURCE.is_file():
-        print(f"ERROR: source file not found: {SOURCE}")
+        missing = [path for path in SOURCE_FILES if not path.is_file()]
+
+    if missing:
+        for path in missing:
+            print(f"ERROR: source file not found: {path}")
         return 1
 
-    code = SOURCE.read_text(encoding="utf-8")
+    code = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in SOURCE_FILES
+    )
 
     stop_all = extract_block(code, "void stopAll()")
     handler = extract_block(code, "void handleWsMessage(")
