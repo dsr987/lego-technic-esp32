@@ -21,6 +21,11 @@ checks = {
     "D UI slider": 'id="slider-test-D"',
     "D heartbeat": "D:0",
     "Stop all four motors": "motorDVal = 0;",
+    "WebSocket disconnect handler": "ws.onclose",
+    "Disconnect resets commands": "zeroAll();",
+    "Mode switch disables engine simulation": "if(m!==1)",
+    "Mode command stops motors": "stopAll();",
+
 }
 
 failed = []
