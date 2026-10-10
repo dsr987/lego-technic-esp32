@@ -47,7 +47,7 @@ demo_url = (
 )
 
 url_pattern = re.compile(
-    r"https://dsr987\.github\.io/lego-technic-esp32/index\.html(?:\?v=[^)\s]*)?"
+    r"https://dsr987\.github\.io/lego-technic-esp32/index\.html(?:\?v=[^)]*)?"
 )
 
 readme, url_count = url_pattern.subn(
