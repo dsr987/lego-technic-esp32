@@ -15,6 +15,8 @@ SOURCES = [
     Path("lego_technic_esp32/display_control.cpp"),
     Path("lego_technic_esp32/steering_control.h"),
     Path("lego_technic_esp32/steering_control.cpp"),
+    Path("lego_technic_esp32/preferences_manager.h"),
+    Path("lego_technic_esp32/preferences_manager.cpp"),
 ]
 
 def extract_block(code, marker):
