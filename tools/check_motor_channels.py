@@ -2,15 +2,12 @@
 from pathlib import Path
 import sys
 
-SOURCE_FILES = [
+SOURCES = [
     Path("lego_technic_esp32/app.cpp"),
     Path("lego_technic_esp32/motor_control.cpp"),
-    Path("lego_technic_esp32/motor_control.h"),
-    Path("lego_technic_esp32/hardware_config.h"),
     Path("lego_technic_esp32/web_page.cpp"),
     Path("lego_technic_esp32/web_control.cpp"),
 ]
-
 
 def extract_block(code, marker):
     """Extract a brace-delimited block while ignoring strings and comments."""
