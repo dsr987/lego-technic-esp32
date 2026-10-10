@@ -1,0 +1,38 @@
+
+name: Check motor channels
+
+on:
+  push:
+    branches:
+      - feature/four-dc-motors
+    paths:
+      - 'lego_technic_esp32/**'
+      - 'tools/**'
+      - '.github/workflows/check-motor-channels.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'lego_technic_esp32/**'
+      - 'tools/**'
+      - '.github/workflows/check-motor-channels.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-motors:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Check motor channels
+        run: python tools/check_motor_channels.py
