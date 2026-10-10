@@ -2,7 +2,11 @@
 from pathlib import Path
 import sys
 
-SOURCE = Path("lego_technic_esp32/app.cpp")
+SOURCE_FILES = [
+    Path("lego_technic_esp32/app.cpp"),
+    Path("lego_technic_esp32/motor_control.cpp"),
+    Path("lego_technic_esp32/hardware_config.h"),
+]
 
 
 def extract_block(code, marker):
