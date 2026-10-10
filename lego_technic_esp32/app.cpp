@@ -95,21 +95,6 @@ void applySteer(int val) {
 
 // ---------- Управление Моторами ----------
   //Управление моторами находится в motor_control.cpp
-  engineSimOn = false;
-
-  motorAVal = 0;
-  motorBVal = 0;
-  motorCVal = 0;
-  motorDVal = 0;
-
-  setDCBridge(TB_AIN1, TB_AIN2, LEDC_CH_A, 0);
-  setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_B, 0);
-  setDCBridge(TB2_AIN1, TB2_AIN2, LEDC_CH_C, 0);
-  setDCBridge(TB2_BIN1, TB2_BIN2, LEDC_CH_D, 0);
-
-  applySteer(0);
-  updateDriverStandby();
-}
 
 // ---------- Батарея и Мониторинг ----------
 float battV = 0.0;
