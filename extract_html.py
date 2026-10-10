@@ -1,53 +1,63 @@
-#!/usr/bin/env python3
-"""
-Извлекает HTML-страницу из app.cpp (константа PAGE_HTML)
-и сохраняет её как отдельный файл index.html.
-"""
 
-import sys
+#!/usr/bin/env python3
+"""Extract PAGE_HTML from a C++ source file into index.html."""
+
 import re
+import sys
 from pathlib import Path
 
-def extract_html(input_file, output_file):
-    path = Path(input_file)
-    if not path.exists():
-        print(f"❌ Файл не найден: {input_file}")
-        sys.exit(1)
 
-    content = path.read_text(encoding='utf-8')
+def extract_html(input_file: str, output_file: str) -> None:
+    source_path = Path(input_file)
+    output_path = Path(output_file)
 
-    # Ищем начало блока HTML
-    start_match = re.search(r'R"HTML\(', content)
-    
-    if not start_match:
-        print("❌ Не найдено начало HTML блока (R\"HTML(\")")
-        sys.exit(1)
+    if not source_path.is_file():
+        raise SystemExit(f"ERROR: Source file not found: {source_path}")
 
-    # Ищем конец блока - ищем первое вхождение )HTML" после начала
-    html_start = start_match.end()
-    remaining_content = content[html_start:]
-    
-    # Ищем )HTML" с возможными символами после (точка с запятой, пробелы)
-    end_match = re.search(r'\)HTML"[;]?\s*\n', remaining_content)
-    
-    if not end_match:
-        # Пробуем найти просто )HTML"
-        end_match = re.search(r'\)HTML"', remaining_content)
-    
-    if not end_match:
-        print("❌ Не найден конец HTML блока")
-        print("💡 Проверьте, что в app.cpp блок заканчивается строкой: )HTML\";")
-        print("💡 Или пришлите последние 5 строк HTML блока из app.cpp")
-        sys.exit(1)
+    content = source_path.read_text(encoding="utf-8")
 
-    # Извлекаем HTML
-    html = remaining_content[:end_match.start()]
+    # Locate the PAGE_HTML declaration and its raw C++ string.
+    declaration = re.search(
+        r"\bPAGE_HTML\b[^=]*=\s*R\"HTML\(",
+        content,
+    )
 
-    Path(output_file).write_text(html, encoding='utf-8')
-    print(f"✅ HTML успешно извлечён: {output_file}")
-    print(f"   Размер: {len(html)} байт, строк: {html.count(chr(10)) + 1}")
+    if declaration is None:
+        raise SystemExit(
+            f"ERROR: PAGE_HTML raw string not found in {source_path}"
+        )
+
+    html_start = declaration.end()
+    html_end = content.find(")HTML\"", html_start)
+
+    if html_end == -1:
+        raise SystemExit(
+            f"ERROR: Closing )HTML\" delimiter not found in {source_path}"
+        )
+
+    html = content[html_start:html_end]
+
+    if not html.strip():
+        raise SystemExit("ERROR: Extracted HTML is empty")
+
+    if not re.search(r"<!DOCTYPE\s+html|<html\b", html, re.IGNORECASE):
+        raise SystemExit("ERROR: Extracted content does not look like HTML")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(html, encoding="utf-8", newline="\n")
+
+    print(f"OK: Extracted HTML from {source_path}")
+    print(f"Output: {output_path}")
+    print(f"Characters: {len(html)}")
+    print(f"Lines: {html.count(chr(10)) + 1}")
+
 
 if __name__ == "__main__":
-    in_file = sys.argv[1] if len(sys.argv) > 1 else "lego_technic_esp32/app.cpp"
-    out_file = sys.argv[2] if len(sys.argv) > 2 else "index.html"
-    extract_html(in_file, out_file)
+    source = (
+        sys.argv[1]
+        if len(sys.argv) > 1
+        else "lego_technic_esp32/web_page.cpp"
+    )
+    destination = sys.argv[2] if len(sys.argv) > 2 else "index.html"
+
+    extract_html(source, destination)
