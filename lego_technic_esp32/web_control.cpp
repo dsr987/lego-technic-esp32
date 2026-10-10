@@ -1,16 +1,16 @@
+
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
-#include <Preferences.h>
 
 #include "motor_control.h"
 #include "web_control.h"
 #include "steering_control.h"
+#include "preferences_manager.h"
 
 // ---------- Состояние, объявленное в app.cpp ----------
 
 extern Mode currentMode;
-extern Preferences prefs;
 
 extern unsigned long lastCmdMillis;
 
@@ -42,13 +42,17 @@ extern void buildStatus(char *buf, size_t n);
 
 void handleWsMessage(uint8_t *data, size_t len) {
   StaticJsonDocument<256> doc;
-  if (deserializeJson(doc, data, len) != DeserializationError::Ok) return;
+
+  if (deserializeJson(doc, data, len) != DeserializationError::Ok) {
+    return;
+  }
 
   // Переключение режима
   if (doc.containsKey("mode")) {
     if (!doc["mode"].is<int>()) return;
 
     int requestedMode = doc["mode"].as<int>();
+
     if (requestedMode < MODE_TANK || requestedMode > MODE_TEST) {
       return;
     }
@@ -60,23 +64,26 @@ void handleWsMessage(uint8_t *data, size_t len) {
     return;
   }
 
-  // Центр и калибровка рулевого сервопривода
+  // Центр рулевого сервопривода
   if (doc.containsKey("trim")) {
     if (!doc["trim"].is<int>()) return;
 
     lastCmdMillis = millis();
     steerCenterUs = 1500 + constrain(doc["trim"].as<int>(), -400, 400);
-    prefs.putInt("steer_c", steerCenterUs);
+
+    saveSteeringCenter(steerCenterUs);
     applySteer(servoVal);
     return;
   }
 
+  // Максимальный угол рулевого управления
   if (doc.containsKey("maxdeg")) {
     if (!doc["maxdeg"].is<int>()) return;
 
     lastCmdMillis = millis();
     steerMaxAngleDeg = constrain(doc["maxdeg"].as<int>(), 5, 90);
-    prefs.putInt("steer_a", steerMaxAngleDeg);
+
+    saveSteeringMaxAngle(steerMaxAngleDeg);
     applySteer(servoVal);
     return;
   }
@@ -108,46 +115,53 @@ void handleWsMessage(uint8_t *data, size_t len) {
   // Настройки реверса моторов
   if (doc.containsKey("revA")) {
     if (!doc["revA"].is<int>()) return;
+
     reverseA = doc["revA"].as<int>() == 1;
-    prefs.putUChar("revA", reverseA ? 1 : 0);
+    saveReverseA(reverseA);
   }
 
   if (doc.containsKey("revB")) {
     if (!doc["revB"].is<int>()) return;
+
     reverseB = doc["revB"].as<int>() == 1;
-    prefs.putUChar("revB", reverseB ? 1 : 0);
+    saveReverseB(reverseB);
   }
 
   if (doc.containsKey("revC")) {
     if (!doc["revC"].is<int>()) return;
+
     reverseC = doc["revC"].as<int>() == 1;
-    prefs.putUChar("revC", reverseC ? 1 : 0);
+    saveReverseC(reverseC);
   }
 
   if (doc.containsKey("revD")) {
     if (!doc["revD"].is<int>()) return;
+
     reverseD = doc["revD"].as<int>() == 1;
-    prefs.putUChar("revD", reverseD ? 1 : 0);
+    saveReverseD(reverseD);
   }
 
   // Передний и задний свет
   if (doc.containsKey("ledF")) {
     if (!doc["ledF"].is<int>()) return;
+
     ledFrontOn = doc["ledF"].as<int>() == 1;
-    prefs.putUChar("ledF", ledFrontOn ? 1 : 0);
+    saveLedFront(ledFrontOn);
     applyLeds();
   }
 
   if (doc.containsKey("ledR")) {
     if (!doc["ledR"].is<int>()) return;
+
     ledRearOn = doc["ledR"].as<int>() == 1;
-    prefs.putUChar("ledR", ledRearOn ? 1 : 0);
+    saveLedRear(ledRearOn);
     applyLeds();
   }
 
   // Симуляция двигателя
   if (doc.containsKey("eng")) {
     if (!doc["eng"].is<int>()) return;
+
     engineSimOn = doc["eng"].as<int>() == 1;
 
     if (!engineSimOn) {
