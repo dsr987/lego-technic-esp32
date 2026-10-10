@@ -7,6 +7,7 @@ SOURCE_FILES = [
     Path("lego_technic_esp32/motor_control.cpp"),
     Path("lego_technic_esp32/motor_control.h"),
     Path("lego_technic_esp32/hardware_config.h"),
+    Path("lego_technic_esp32/web_page.cpp"),
 ]
 
 
