@@ -6,7 +6,7 @@
 
 Проект развивает идею единой универсальной платформы электроники для любых моделей Lego, поддерживая до 3 независимых моторов и рулевое управление.
 
-Текущая версия прошивки: **0.3.1 beta**
+Текущая версия прошивки: **0.3.2 beta**
 ---
 
 ## 🎮 Попробовать GUI прямо сейчас
@@ -15,7 +15,7 @@
 
 <div align="center">
 
-[![Попробовать GUI](https://img.shields.io/badge/🎮_Попробовать_GUI-открыть_в_браузере-blue?style=for-the-badge&logo=googlechrome)](https://dsr987.github.io/lego-technic-esp32/index.html?v=0.3.1)
+[![Попробовать GUI](https://img.shields.io/badge/🎮_Попробовать_GUI-открыть_в_браузере-blue?style=for-the-badge&logo=googlechrome)](https://dsr987.github.io/lego-technic-esp32/index.html?v=0.3.2)
 
 </div>
 

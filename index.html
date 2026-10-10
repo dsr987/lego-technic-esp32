@@ -276,7 +276,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div>
         <div class="brand-title">Lego Control Center</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-addr">192.168.4.1</span></div>
-        <div class="brand-ver">0.3.1</div>
+        <div class="brand-ver">0.3.2</div>
       </div>
     </div>
     <div class="mode-switch">
@@ -549,9 +549,13 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 (function(){
   function $(id){ return document.getElementById(id); }
   var ws = null;
-  
+
+  // --- Единый источник правды для heartbeat: последние отправленные значения A/B/C/S ---
+  var lastSent = {A:0, B:0, C:0, S:0};
+
   function txWS(obj){
     $('telemetry').textContent = JSON.stringify(obj);
+    if (obj.ch && lastSent.hasOwnProperty(obj.ch)) lastSent[obj.ch] = obj.val;
     if(ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
   }
 
@@ -611,14 +615,14 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     };
   }
 
-  // Heartbeat для предотвращения срабатывания watchdog при удержании
+  // Heartbeat: раз в 150мс переотправляем ВСЕ 4 канала из lastSent, без привязки к режиму.
+  // Прошивка сама решит, что из этого актуально для текущего режима — лишний пакет по
+  // неиспользуемому каналу безвреден. Это чинит Cruise Control и Тестовый режим разом.
   setInterval(function(){
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    if (mode === 0) {
-      ws.send(JSON.stringify({ch:'A', val: drive})); // В танке drive мапится на A/B через UI, но здесь упростим для примера, лучше использовать state
-    }
-    // Отправляем актуальные состояния для сброса таймера
-    ws.send(JSON.stringify({ch:'A', val: $('slider-left').value})); // Упрощенно для демо heartbeat
+    ['A','B','C','S'].forEach(function(ch){
+      ws.send(JSON.stringify({ch:ch, val:lastSent[ch]}));
+    });
   }, 150);
 
   function updateWifi(r){
@@ -701,8 +705,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
      'slider-test-A','slider-test-B','slider-test-C','slider-test-S'].forEach(function(id){ var e=$(id); if(e) e.value=0; });
     ['val-left','val-right','val-drive','val-aux','val-C','val-steer',
      'val-test-A','val-test-B','val-test-C','val-test-S'].forEach(function(id){ var e=$(id); if(e) e.textContent='0%'; });
-    
-    // ИСПРАВЛЕНО: Убран сброс состояния фар, так как они привязаны к физическому выходу, а не к режиму
+
+    // Фары намеренно не трогаем — привязаны к физическому выходу, не к режиму.
     txWS({ch:'A', val:0}); txWS({ch:'B', val:0}); txWS({ch:'C', val:0}); txWS({ch:'S', val:0});
     paintTank(0,0); paintCar();
   }
