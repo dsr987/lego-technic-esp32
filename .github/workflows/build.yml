@@ -3,7 +3,7 @@ name: Build ESP32 firmware
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ feature/four-dc-motors ]
     paths:
       - 'lego_technic_esp32/**'
 
