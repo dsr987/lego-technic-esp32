@@ -1088,8 +1088,13 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     $('classic-panel').classList.toggle('hidden', m!==1);
     $('test-panel').classList.toggle('hidden', m!==2);
 
-    if(m===0){ eng=false; updateEngUI(); applyEngGate(); }
-    txWS({mode: m});
+if(m!==1){
+  eng=false;
+  updateEngUI();
+  applyEngGate();
+}
+txWS({mode: m});
+
     zeroAll(); setTimeout(fitSliders,30);
   }
   $('btn-tank').onclick=function(){ switchMode(0); };
