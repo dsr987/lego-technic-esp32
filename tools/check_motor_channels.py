@@ -5,8 +5,12 @@ import sys
 SOURCES = [
     Path("lego_technic_esp32/app.cpp"),
     Path("lego_technic_esp32/motor_control.cpp"),
+    Path("lego_technic_esp32/motor_control.h"),
+    Path("lego_technic_esp32/hardware_config.h"),
     Path("lego_technic_esp32/web_page.cpp"),
     Path("lego_technic_esp32/web_control.cpp"),
+    Path("lego_technic_esp32/battery_monitor.h"),
+    Path("lego_technic_esp32/battery_monitor.cpp"),
 ]
 
 def extract_block(code, marker):
