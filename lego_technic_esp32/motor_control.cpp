@@ -3,6 +3,7 @@
 
 #include "hardware_config.h"
 #include "motor_control.h"
+#include "steering_control.h" 
 
 // Состояние объявлено и определяется в app.cpp
 extern Mode currentMode;
@@ -18,9 +19,6 @@ extern bool reverseB;
 extern bool reverseC;
 extern bool reverseD;
 extern bool engineSimOn;
-
-// Реализация сервопривода пока остаётся в app.cpp
-extern void applySteer(int val);
 
 
 // ---------- Базовое управление мостом TB6612FNG ----------
