@@ -46,12 +46,6 @@
 #define TB2_BIN2  33
 #define TB2_PWMB  1
 
-// Временно сохраняем определения DRV8825
-// до завершения переноса канала C на TB6612FNG.
-#define DRV_EN    13
-#define DRV_DIR   23
-#define DRV_STEP  5
-
 // Каналы LEDC (ШИМ)
 #define LEDC_CH_A 4
 #define LEDC_CH_B 5
@@ -84,11 +78,13 @@ const unsigned long CMD_TIMEOUT_MS = 500;
 int motorAVal = 0;
 int motorBVal = 0;
 int motorCVal = 0;
+int motorDVal = 0;
 int servoVal  = 0;
 
 bool reverseA = false;
 bool reverseB = false;
 bool reverseC = false;
+bool reverseD = false;
 
 bool ledFrontOn = false;
 bool ledRearOn  = false;
@@ -103,6 +99,7 @@ void loadPreferences() {
   reverseA = prefs.getUChar("revA", 0) != 0;
   reverseB = prefs.getUChar("revB", 0) != 0;
   reverseC = prefs.getUChar("revC", 0) != 0;
+  reverseD = prefs.getUChar("revD", 0) != 0;
   ledFrontOn = prefs.getUChar("ledF", 0) != 0;
   ledRearOn  = prefs.getUChar("ledR", 0) != 0;
   steerCenterUs = prefs.getInt("steer_c", 1500);
@@ -110,8 +107,8 @@ void loadPreferences() {
 }
 
 void applyLeds() {
-  digitalWrite(LED_FRONT_PIN, ledFrontOn ? HIGH : LOW);
-  digitalWrite(LED_REAR_PIN, ledRearOn ? HIGH : LOW);
+  // Свет временно отключён: GPIO32 и GPIO33 используются
+  // для управления вторым TB6612FNG.
 }
 
 void applySteer(int val) {
@@ -131,23 +128,11 @@ void setDCBridge(int in1, int in2, int pwmChannel, int val) {
   ledcWrite(pwmChannel, duty);
 }
 
-void setDRV8825Motor(int dirPin, int pwmChannel, int val) {
-  val = constrain(val, -100, 100);
-  digitalWrite(dirPin, val >= 0 ? HIGH : LOW);
-
-  if (val == 0) {
-    ledcWrite(pwmChannel, 0);
-  } else {
-    // Для шагового драйвера важна частота фронтов, а не скважность
-    int freq = map(abs(val), 1, 100, 100, 5000); // От 100 Гц до 5000 Гц
-    ledcChangeFrequency(pwmChannel, freq, 8);
-    ledcWrite(pwmChannel, 128); // 50% duty cycle для чётких фронтов
-  }
-}
 
 void applyMotorA(int val) {
-  motorAVal = val;
-  setDCBridge(TB_AIN1, TB_AIN2, LEDC_CH_A, reverseA ? -val : val);
+  motorAVal = constrain(val, -100, 100);
+  setDCBridge(TB_AIN1, TB_AIN2, LEDC_CH_A,
+              reverseA ? -motorAVal : motorAVal);
 
   if (engineSimOn && currentMode == MODE_CAR) {
     int aux = (int)(33.0 + 67.0 * abs(motorAVal) / 100.0 + 0.5);
@@ -158,33 +143,47 @@ void applyMotorA(int val) {
 }
 
 void applyMotorB(int val) {
-  motorBVal = val;
-  setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_B, reverseB ? -val : val);
+  motorBVal = constrain(val, -100, 100);
+  setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_B,
+              reverseB ? -motorBVal : motorBVal);
 }
 
 void applyMotorC(int val) {
-  motorCVal = val;
-  setDRV8825Motor(DRV_DIR, LEDC_CH_C, reverseC ? -val : val);
+  motorCVal = constrain(val, -100, 100);
+  setDCBridge(TB2_AIN1, TB2_AIN2, LEDC_CH_C,
+              reverseC ? -motorCVal : motorCVal);
+}
+
+void applyMotorD(int val) {
+  motorDVal = constrain(val, -100, 100);
+  setDCBridge(TB2_BIN1, TB2_BIN2, LEDC_CH_D,
+              reverseD ? -motorDVal : motorDVal);
 }
 
 void updateDriverStandby() {
-  bool active = (motorAVal != 0) || (motorBVal != 0) || (motorCVal != 0) || (servoVal != 0) || engineSimOn;
-  // TB6612 включается HIGH, DRV8825 включается LOW
+  bool active = motorAVal != 0 || motorBVal != 0 ||
+                motorCVal != 0 || motorDVal != 0 ||
+                servoVal != 0 || engineSimOn;
+
+  // Оба TB6612FNG используют общий STBY.
   digitalWrite(TB_STBY, active ? HIGH : LOW);
-  digitalWrite(DRV_EN, active ? LOW : HIGH);
 }
 
 void stopAll() {
-  motorAVal = 0;
-  motorCVal = 0;
-  applyMotorA(0);
-  applyMotorC(0);
-  applySteer(0);
+  // Сначала отключаем имитацию, чтобы она не включила B повторно.
+  engineSimOn = false;
 
-  if (!engineSimOn) {
-    motorBVal = 0;
-    applyMotorB(0);
-  }
+  motorAVal = 0;
+  motorBVal = 0;
+  motorCVal = 0;
+  motorDVal = 0;
+
+  setDCBridge(TB_AIN1, TB_AIN2, LEDC_CH_A, 0);
+  setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_B, 0);
+  setDCBridge(TB2_AIN1, TB2_AIN2, LEDC_CH_C, 0);
+  setDCBridge(TB2_BIN1, TB2_BIN2, LEDC_CH_D, 0);
+
+  applySteer(0);
   updateDriverStandby();
 }
 
@@ -234,8 +233,8 @@ void updateStatus() {
   battV = readBatteryVoltage();
 
   bool atRest = (engineSimOn && currentMode == MODE_CAR)
-                  ? (motorAVal == 0 && motorCVal == 0 && servoVal == 0)
-                  : (motorAVal == 0 && motorBVal == 0 && motorCVal == 0 && servoVal == 0);
+                  ? (motorAVal == 0 && motorCVal == 0 && motorDVal == 0 && servoVal == 0)
+                  : (motorAVal == 0 && motorBVal == 0 && motorCVal == 0 && motorDVal == 0 && servoVal == 0);
 
   if (atRest) {
     if (!wasAtRest) { restStartMillis = millis(); wasAtRest = true; }
@@ -255,9 +254,9 @@ void updateStatus() {
 }
 
 void buildStatus(char *buf, size_t n) {
-  snprintf(buf, n, "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,\"m\":%d,\"c\":%d,\"ra\":%d,\"rb\":%d,\"rc\":%d,\"lf\":%d,\"lr\":%d,\"es\":%d,\"tr\":%d,\"md\":%d}",
+  snprintf(buf, n, "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,\"m\":%d,\"c\":%d,\"ra\":%d,\"rb\":%d,\"rc\":%d,\"rd\":%d\"lf\":%d,\"lr\":%d,\"es\":%d,\"tr\":%d,\"md\":%d}",
            battV, battPct, wifiRssi, (int)currentMode, (int)ws.count(),
-           reverseA ? 1 : 0, reverseB ? 1 : 0, reverseC ? 1 : 0,
+           reverseA ? 1 : 0, reverseB ? 1 : 0, reverseC ? 1 : 0, reverseD ? 1 : 0,
            ledFrontOn ? 1 : 0, ledRearOn ? 1 : 0, engineSimOn ? 1 : 0,
            steerCenterUs - 1500, steerMaxAngleDeg);
 }
@@ -349,6 +348,10 @@ void handleWsMessage(uint8_t *data, size_t len) {
   if (doc.containsKey("revA")) { reverseA = doc["revA"].as<int>() == 1; prefs.putUChar("revA", reverseA ? 1 : 0); }
   if (doc.containsKey("revB")) { reverseB = doc["revB"].as<int>() == 1; prefs.putUChar("revB", reverseB ? 1 : 0); }
   if (doc.containsKey("revC")) { reverseC = doc["revC"].as<int>() == 1; prefs.putUChar("revC", reverseC ? 1 : 0); }
+if (doc.containsKey("revD")) {
+  reverseD = doc["revD"].as<int>() == 1;
+  prefs.putUChar("revD", reverseD ? 1 : 0);
+}
 
   if (doc.containsKey("ledF")) { ledFrontOn = doc["ledF"].as<int>() == 1; prefs.putUChar("ledF", ledFrontOn ? 1 : 0); applyLeds(); }
   if (doc.containsKey("ledR")) { ledRearOn = doc["ledR"].as<int>() == 1; prefs.putUChar("ledR", ledRearOn ? 1 : 0); applyLeds(); }
@@ -367,10 +370,10 @@ void handleWsMessage(uint8_t *data, size_t len) {
   int val = doc["val"] | 0;
 
   if (strcmp(ch, "A") == 0) applyMotorA(val);
-  else if (strcmp(ch, "B") == 0 && !engineSimOn) applyMotorB(val);
-  else if (strcmp(ch, "C") == 0) applyMotorC(val);
-  else if (strcmp(ch, "S") == 0) applySteer(val);
-
+else if (strcmp(ch, "B") == 0 && !engineSimOn) applyMotorB(val);
+else if (strcmp(ch, "C") == 0) applyMotorC(val);
+else if (strcmp(ch, "D") == 0) applyMotorD(val);
+else if (strcmp(ch, "S") == 0) applySteer(val);
   updateDriverStandby();
 }
 
@@ -647,7 +650,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 <div class="overlay" id="rotate-overlay">
   <div class="overlay-icon">📱</div>
   <h2>Поверните устройство</h2>
-  <p>Для управления переведите телефон в горизонтальное положение или включите полный экран.</p>
+  <p>Для управления переведите телефон в горизонтальное положение и включите полный экран.</p>
   <button class="fs-btn" onclick="toggleFullscreen()">⛶ Включить полный экран</button>
 </div>
 
@@ -854,6 +857,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
           <div class="slider-v-container"><input type="range" id="slider-test-C" class="slider-v" min="-100" max="100" value="0"></div>
         </div>
       </div>
+        <div class="col">
+          <span class="lbl">Мотор D</span>
+          <span class="val" id="val-test-D">0%</span>
+          <div class="slider-v-container"><input type="range" id="slider-test-D" class="slider-v" min="-100" max="100" value="0"></div>
+        </div>
       <div class="servo-group">
         <div class="btn-row" style="margin-top:0; justify-content:center; gap:12px">
           <button class="aux-btn led-btn" data-ch="F" type="button" title="Передние фары"><span class="ico">💡</span></button>
@@ -919,6 +927,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="line"><span>Канал A</span><span class="grow"></span><button class="rev-btn" data-ch="A" type="button">⇄</button></div>
       <div class="line"><span>Канал B</span><span class="grow"></span><button class="rev-btn" data-ch="B" type="button">⇄</button></div>
       <div class="line"><span>Канал C</span><span class="grow"></span><button class="rev-btn" data-ch="C" type="button">⇄</button></div>
+      <div class="line"><span>Канал D</span><span class="grow"></span><button class="rev-btn" data-ch="D" type="button">⇄</button></div>
     </div>
     <div class="block">
       <h3>Кнопки</h3>
@@ -937,8 +946,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   function $(id){ return document.getElementById(id); }
   var ws = null;
 
-  // --- Единый источник правды для heartbeat: последние отправленные значения A/B/C/S ---
-  var lastSent = {A:0, B:0, C:0, S:0};
+  // --- Единый источник правды для heartbeat: последние отправленные значения A/B/C/D/S ---
+  var lastSent = {A:0, B:0, C:0, D:0, S:0};
 
   function txWS(obj){
     $('telemetry').textContent = JSON.stringify(obj);
@@ -946,7 +955,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     if(ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
   }
 
-  var mode=0, rev={A:0,B:0,C:0}, led={F:0,R:0};
+  var mode=0, rev={A:0,B:0,C:0,D:0}, led={F:0,R:0};
   var eng=false, auxMode=false, trim=0;
   var drive=0, auxB=0, auxC=0, steer=0;
   
@@ -992,6 +1001,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
           if(typeof d.ra !== 'undefined') { rev.A = !!d.ra; updateRevUI('A'); }
           if(typeof d.rb !== 'undefined') { rev.B = !!d.rb; updateRevUI('B'); }
           if(typeof d.rc !== 'undefined') { rev.C = !!d.rc; updateRevUI('C'); }
+          if(typeof d.rd !== 'undefined') { rev.D = !!d.rd; updateRevUI('D'); } 
           if(typeof d.lf !== 'undefined') { led.F = !!d.lf; updateLedUI('F'); }
           if(typeof d.lr !== 'undefined') { led.R = !!d.lr; updateLedUI('R'); }
           if(typeof d.es !== 'undefined') { eng = !!d.es; updateEngUI(); applyEngGate(); }
@@ -1007,7 +1017,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   // неиспользуемому каналу безвреден. Это чинит Cruise Control и Тестовый режим разом.
   setInterval(function(){
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ['A','B','C','S'].forEach(function(ch){
+    ['A','B','C','D','S'].forEach(function(ch){
       ws.send(JSON.stringify({ch:ch, val:lastSent[ch]}));
     });
   }, 150);
@@ -1089,12 +1099,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     drive=auxB=auxC=steer=0;
     ['A','B','C'].forEach(function(ch){ clearHoldState(ch); });
     ['slider-left','slider-right','slider-drive','slider-aux','slider-C','slider-steer',
-     'slider-test-A','slider-test-B','slider-test-C','slider-test-S'].forEach(function(id){ var e=$(id); if(e) e.value=0; });
+     'slider-test-A','slider-test-B','slider-test-C', 'slider-test-D','slider-test-S'].forEach(function(id){ var e=$(id); if(e) e.value=0; });
     ['val-left','val-right','val-drive','val-aux','val-C','val-steer',
-     'val-test-A','val-test-B','val-test-C','val-test-S'].forEach(function(id){ var e=$(id); if(e) e.textContent='0%'; });
+     'val-test-A','val-test-B','val-test-C','val-test-D','val-test-S'].forEach(function(id){ var e=$(id); if(e) e.textContent='0%'; });
 
     // Фары намеренно не трогаем — привязаны к физическому выходу, не к режиму.
-    txWS({ch:'A', val:0}); txWS({ch:'B', val:0}); txWS({ch:'C', val:0}); txWS({ch:'S', val:0});
+    txWS({ch:'A', val:0}); txWS({ch:'B', val:0}); txWS({ch:'C', val:0}); txWS({ch:'D', val:0}); txWS({ch:'S', val:0});
     paintTank(0,0); paintCar();
   }
 
@@ -1409,6 +1419,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   $('slider-test-A').oninput=function(){ var v=+this.value; $('val-test-A').textContent=v+'%'; txWS({ch:'A',val:v}); if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge(); };
   $('slider-test-B').oninput=function(){ var v=+this.value; $('val-test-B').textContent=v+'%'; txWS({ch:'B',val:v}); if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge(); };
   $('slider-test-C').oninput=function(){ var v=+this.value; $('val-test-C').textContent=v+'%'; txWS({ch:'C',val:v}); if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge(); };
+  $('slider-test-D').oninput=function(){
+  var v=+this.value;
+  $('val-test-D').textContent=v+'%';
+  txWS({ch:'D',val:v});
+  if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge();
+};
   $('slider-test-S').oninput=function(){ var v=+this.value; $('val-test-S').textContent=v+'%'; txWS({ch:'S',val:v}); if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge(); };
   
   $('test-reset-btn').onclick=function(){ vibrateClick(); zeroAll(); };
@@ -1510,22 +1526,48 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 )HTML";
 
 // ---------- Setup / Loop ----------
+
 void setup() {
-  Serial.begin(115200);
+  // Аппаратная Serial-отладка отключена.
+  // Диагностика остаётся через Wi-Fi.
 
-  pinMode(TB_STBY, OUTPUT); digitalWrite(TB_STBY, LOW);
-  pinMode(DRV_EN, OUTPUT); digitalWrite(DRV_EN, HIGH); // DRV8825 активен при LOW
+  // Сначала удерживаем оба TB6612FNG в режиме ожидания.
+  pinMode(TB_STBY, OUTPUT);
+  digitalWrite(TB_STBY, LOW);
 
-  pinMode(TB_AIN1, OUTPUT); pinMode(TB_AIN2, OUTPUT);
-  pinMode(TB_BIN1, OUTPUT); pinMode(TB_BIN2, OUTPUT);
-  pinMode(DRV_DIR, OUTPUT);
+  // Направление каналов A/B/C/D
+  pinMode(TB_AIN1, OUTPUT);
+  pinMode(TB_AIN2, OUTPUT);
+  pinMode(TB_BIN1, OUTPUT);
+  pinMode(TB_BIN2, OUTPUT);
 
-  ledcSetup(LEDC_CH_A, 5000, 8); ledcAttachPin(TB_PWMA, LEDC_CH_A);
-  ledcSetup(LEDC_CH_B, 5000, 8); ledcAttachPin(TB_PWMB, LEDC_CH_B);
-  ledcSetup(LEDC_CH_C, 5000, 8); ledcAttachPin(DRV_STEP, LEDC_CH_C);
+  pinMode(TB2_AIN1, OUTPUT);
+  pinMode(TB2_AIN2, OUTPUT);
+  pinMode(TB2_BIN1, OUTPUT);
+  pinMode(TB2_BIN2, OUTPUT);
 
-  pinMode(LED_FRONT_PIN, OUTPUT);
-  pinMode(LED_REAR_PIN, OUTPUT);
+  // Начальное безопасное состояние входов направления
+  digitalWrite(TB_AIN1, LOW);
+  digitalWrite(TB_AIN2, LOW);
+  digitalWrite(TB_BIN1, LOW);
+  digitalWrite(TB_BIN2, LOW);
+  digitalWrite(TB2_AIN1, LOW);
+  digitalWrite(TB2_AIN2, LOW);
+  digitalWrite(TB2_BIN1, LOW);
+  digitalWrite(TB2_BIN2, LOW);
+
+  // Четыре канала PWM, 5 кГц, 8 бит
+  ledcSetup(LEDC_CH_A, 5000, 8);
+  ledcAttachPin(TB_PWMA, LEDC_CH_A);
+
+  ledcSetup(LEDC_CH_B, 5000, 8);
+  ledcAttachPin(TB_PWMB, LEDC_CH_B);
+
+  ledcSetup(LEDC_CH_C, 5000, 8);
+  ledcAttachPin(TB2_PWMA, LEDC_CH_C);
+
+  ledcSetup(LEDC_CH_D, 5000, 8);
+  ledcAttachPin(TB2_PWMB, LEDC_CH_D);
 
   steerServo.setPeriodHertz(50);
   steerServo.attach(SERVO_PIN, 1000, 2000);
