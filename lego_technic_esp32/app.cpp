@@ -9,7 +9,7 @@
 //--#include "web_control.h"
 //--#include "battery_monitor.h"
 //--#include "display_control.h"
-
+//--#include "steering_control.h"
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -29,6 +29,7 @@
 #include "web_control.h"
 #include "battery_monitor.h"
 #include "display_control.h"
+#include "steering_control.h"
 
 // Периферия
 #define SERVO_PIN      27
@@ -66,7 +67,6 @@ bool ledRearOn  = false;
 bool engineSimOn = false;
 
 // Калибровка сервопривода
-const float US_PER_DEGREE = 1000.0 / 180.0;
 int steerCenterUs    = 1500;
 int steerMaxAngleDeg = 45;
 
@@ -84,13 +84,6 @@ void loadPreferences() {
 void applyLeds() {
   // Свет временно отключён: GPIO32 и GPIO33 используются
   // для управления вторым TB6612FNG.
-}
-
-void applySteer(int val) {
-  servoVal = val;
-  int us = steerCenterUs + (int)((val / 100.0) * steerMaxAngleDeg * US_PER_DEGREE);
-  us = constrain(us, 500, 2500);
-  steerServo.writeMicroseconds(us);
 }
 
 // ----------- Мониторинг ---------
