@@ -8,6 +8,7 @@ SOURCE_FILES = [
     Path("lego_technic_esp32/motor_control.h"),
     Path("lego_technic_esp32/hardware_config.h"),
     Path("lego_technic_esp32/web_page.cpp"),
+    Path("lego_technic_esp32/web_control.cpp"),
 ]
 
 
@@ -68,19 +69,16 @@ def extract_block(code, marker):
 
 
 def main():
-    missing = [
-        path for path in SOURCE_FILES
-        if not path.is_file()
-    ]
-
+    missing = [str(path) for path in SOURCES if not path.is_file()]
     if missing:
+        print("ERROR: source file(s) not found:")
         for path in missing:
-            print(f"ERROR: source file not found: {path}")
+            print(f" - {path}")
         return 1
 
     code = "\n".join(
         path.read_text(encoding="utf-8")
-        for path in SOURCE_FILES
+        for path in SOURCES
     )
 
     stop_all = extract_block(code, "void stopAll()")
