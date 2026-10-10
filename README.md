@@ -20,7 +20,7 @@
 
 ## Демо
 
-[**Открыть веб-пульт**](https://dsr987.github.io/lego-technic-esp32/index.html?v=0.3.3%20Refactoring)
+[**Открыть веб-пульт**](https://dsr987.github.io/lego-technic-esp32/index.html)
 
 Демо позволяет изучить интерфейс без подключения к физической модели.
 
