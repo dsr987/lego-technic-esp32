@@ -1,11 +1,11 @@
 /*
  * LEGO Technic ESP32
- * Версия разработки: 0.3.3 Refactoring
+ * Версия разработки: 0.4.0 Refactoring
  * Ветка: feature/four-dc-motors
  *
  * ВАЖНО:
  * Это подготовительная версия, не готовый релиз.
- * Выпуск 0.3.3 планируется после проверки на реальном оборудовании.
+ * Выпуск 0.4.0 планируется после проверки на реальном оборудовании.
  *
  * Совместимость:
  * - ESP32 Arduino Core 2.0.9
@@ -17,7 +17,7 @@
  * - Preferences
  * - ElegantOTA
  *
- * CHANGELOG_VERSION: 0.3.3 Refactoring
+ * CHANGELOG_VERSION: 0.4.0 Refactoring
  * CHANGELOG_START
  * - Код разделён на отдельные модули .h и .cpp.
  * - Управление четырьмя DC-моторами вынесено в motor_control.
