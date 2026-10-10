@@ -26,11 +26,11 @@
 #include <Preferences.h>
 #include <ElegantOTA.h>
 
-// ---------- Пины Драйверов и Периферии ----------
-#define TB_STBY   4   // TB6612 STBY (HIGH = Включен)
-#define DRV_EN    13  // DRV8825 nENABLE/nSLEEP (LOW = Включен). ВАЖНО: физически отделён от GPIO 4!
 
-// TB6612FNG — Моторы A и B
+ // ---------- Пины Драйверов и Периферии ----------
+#define TB_STBY   4   // Общий STBY обоих TB6612FNG
+
+// TB6612FNG №1 — моторы A и B
 #define TB_AIN1   16
 #define TB_AIN2   17
 #define TB_PWMA   18
@@ -38,23 +38,33 @@
 #define TB_BIN2   21
 #define TB_PWMB   22
 
-// DRV8825 — Мотор C
+// TB6612FNG №2 — моторы C и D
+#define TB2_AIN1  13
+#define TB2_AIN2  14
+#define TB2_PWMA  23
+#define TB2_BIN1  32
+#define TB2_BIN2  33
+#define TB2_PWMB  1
+
+// Временно сохраняем определения DRV8825
+// до завершения переноса канала C на TB6612FNG.
+#define DRV_EN    13
 #define DRV_DIR   23
 #define DRV_STEP  5
 
-// LEDC Каналы (ШИМ)
+// Каналы LEDC (ШИМ)
 #define LEDC_CH_A 4
 #define LEDC_CH_B 5
 #define LEDC_CH_C 6
+#define LEDC_CH_D 7
 
 // Прочая периферия
-#define SERVO_PIN   27
-#define OLED_SDA    25
-#define OLED_SCL    26
-#define BATT_PIN    34
-#define LED_FRONT_PIN 32
-#define LED_REAR_PIN  33
-
+#define SERVO_PIN      27
+#define OLED_SDA       25
+#define OLED_SCL       26
+#define BATT_PIN       34
+#define LED_FRONT_PIN  32
+#define LED_REAR_PIN   33
 #define BATT_DIVIDER_FACTOR 0.2680
 
 // ---------- Переменные Режимов и Состояния ----------
