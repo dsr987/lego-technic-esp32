@@ -5,6 +5,7 @@
 
 #include "motor_control.h"
 #include "web_control.h"
+#include "steering_control.h"
 
 // ---------- Состояние, объявленное в app.cpp ----------
 
@@ -34,7 +35,6 @@ extern int steerMaxAngleDeg;
 // ---------- Функции из других модулей ----------
 
 extern void applyLeds();
-extern void applySteer(int val);
 
 extern void buildStatus(char *buf, size_t n);
 
