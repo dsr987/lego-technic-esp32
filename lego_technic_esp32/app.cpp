@@ -325,7 +325,14 @@ void handleWsMessage(uint8_t *data, size_t len) {
   lastCmdMillis = millis();
 
   if (doc.containsKey("mode")) {
-    currentMode = (Mode)doc["mode"].as<int>();
+    if (!doc["mode"].is<int>()) return;
+
+    int requestedMode = doc["mode"].as<int>();
+    if (requestedMode < MODE_TANK || requestedMode > MODE_TEST) {
+      return;
+    }
+
+    currentMode = static_cast<Mode>(requestedMode);
     engineSimOn = false;
     stopAll();
     return;
