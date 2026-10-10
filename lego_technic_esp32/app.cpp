@@ -1,14 +1,17 @@
-// ESP32 Lego Technic motorization — Версия: 0.3.1
+// ESP32 Lego Technic motorization — Версия: 0.3.2
 // Библиотеки: ESPAsyncWebServer, AsyncTCP, ArduinoJson, Adafruit_SSD1306, Adafruit_GFX, ESP32Servo, ElegantOTA
 // ESP32 core: 2.0.9 (совместимость с LEDC и AsyncWebServer)
-// CHANGELOG 0.3.1:
-// - Исправлена полярность управления DRV8825 (добавлен отдельный пин DRV_EN, активный LOW)
-// - Скорость мотора C теперь регулируется через ledcChangeFrequency (изменение частоты STEP), а не duty cycle
-// - Возвращён GUI heartbeat (150 мс) для корректной работы Cruise Control и Тестового режима
-// - Добавлено полноэкранное предупреждение LOW BATTERY на OLED
-// - Добавлена отрисовка иконок режимов (Танк, Машина, Гаечный ключ) на OLED
-// - Добавлен HTTP эндпоинт /calib и передача trim/maxdeg в WebSocket статус
-// - Исправлен баг сброса состояния фар при переключении режимов в zeroAll()
+// CHANGELOG 0.3.2:
+// - Переписан GUI heartbeat: единый объект lastSent{A,B,C,S}, обновляется внутри txWS(),
+//   раз в 150мс переотправляются все 4 канала без привязки к режиму. В 0.3.1 heartbeat
+//   слал только канал A (дважды), причём в Классике/Тесте второй раз брал значение
+//   из скрытого танкового ползунка (всегда 0) — газ в Классике дёргался каждые ~150мс.
+//   Канал B/C/S heartbeat вообще не видел — Cruise Control и Тестовый режим по-прежнему
+//   обнулялись watchdog'ом через 500мс. Сейчас это исправлено единообразно для всех режимов.
+// (0.3.1: исправлена полярность DRV8825 (раздельный DRV_EN, инверсия в updateDriverStandby),
+//  скорость мотора C — через ledcChangeFrequency вместо duty, LOW BATTERY на OLED,
+//  иконки режимов (танк/машина/ключ), /calib эндпоинт + trim/maxdeg в статусе,
+//  убран сброс фар при смене режима в zeroAll())
 
 #include <Arduino.h>
 #include <WiFi.h>
@@ -25,32 +28,32 @@
 
 // ---------- Пины Драйверов и Периферии ----------
 #define TB_STBY   4   // TB6612 STBY (HIGH = Включен)
-#define DRV_EN    13  // DRV8825 nENABLE/nSLEEP (LOW = Включен). ВАЖНО: Должен быть физически отделен от GPIO 4!
+#define DRV_EN    13  // DRV8825 nENABLE/nSLEEP (LOW = Включен). ВАЖНО: физически отделён от GPIO 4!
 
 // TB6612FNG — Моторы A и B
-#define TB_AIN1   16  
-#define TB_AIN2   17  
-#define TB_PWMA   18  
-#define TB_BIN1   19  
-#define TB_BIN2   21  
-#define TB_PWMB   22  
+#define TB_AIN1   16
+#define TB_AIN2   17
+#define TB_PWMA   18
+#define TB_BIN1   19
+#define TB_BIN2   21
+#define TB_PWMB   22
 
 // DRV8825 — Мотор C
-#define DRV_DIR   23  
-#define DRV_STEP  5   
+#define DRV_DIR   23
+#define DRV_STEP  5
 
 // LEDC Каналы (ШИМ)
-#define LEDC_CH_A 4   
-#define LEDC_CH_B 5   
-#define LEDC_CH_C 6   
+#define LEDC_CH_A 4
+#define LEDC_CH_B 5
+#define LEDC_CH_C 6
 
 // Прочая периферия
-#define SERVO_PIN   27  
-#define OLED_SDA    25  
-#define OLED_SCL    26  
-#define BATT_PIN    34  
-#define LED_FRONT_PIN 32 
-#define LED_REAR_PIN  33 
+#define SERVO_PIN   27
+#define OLED_SDA    25
+#define OLED_SCL    26
+#define BATT_PIN    34
+#define LED_FRONT_PIN 32
+#define LED_REAR_PIN  33
 
 #define BATT_DIVIDER_FACTOR 0.2680
 
@@ -66,12 +69,12 @@ AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
 unsigned long lastCmdMillis = 0;
-const unsigned long CMD_TIMEOUT_MS = 500; 
+const unsigned long CMD_TIMEOUT_MS = 500;
 
-int motorAVal = 0; 
-int motorBVal = 0; 
-int motorCVal = 0; 
-int servoVal  = 0; 
+int motorAVal = 0;
+int motorBVal = 0;
+int motorCVal = 0;
+int servoVal  = 0;
 
 bool reverseA = false;
 bool reverseB = false;
@@ -121,7 +124,7 @@ void setDCBridge(int in1, int in2, int pwmChannel, int val) {
 void setDRV8825Motor(int dirPin, int pwmChannel, int val) {
   val = constrain(val, -100, 100);
   digitalWrite(dirPin, val >= 0 ? HIGH : LOW);
-  
+
   if (val == 0) {
     ledcWrite(pwmChannel, 0);
   } else {
@@ -135,11 +138,11 @@ void setDRV8825Motor(int dirPin, int pwmChannel, int val) {
 void applyMotorA(int val) {
   motorAVal = val;
   setDCBridge(TB_AIN1, TB_AIN2, LEDC_CH_A, reverseA ? -val : val);
-  
+
   if (engineSimOn && currentMode == MODE_CAR) {
     int aux = (int)(33.0 + 67.0 * abs(motorAVal) / 100.0 + 0.5);
     int actualB = reverseB ? -aux : aux;
-    motorBVal = actualB; 
+    motorBVal = actualB;
     setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_B, actualB);
   }
 }
@@ -158,16 +161,16 @@ void updateDriverStandby() {
   bool active = (motorAVal != 0) || (motorBVal != 0) || (motorCVal != 0) || (servoVal != 0) || engineSimOn;
   // TB6612 включается HIGH, DRV8825 включается LOW
   digitalWrite(TB_STBY, active ? HIGH : LOW);
-  digitalWrite(DRV_EN, active ? LOW : HIGH); 
+  digitalWrite(DRV_EN, active ? LOW : HIGH);
 }
 
 void stopAll() {
-  motorAVal = 0; 
+  motorAVal = 0;
   motorCVal = 0;
-  applyMotorA(0); 
+  applyMotorA(0);
   applyMotorC(0);
   applySteer(0);
-  
+
   if (!engineSimOn) {
     motorBVal = 0;
     applyMotorB(0);
@@ -182,7 +185,7 @@ int   wifiRssi = 0;
 
 #define LOW_BATTERY_THRESHOLD_V 6.0
 #define BATTERY_DISCONNECTED_V  0.5
-#define REST_SETTLE_MS 400 
+#define REST_SETTLE_MS 400
 
 bool wasAtRest = true;
 unsigned long restStartMillis = 0;
@@ -253,7 +256,7 @@ void buildStatus(char *buf, size_t n) {
 void drawModeIcon() {
   int x = 92, y = 42;
   display.drawRect(x, y, 24, 16, SSD1306_WHITE); // Base
-  
+
   if (currentMode == MODE_TANK) {
     display.fillRect(x + 6, y + 2, 12, 8, SSD1306_WHITE); // Turret
     display.drawLine(x + 12, y + 6, x + 28, y + 6, SSD1306_WHITE); // Barrel
@@ -271,7 +274,7 @@ void drawModeIcon() {
 void updateDisplay() {
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
-  
+
   // Предупреждение о разряде
   if (lowBattCount >= 3) {
     display.setTextSize(2);
@@ -371,7 +374,7 @@ void onWsEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventTyp
   }
 }
 
-// ---------- HTML GUI v0.3.1 ----------
+// ---------- HTML GUI v0.3.2 ----------
 const char PAGE_HTML[] PROGMEM = R"HTML(
 <!DOCTYPE html>
 <html lang="ru">
@@ -650,7 +653,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div>
         <div class="brand-title">Lego Control Center</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-addr">192.168.4.1</span></div>
-        <div class="brand-ver">0.3.1</div>
+        <div class="brand-ver">0.3.2</div>
       </div>
     </div>
     <div class="mode-switch">
@@ -923,9 +926,13 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 (function(){
   function $(id){ return document.getElementById(id); }
   var ws = null;
-  
+
+  // --- Единый источник правды для heartbeat: последние отправленные значения A/B/C/S ---
+  var lastSent = {A:0, B:0, C:0, S:0};
+
   function txWS(obj){
     $('telemetry').textContent = JSON.stringify(obj);
+    if (obj.ch && lastSent.hasOwnProperty(obj.ch)) lastSent[obj.ch] = obj.val;
     if(ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
   }
 
@@ -985,14 +992,14 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     };
   }
 
-  // Heartbeat для предотвращения срабатывания watchdog при удержании
+  // Heartbeat: раз в 150мс переотправляем ВСЕ 4 канала из lastSent, без привязки к режиму.
+  // Прошивка сама решит, что из этого актуально для текущего режима — лишний пакет по
+  // неиспользуемому каналу безвреден. Это чинит Cruise Control и Тестовый режим разом.
   setInterval(function(){
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    if (mode === 0) {
-      ws.send(JSON.stringify({ch:'A', val: drive})); // В танке drive мапится на A/B через UI, но здесь упростим для примера, лучше использовать state
-    }
-    // Отправляем актуальные состояния для сброса таймера
-    ws.send(JSON.stringify({ch:'A', val: $('slider-left').value})); // Упрощенно для демо heartbeat
+    ['A','B','C','S'].forEach(function(ch){
+      ws.send(JSON.stringify({ch:ch, val:lastSent[ch]}));
+    });
   }, 150);
 
   function updateWifi(r){
@@ -1075,8 +1082,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
      'slider-test-A','slider-test-B','slider-test-C','slider-test-S'].forEach(function(id){ var e=$(id); if(e) e.value=0; });
     ['val-left','val-right','val-drive','val-aux','val-C','val-steer',
      'val-test-A','val-test-B','val-test-C','val-test-S'].forEach(function(id){ var e=$(id); if(e) e.textContent='0%'; });
-    
-    // ИСПРАВЛЕНО: Убран сброс состояния фар, так как они привязаны к физическому выходу, а не к режиму
+
+    // Фары намеренно не трогаем — привязаны к физическому выходу, не к режиму.
     txWS({ch:'A', val:0}); txWS({ch:'B', val:0}); txWS({ch:'C', val:0}); txWS({ch:'S', val:0});
     paintTank(0,0); paintCar();
   }
@@ -1496,7 +1503,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 void setup() {
   Serial.begin(115200);
 
-  pinMode(TB_STBY, OUTPUT); digitalWrite(TB_STBY, LOW); 
+  pinMode(TB_STBY, OUTPUT); digitalWrite(TB_STBY, LOW);
   pinMode(DRV_EN, OUTPUT); digitalWrite(DRV_EN, HIGH); // DRV8825 активен при LOW
 
   pinMode(TB_AIN1, OUTPUT); pinMode(TB_AIN2, OUTPUT);
@@ -1515,7 +1522,7 @@ void setup() {
 
   Wire.begin(OLED_SDA, OLED_SCL);
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-  
+
   // Статус инициализации на OLED
   display.clearDisplay();
   display.setTextSize(2);
@@ -1535,7 +1542,7 @@ void setup() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
     req->send(200, "text/html", PAGE_HTML);
   });
-  
+
   // Эндпоинт для калибровки
   server.on("/calib", HTTP_GET, [](AsyncWebServerRequest *req) {
     String json = "{\"trim\":" + String(steerCenterUs - 1500) +
