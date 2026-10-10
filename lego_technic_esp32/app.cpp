@@ -988,6 +988,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       $('ws-status').textContent='НЕТ СВЯЗИ'; 
       $('ws-status').style.color='var(--rose)'; 
       updateWifi(0);
+      zeroAll();
       setTimeout(initWS,1000); 
     };
     ws.onmessage = function(e){
