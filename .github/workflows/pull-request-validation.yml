@@ -60,11 +60,29 @@ jobs:
           arduino-cli lib install "Adafruit GFX Library"
           arduino-cli lib install "Adafruit SSD1306"
           arduino-cli lib install "ESP32Servo"
-          arduino-cli lib install "ElegantOTA"
+          arduino-cli lib install "ElegantOTA@3.1.0"
+
+      - name: Enable ElegantOTA async mode
+        run: |
+          OTA_HEADER="$HOME/Arduino/libraries/ElegantOTA/src/ElegantOTA.h"
+
+          if [ ! -f "$OTA_HEADER" ]; then
+            echo "ERROR: ElegantOTA.h not found at $OTA_HEADER"
+            exit 1
+          fi
+
+          if grep -q '^#define ELEGANTOTA_USE_ASYNC_WEBSERVER 0' "$OTA_HEADER"; then
+            sed -i \
+              's/^#define ELEGANTOTA_USE_ASYNC_WEBSERVER 0/#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1/' \
+              "$OTA_HEADER"
+          fi
+
+          grep -n 'ELEGANTOTA_USE_ASYNC_WEBSERVER' "$OTA_HEADER"
 
       - name: Compile ESP32 firmware
         run: |
           set -euo pipefail
+
           arduino-cli compile \
             --fqbn esp32:esp32:esp32 \
             --warnings all \
