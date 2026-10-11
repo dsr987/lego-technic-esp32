@@ -86,6 +86,7 @@ jobs:
           arduino-cli compile \
             --fqbn esp32:esp32:esp32 \
             --warnings all \
+            --build-property "compiler.cpp.extra_flags=-DELEGANTOTA_USE_ASYNC_WEBSERVER=1" \
             lego_technic_esp32
 
   project-audit:
