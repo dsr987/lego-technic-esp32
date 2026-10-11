@@ -7,6 +7,7 @@ on:
       - feature/four-dc-motors
     paths:
       - 'lego_technic_esp32/**'
+      - 'firmware/bootstrap/**'
       - 'tools/extract_html.py'
       - 'tools/extract_changelog.py'
       - 'tools/update_readme_version.py'
@@ -51,6 +52,7 @@ jobs:
           generated=false
           site=false
           workflow_changed=false
+          bootstrap_changed=false
 
           # Manual runs intentionally rebuild and regenerate everything.
           if [[ "$EVENT_NAME" != "push" ]]; then
@@ -58,6 +60,7 @@ jobs:
             generated=true
             site=true
             workflow_changed=true
+            bootstrap_changed=true
           else
             before="$EVENT_BEFORE"
             if [[ -z "$before" || "$before" =~ ^0+$ ]]; then
@@ -66,6 +69,7 @@ jobs:
               generated=true
               site=true
               workflow_changed=true
+              bootstrap_changed=true
             else
               changed_files="$(git diff --name-only "$before" "$GITHUB_SHA")"
               echo "Changed files:"
@@ -81,6 +85,13 @@ jobs:
                 esac
 
                 case "$file" in
+                  firmware/bootstrap/LEGO_Technic_ESP32_Bootstrap/LEGO_Technic_ESP32_Bootstrap.ino)
+                    bootstrap_changed=true
+                    site=true
+                    ;;
+                esac
+
+                case "$file" in
                   lego_technic_esp32/app.cpp|\
                   lego_technic_esp32/web_page.cpp|\
                   tools/extract_html.py|\
@@ -91,7 +102,7 @@ jobs:
                 esac
 
                 case "$file" in
-                  index.html|README.md|CHANGELOG.md|docs/*)
+                  index.html|README.md|CHANGELOG.md|docs/*|firmware/bootstrap/*)
                     site=true
                     ;;
                   .github/workflows/ci-build-deploy.yml)
@@ -108,6 +119,7 @@ jobs:
             echo "generated=$generated"
             echo "site=$site"
             echo "workflow_changed=$workflow_changed"
+            echo "bootstrap_changed=$bootstrap_changed"
           } >> "$GITHUB_OUTPUT"
 
       - name: Set up Python
@@ -169,30 +181,56 @@ jobs:
             echo "::notice::No published firmware available; performing the initial build."
           fi
 
-      - name: Decide whether ESP32 compilation is needed
+      - name: Decide which firmware targets need compilation
         id: build_decision
         shell: bash
         env:
           FIRMWARE_CHANGED: ${{ steps.changes.outputs.firmware }}
+          BOOTSTRAP_CHANGED: ${{ steps.changes.outputs.bootstrap_changed }}
           WORKFLOW_CHANGED: ${{ steps.changes.outputs.workflow_changed }}
           EVENT_NAME: ${{ github.event_name }}
           REF: ${{ github.ref }}
           EXISTING_FIRMWARE: ${{ steps.existing_firmware.outputs.exists }}
         run: |
           set -euo pipefail
+
           if [[ "$FIRMWARE_CHANGED" == "true" || \
                 "$WORKFLOW_CHANGED" == "true" || \
                 "$EVENT_NAME" == "workflow_dispatch" || \
                 ( "$REF" == "refs/heads/main" && "$EXISTING_FIRMWARE" != "true" ) ]]; then
-            echo "build=true" >> "$GITHUB_OUTPUT"
-            echo "ESP32 build is required."
+            app_build=true
           else
-            echo "build=false" >> "$GITHUB_OUTPUT"
-            echo "ESP32 build is not required for this change."
+            app_build=false
           fi
 
+          # Refresh the bootstrap binary on bootstrap source changes and whenever
+          # the main app is built, so the repository's prebuilt image stays fresh.
+          if [[ "$BOOTSTRAP_CHANGED" == "true" || \
+                "$app_build" == "true" || \
+                "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            bootstrap_build=true
+          else
+            bootstrap_build=false
+          fi
+
+          if [[ "$app_build" == "true" || "$bootstrap_build" == "true" ]]; then
+            toolchain=true
+          else
+            toolchain=false
+          fi
+
+          {
+            echo "app_build=$app_build"
+            echo "bootstrap_build=$bootstrap_build"
+            echo "toolchain=$toolchain"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Build main firmware: $app_build"
+          echo "Build OTA bootstrap: $bootstrap_build"
+          echo "Install/build toolchain: $toolchain"
+
       - name: Install pyserial for esptool
-        if: ${{ steps.build_decision.outputs.build == 'true' }}
+        if: ${{ steps.build_decision.outputs.toolchain == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -201,11 +239,11 @@ jobs:
           python3 -c "import serial; print('python3 can import pySerial:', serial.__version__)"
 
       - name: Install arduino-cli
-        if: ${{ steps.build_decision.outputs.build == 'true' }}
+        if: ${{ steps.build_decision.outputs.toolchain == 'true' }}
         uses: arduino/setup-arduino-cli@v2
 
       - name: Configure ESP32 board index
-        if: ${{ steps.build_decision.outputs.build == 'true' }}
+        if: ${{ steps.build_decision.outputs.toolchain == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -214,7 +252,7 @@ jobs:
             https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
 
       - name: Install ESP32 Core 2.0.9
-        if: ${{ steps.build_decision.outputs.build == 'true' }}
+        if: ${{ steps.build_decision.outputs.toolchain == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -222,7 +260,7 @@ jobs:
           arduino-cli core install esp32:esp32@2.0.9
 
       - name: Install firmware libraries
-        if: ${{ steps.build_decision.outputs.build == 'true' }}
+        if: ${{ steps.build_decision.outputs.toolchain == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -237,7 +275,7 @@ jobs:
             "ElegantOTA"
 
       - name: Configure ElegantOTA for async web server
-        if: ${{ steps.build_decision.outputs.build == 'true' }}
+        if: ${{ steps.build_decision.outputs.toolchain == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -257,7 +295,7 @@ jobs:
           fi
 
       - name: Compile ESP32 firmware
-        if: ${{ steps.build_decision.outputs.build == 'true' }}
+        if: ${{ steps.build_decision.outputs.app_build == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -269,7 +307,7 @@ jobs:
             lego_technic_esp32
 
       - name: Prepare newly compiled firmware
-        if: ${{ steps.build_decision.outputs.build == 'true' }}
+        if: ${{ steps.build_decision.outputs.app_build == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -290,7 +328,7 @@ jobs:
           sha256sum downloads/build_firmware_for_esp32.bin
 
       - name: Reuse published firmware when compilation is skipped
-        if: ${{ github.ref == 'refs/heads/main' && steps.build_decision.outputs.build == 'false' }}
+        if: ${{ github.ref == 'refs/heads/main' && steps.build_decision.outputs.app_build == 'false' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -300,24 +338,24 @@ jobs:
           echo "Reusing existing firmware for this site-only update."
 
       - name: Stage firmware artifact
-        if: ${{ steps.build_decision.outputs.build == 'true' || github.ref == 'refs/heads/main' }}
+        if: ${{ steps.build_decision.outputs.app_build == 'true' || github.ref == 'refs/heads/main' }}
         shell: bash
         run: |
           set -euo pipefail
           test -s downloads/build_firmware_for_esp32.bin
 
-          mkdir -p firmware-artifact
+          mkdir -p "$RUNNER_TEMP/firmware-artifact"
           cp downloads/build_firmware_for_esp32.bin \
-            firmware-artifact/build_firmware_for_esp32.bin
+            "$RUNNER_TEMP/firmware-artifact/build_firmware_for_esp32.bin"
 
-          # Include all Arduino build files when this run compiled firmware.
+          # Keep temporary build files outside the Pages document root.
           if [[ -d "$RUNNER_TEMP/esp32-build" ]]; then
-            mkdir -p firmware-artifact/build-output
+            mkdir -p "$RUNNER_TEMP/firmware-artifact/build-output"
             cp -a "$RUNNER_TEMP/esp32-build/." \
-              firmware-artifact/build-output/
+              "$RUNNER_TEMP/firmware-artifact/build-output/"
           fi
 
-          cat > firmware-artifact/README.txt <<'EOF'
+          cat > "$RUNNER_TEMP/firmware-artifact/README.txt" <<'EOF'
           build_firmware_for_esp32.bin is the compiled application image intended for OTA update of an already provisioned ESP32.
           The build-output directory contains additional Arduino CLI build files when they are available.
           For initial USB flashing, use the matching bootloader, partition table and application files with their correct flash offsets. Do not assume the application-only BIN is a complete flash image.
@@ -333,16 +371,93 @@ jobs:
           if [[ -z "$safe_branch" ]]; then
             safe_branch="branch"
           fi
-          artifact_name="esp32-firmware-${safe_branch}-${GITHUB_RUN_NUMBER}"
-          echo "name=${artifact_name}" >> "$GITHUB_OUTPUT"
-          echo "Artifact name: ${artifact_name}"
+          echo "branch=${safe_branch}" >> "$GITHUB_OUTPUT"
+          echo "name=esp32-firmware-${safe_branch}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "Safe artifact branch: ${safe_branch}"
+
+      - name: Compile OTA bootstrap firmware
+        if: ${{ steps.build_decision.outputs.bootstrap_build == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/bootstrap-build"
+
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32 \
+            --output-dir "$RUNNER_TEMP/bootstrap-build" \
+            firmware/bootstrap/LEGO_Technic_ESP32_Bootstrap
+
+      - name: Prepare OTA bootstrap artifact and prebuilt binary
+        if: ${{ steps.build_decision.outputs.bootstrap_build == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t bootstrap_bins < <(
+            find "$RUNNER_TEMP/bootstrap-build" \
+              -maxdepth 1 -type f -name '*.ino.bin' -print
+          )
+
+          if [[ "${#bootstrap_bins[@]}" -ne 1 ]]; then
+            echo "::error::Expected exactly one bootstrap *.ino.bin file; found ${#bootstrap_bins[@]}."
+            find "$RUNNER_TEMP/bootstrap-build" -maxdepth 1 -type f -printf '%f\n' || true
+            exit 1
+          fi
+
+          # This is the application image only. The BAT script compiles/uploads
+          # the full sketch correctly for first-time USB provisioning.
+          mkdir -p firmware/bootstrap/prebuilt
+          cp "${bootstrap_bins[0]}" firmware/bootstrap/prebuilt/esp32_ota_bootstrap.bin
+
+          mkdir -p "$RUNNER_TEMP/bootstrap-artifact/source"
+          cp "${bootstrap_bins[0]}" "$RUNNER_TEMP/bootstrap-artifact/esp32_ota_bootstrap.bin"
+          cp firmware/bootstrap/README.md "$RUNNER_TEMP/bootstrap-artifact/README.md"
+          cp firmware/bootstrap/flash_bootstrap.bat "$RUNNER_TEMP/bootstrap-artifact/"
+          cp firmware/bootstrap/install_arduino_cli.ps1 "$RUNNER_TEMP/bootstrap-artifact/"
+          cp firmware/bootstrap/patch_elegantota.ps1 "$RUNNER_TEMP/bootstrap-artifact/"
+          cp firmware/bootstrap/LEGO_Technic_ESP32_Bootstrap/LEGO_Technic_ESP32_Bootstrap.ino \
+            "$RUNNER_TEMP/bootstrap-artifact/source/"
+          mkdir -p "$RUNNER_TEMP/bootstrap-artifact/build-output"
+          cp -a "$RUNNER_TEMP/bootstrap-build/." "$RUNNER_TEMP/bootstrap-artifact/build-output/"
+
+          cat > "$RUNNER_TEMP/bootstrap-artifact/ARTIFACT_INFO.txt" <<'EOF'
+          esp32_ota_bootstrap.bin is an application-only image, not a complete flash image for a blank ESP32.
+          Use flash_bootstrap.bat on Windows for first-time USB flashing. The script compiles the sketch and uses Arduino CLI to handle the flash layout.
+          This bootstrap uses the project's current Wi-Fi AP and OTA credentials; see README.md before distributing the firmware.
+          EOF
+
+      - name: Commit prebuilt OTA bootstrap binary
+        if: ${{ steps.build_decision.outputs.bootstrap_build == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add firmware/bootstrap/prebuilt/esp32_ota_bootstrap.bin
+
+          if git diff --cached --quiet; then
+            echo "Prebuilt bootstrap binary is unchanged."
+          else
+            git commit -m "Update prebuilt ESP32 OTA bootstrap firmware"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
+
+      - name: Upload OTA bootstrap artifact
+        if: ${{ steps.build_decision.outputs.bootstrap_build == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: esp32-ota-bootstrap-${{ steps.artifact_name.outputs.branch }}-${{ github.run_number }}
+          path: ${{ runner.temp }}/bootstrap-artifact/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 6
 
       - name: Upload firmware artifact
-        if: ${{ steps.build_decision.outputs.build == 'true' || github.ref == 'refs/heads/main' }}
+        if: ${{ steps.build_decision.outputs.app_build == 'true' || github.ref == 'refs/heads/main' }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.artifact_name.outputs.name }}
-          path: firmware-artifact/
+          path: ${{ runner.temp }}/firmware-artifact/
           if-no-files-found: error
           retention-days: 14
           compression-level: 6
