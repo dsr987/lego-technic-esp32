@@ -34,7 +34,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.12'
 
       - name: Install esptool Python dependencies
         run: python3 -m pip install --upgrade pyserial
@@ -60,6 +60,7 @@ jobs:
           arduino-cli lib install "Adafruit GFX Library"
           arduino-cli lib install "Adafruit SSD1306"
           arduino-cli lib install "ESP32Servo"
+          arduino-cli lib install "ElegantOTA"
 
       - name: Compile ESP32 firmware
         run: |
@@ -80,7 +81,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.12'
 
       - name: Run project auditor
         run: python3 tools/project_auditor.py
