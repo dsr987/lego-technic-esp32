@@ -275,7 +275,7 @@ jobs:
         if: ${{ steps.build_decision.outputs.build == 'true' || github.ref == 'refs/heads/main' }}
         uses: actions/upload-artifact@v4
         with:
-          name: esp32-firmware-${{ github.ref_name }}-${{ github.run_number }}
+          name: esp32-firmware-${{ github.ref_name == 'feature/four-dc-motors' && 'feature-four-dc-motors' || github.ref_name }}-${{ github.run_number }}
           path: firmware-artifact/
           if-no-files-found: error
           retention-days: 14
