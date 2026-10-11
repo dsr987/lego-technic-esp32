@@ -1,4 +1,3 @@
-
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
@@ -11,7 +10,6 @@
 // ---------- Состояние, объявленное в app.cpp ----------
 
 extern Mode currentMode;
-
 extern unsigned long lastCmdMillis;
 
 extern int motorAVal;
@@ -35,7 +33,6 @@ extern int steerMaxAngleDeg;
 // ---------- Функции из других модулей ----------
 
 extern void applyLeds();
-
 extern void buildStatus(char *buf, size_t n);
 
 // ---------- Обработка входящих команд WebSocket ----------
@@ -44,6 +41,19 @@ void handleWsMessage(uint8_t *data, size_t len) {
   StaticJsonDocument<256> doc;
 
   if (deserializeJson(doc, data, len) != DeserializationError::Ok) {
+    return;
+  }
+
+  // Heartbeat подтверждает, что вкладка управления ещё активна.
+  // Он намеренно НЕ повторяет значения слайдеров: после срабатывания
+  // CMD_TIMEOUT_MS остановленные моторы не должны запуститься повторно
+  // только потому, что браузер восстановил соединение или таймеры.
+  if (doc.containsKey("hb")) {
+    if (doc.size() != 1 || !doc["hb"].is<int>() || doc["hb"].as<int>() != 1) {
+      return;
+    }
+
+    lastCmdMillis = millis();
     return;
   }
 
@@ -141,7 +151,7 @@ void handleWsMessage(uint8_t *data, size_t len) {
     saveReverseD(reverseD);
   }
 
-  // Передний и задний свет
+  // Передний и задний свет. Физическая реализация applyLeds() пока пустая.
   if (doc.containsKey("ledF")) {
     if (!doc["ledF"].is<int>()) return;
 
@@ -158,11 +168,13 @@ void handleWsMessage(uint8_t *data, size_t len) {
     applyLeds();
   }
 
-  // Симуляция двигателя
+  // Имитация ДВС разрешена только в режиме классического автомобиля.
+  // При выключении B обязательно получает нулевую команду.
   if (doc.containsKey("eng")) {
     if (!doc["eng"].is<int>()) return;
 
-    engineSimOn = doc["eng"].as<int>() == 1;
+    bool requestedEngineSim = doc["eng"].as<int>() == 1;
+    engineSimOn = requestedEngineSim && currentMode == MODE_CAR;
 
     if (!engineSimOn) {
       motorBVal = 0;
