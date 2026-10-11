@@ -1,10 +1,17 @@
-name: Deploy to GitHub Pages
+
+name: Build firmware and deploy GitHub Pages
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
     paths:
       - 'index.html'
+      - 'lego_technic_esp32/**'
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -13,27 +20,115 @@ permissions:
   id-token: write
 
 concurrency:
-  group: "pages"
+  group: pages
   cancel-in-progress: false
 
 jobs:
-  deploy:
+  build-and-deploy:
+    name: Build ESP32 firmware and deploy site
+    if: github.ref == 'refs/heads/main'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Pages
+      - name: Configure GitHub Pages
         uses: actions/configure-pages@v4
 
-      - name: Upload artifact
+      - name: Install arduino-cli
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Configure ESP32 board index
+        shell: bash
+        run: |
+          set -euo pipefail
+          arduino-cli config init --overwrite
+          arduino-cli config add board_manager.additional_urls \
+            https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+
+      - name: Install ESP32 core 2.0.9
+        shell: bash
+        run: |
+          set -euo pipefail
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32@2.0.9
+
+      - name: Install firmware libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          arduino-cli lib install \
+            "ESPAsyncWebServer@3.1.0" \
+            "AsyncTCP@1.1.4" \
+            "ArduinoJson" \
+            "Adafruit SSD1306" \
+            "Adafruit GFX Library" \
+            "Adafruit BusIO" \
+            "ESP32Servo" \
+            "ElegantOTA"
+
+      - name: Configure ElegantOTA for async web server
+        shell: bash
+        run: |
+          set -euo pipefail
+          find ~/Arduino/libraries ~/.arduino15 \
+            -path "*ElegantOTA/src/ElegantOTA.h" \
+            -type f -print0 2>/dev/null \
+            | while IFS= read -r -d '' file; do
+                sed -i \
+                  's/#define ELEGANTOTA_USE_ASYNC_WEBSERVER 0/#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1/' \
+                  "$file"
+              done
+
+      - name: Compile ESP32 firmware
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/esp32-build"
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32 \
+            --output-dir "$RUNNER_TEMP/esp32-build" \
+            lego_technic_esp32
+
+      - name: Publish latest firmware to Pages
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mapfile -t firmware_bins < <(
+            find "$RUNNER_TEMP/esp32-build" \
+              -maxdepth 1 -type f -name '*.ino.bin' -print
+          )
+
+          if [[ "${#firmware_bins[@]}" -ne 1 ]]; then
+            echo "::error::Expected exactly one compiled *.ino.bin file; found ${#firmware_bins[@]}."
+            echo "Files in build output:"
+            find "$RUNNER_TEMP/esp32-build" \
+              -maxdepth 1 -type f -printf '%f\n' || true
+            exit 1
+          fi
+
+          mkdir -p downloads
+          cp "${firmware_bins[0]}" \
+            downloads/build_firmware_for_esp32.bin
+
+          test -s downloads/build_firmware_for_esp32.bin
+
+          echo "Firmware published at:"
+          echo "/downloads/build_firmware_for_esp32.bin"
+
+          ls -lh downloads/build_firmware_for_esp32.bin
+          sha256sum downloads/build_firmware_for_esp32.bin
+
+      - name: Upload site and firmware to GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
           path: '.'
 
-      - name: Deploy to GitHub Pages
+      - name: Deploy GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
