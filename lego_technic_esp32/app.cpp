@@ -77,7 +77,7 @@ AsyncWebSocket ws("/ws");
 // Если команды управления не поступают в течение
 // указанного времени, моторы должны быть остановлены.
 unsigned long lastCmdMillis = 0;
-const unsigned long CMD_TIMEOUT_MS = 500;
+const unsigned long CMD_TIMEOUT_MS = 500; // safety: стоп, если нет команд
 
 // ---------- Текущие значения каналов ----------
 
@@ -127,6 +127,8 @@ void applyLeds() {
 
 // ---------- Формирование статуса для веб-интерфейса ----------
 
+// Статус для веб-страницы: v — вольты (живой), p — % заряда (только в покое), r — RSSI,
+// m — режим, c — WS-клиенты, ra/rb — реверс каналов A/B, lf/lr — состояние LED, es — имитация оборотов
 void buildStatus(char *buf, size_t n) {
   snprintf(
     buf,
@@ -310,7 +312,7 @@ void loop() {
 
     // Отправляем актуальный статус подключённым клиентам.
     if (ws.count() > 0) {
-      char buf[200];
+      char buf[160];
       buildStatus(buf, sizeof(buf));
       ws.textAll(buf);
     }
