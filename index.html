@@ -793,7 +793,18 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 
   function initWS(){
     ws = new WebSocket('ws://' + location.host + '/ws');
-    ws.onopen = function(){ $('ws-status').textContent='ESP32'; $('ws-status').style.color='var(--emerald)'; };
+    ws.onopen = function(){
+      $('ws-status').textContent='ESP32';
+      $('ws-status').style.color='var(--emerald)';
+
+      // После любого переподключения не восстанавливаем прежние команды моторов.
+      // Сначала сбрасываем интерфейс и отправляем нулевые значения каналов.
+      eng = false;
+      updateEngUI();
+      applyEngGate();
+      zeroAll();
+      txWS({eng:0});
+    };
     ws.onclose = function(){ 
       $('ws-status').textContent='НЕТ СВЯЗИ'; 
       $('ws-status').style.color='var(--rose)'; 
@@ -822,14 +833,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     };
   }
 
-  // Heartbeat: раз в 150мс переотправляем ВСЕ 4 канала из lastSent, без привязки к режиму.
-  // Прошивка сама решит, что из этого актуально для текущего режима — лишний пакет по
-  // неиспользуемому каналу безвреден. Это чинит Cruise Control и Тестовый режим разом.
+  // Heartbeat поддерживает связь с прошивкой, но не повторяет команды моторов.
+  // Иначе после тайм-аута или переподключения старое значение слайдера могло бы
+  // неожиданно снова запустить мотор.
   setInterval(function(){
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ['A','B','C','D','S'].forEach(function(ch){
-      ws.send(JSON.stringify({ch:ch, val:lastSent[ch]}));
-    });
+    ws.send(JSON.stringify({hb:1}));
   }, 150);
 
   function updateWifi(r){
@@ -898,7 +907,13 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     // При уменьшении числа моторов лишние каналы сбрасываем, чтобы старое значение не осталось активным.
     if(motorCount < 4){ auxD=0; if($('slider-D')) $('slider-D').value=0; if($('val-D')) $('val-D').textContent='0%'; txWS({ch:'D',val:0}); }
     if(motorCount < 3){ auxC=0; if($('slider-C')) $('slider-C').value=0; if($('val-C')) $('val-C').textContent='0%'; txWS({ch:'C',val:0}); }
-    if(motorCount < 2){ eng=false; auxMode=false; auxB=0; if($('slider-aux')) $('slider-aux').value=0; if($('val-aux')) $('val-aux').textContent='0%'; txWS({ch:'B',val:0}); }
+    if(motorCount < 2){
+      eng=false; auxMode=false; auxB=0;
+      if($('slider-aux')) $('slider-aux').value=0;
+      if($('val-aux')) $('val-aux').textContent='0%';
+      txWS({eng:0});
+      txWS({ch:'B',val:0});
+    }
     updateEngUI(); applyEngGate(); updateAuxModeUI();
     setTimeout(fitSliders, 30);
   }
@@ -916,6 +931,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     $('classic-panel').classList.toggle('hidden', m!==1);
     $('test-panel').classList.toggle('hidden', m!==2);
 
+    if(m!==1 && eng){
+      eng=false;
+      updateEngUI();
+      applyEngGate();
+      txWS({eng:0});
+    }
     if(m===0){ eng=false; updateEngUI(); applyEngGate(); }
     txWS({mode: m});
     zeroAll(); setTimeout(fitSliders,30);
@@ -1150,7 +1171,14 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     paintCar();
   }
 
-  $('eng-btn').onclick=function(){ if(motorCount<2) return; vibrateClick(); eng=!eng; updateEngUI(); applyEngGate(); txWS({eng: eng?1:0}); };
+  $('eng-btn').onclick=function(){
+    if(motorCount<2 || mode!==1) return;
+    vibrateClick();
+    eng=!eng;
+    updateEngUI();
+    applyEngGate();
+    txWS({eng: eng?1:0});
+  };
   $('aux-mode-btn').onclick=function(){ vibrateClick(); auxMode=!auxMode; updateAuxModeUI(); applyEngGate(); };
 
   var springs = {};
