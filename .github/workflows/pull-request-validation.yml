@@ -62,30 +62,6 @@ jobs:
           arduino-cli lib install "ESP32Servo"
           arduino-cli lib install "ElegantOTA@3.1.0"
 
-      - name: Enable ElegantOTA async mode
-        run: |
-          set -euo pipefail
-
-          OTA_HEADER="$HOME/Arduino/libraries/ElegantOTA/src/ElegantOTA.h"
-
-          if [ ! -f "$OTA_HEADER" ]; then
-            echo "ERROR: ElegantOTA.h not found at $OTA_HEADER"
-            exit 1
-          fi
-
-          if grep -q '^#define ELEGANTOTA_USE_ASYNC_WEBSERVER 0' "$OTA_HEADER"; then
-            sed -i \
-              's/^#define ELEGANTOTA_USE_ASYNC_WEBSERVER 0/#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1/' \
-              "$OTA_HEADER"
-          fi
-
-          if ! grep -q '^#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1' "$OTA_HEADER"; then
-            echo "ERROR: Could not enable ElegantOTA async mode"
-            exit 1
-          fi
-
-          grep -n 'ELEGANTOTA_USE_ASYNC_WEBSERVER' "$OTA_HEADER"
-
       - name: Compile ESP32 firmware
         run: |
           set -euo pipefail
