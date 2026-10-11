@@ -400,7 +400,7 @@ V_batt = V_adc / 0.2680
 
 При ручном запуске workflow выполняет полную сборку. При обычном push некоторые шаги пропускаются, если изменившиеся файлы их не требуют.
 
-Статический аудит проекта
+###Статический аудит проекта
 
 Скрипт `tools/project_auditor.py` запускается в составе workflow `pull-request-validation.yml` как задача `Project Static Audit` при проверке Pull Request в `main`.
 
