@@ -37,10 +37,14 @@
 <a href="firmware/bootstrap/README.md"><img src="https://img.shields.io/badge/Открыть-инструкцию%20первой%20прошивки-blue?style=for-the-badge" alt="Открыть инструкцию по первоначальной прошивке ESP32"></a>
 
 ## Текущий статус
-**Текущая версия прошивки: 0.5.26**
-<a href="https://github.com/dsr987/lego-technic-esp32/blob/feature/four-dc-motors/lego_technic_esp32/app.cpp"><img src="https://img.shields.io/badge/Посмотреть-код-blue?style=for-the-badge" alt="Посмотреть код"></a>
 
-<a href="https://dsr987.github.io/lego-technic-esp32/downloads/build_firmware_for_esp32.bin" download><img src="https://img.shields.io/badge/Скачать-прошивку%20ESP32-blue?style=for-the-badge" alt="Скачать прошивку для ESP32"></a>
+**Текущая версия прошивки: 0.5.26**
+
+<a href="https://github.com/dsr987/lego-technic-esp32/blob/main/lego_technic_esp32/app.cpp"><img src="https://img.shields.io/badge/Посмотреть-код-blue?style=for-the-badge" alt="Посмотреть код"></a>
+
+<a href="https://github.com/dsr987/lego-technic-esp32/releases/latest/download/lego_technic_esp32.ino.bin" download><img src="https://img.shields.io/badge/Скачать-прошивку%20ESP32-blue?style=for-the-badge" alt="Скачать прошивку для ESP32"></a>
+
+Ссылка на скачивание всегда ведёт к файлу последнего опубликованного GitHub Release. Этот бинарный файл предназначен для обновления уже настроенного контроллера через ElegantOTA, а не для первоначальной прошивки новой платы через USB.
 
 Проект находится в стадии разработки. Перед выпуском необходимо проверить управление на реальной модели и подтвердить работу аппаратных функций.
 
