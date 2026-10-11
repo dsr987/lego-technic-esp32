@@ -1,6 +1,3 @@
-![Build](https://github.com/dsr987/lego-technic-esp32/actions/workflows/build.yml/badge.svg)
-![Extract GUI](https://github.com/dsr987/lego-technic-esp32/actions/workflows/extract-gui.yml/badge.svg)
-
 # LEGO Technic ESP32
 
 **Оживляем LEGO Technic с помощью ESP32, открытого кода и собственного веб-интерфейса.**
