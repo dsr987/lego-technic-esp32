@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="650" viewBox="0 0 1000 650" role="img" aria-labelledby="title desc">
+  <title id="title">Архитектура LEGO Technic ESP32</title>
+  <desc id="desc">Смартфон соединяется по Wi-Fi с ESP32; HTTP и WebSocket передают интерфейс и команды модулям управления, а прошивка управляет моторами, рулём и мониторингом.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker>
+    <style>
+      .label{font:600 18px system-ui, sans-serif;fill:#0f172a}.small{font:14px system-ui,sans-serif;fill:#334155}.title{font:700 25px system-ui,sans-serif;fill:#0f172a}.muted{font:13px system-ui,sans-serif;fill:#475569}.line{stroke:#64748b;stroke-width:2.4;fill:none;marker-end:url(#arrow)}.box{stroke-width:1.5;rx:15}
+    </style>
+  </defs>
+  <rect width="1000" height="650" rx="22" fill="#f8fafc"/>
+  <text x="500" y="42" text-anchor="middle" class="title">Как устроено управление</text>
+  <rect x="35" y="95" width="240" height="115" class="box" fill="#e0f2fe" stroke="#38bdf8"/>
+  <text x="155" y="131" text-anchor="middle" class="label">Телефон / ПК</text>
+  <text x="155" y="159" text-anchor="middle" class="small">Браузер</text>
+  <text x="155" y="184" text-anchor="middle" class="muted">HTML · CSS · JavaScript</text>
+  <path d="M275 152 H365" class="line"/>
+  <text x="320" y="137" text-anchor="middle" class="small">Wi-Fi</text>
+  <rect x="370" y="90" width="255" height="125" class="box" fill="#dbeafe" stroke="#60a5fa"/>
+  <text x="497" y="127" text-anchor="middle" class="label">ESP32</text>
+  <text x="497" y="155" text-anchor="middle" class="small">HTTP-сервер</text>
+  <text x="497" y="181" text-anchor="middle" class="small">WebSocket /ws</text>
+  <path d="M497 215 V265" class="line"/>
+  <rect x="370" y="270" width="255" height="75" class="box" fill="#ede9fe" stroke="#a78bfa"/>
+  <text x="497" y="300" text-anchor="middle" class="label">web_control</text>
+  <text x="497" y="325" text-anchor="middle" class="small">Проверка и маршрутизация команд</text>
+  <path d="M497 345 V380 H165 V420" class="line"/>
+  <path d="M497 380 V420" class="line"/>
+  <path d="M497 380 H830 V420" class="line"/>
+  <rect x="35" y="425" width="260" height="105" class="box" fill="#dcfce7" stroke="#4ade80"/>
+  <text x="165" y="458" text-anchor="middle" class="label">motor_control</text>
+  <text x="165" y="484" text-anchor="middle" class="small">Драйверы TB6612FNG × 2</text>
+  <text x="165" y="508" text-anchor="middle" class="small">Моторы A · B · C · D</text>
+  <rect x="370" y="425" width="255" height="105" class="box" fill="#fef3c7" stroke="#fbbf24"/>
+  <text x="497" y="458" text-anchor="middle" class="label">steering_control</text>
+  <text x="497" y="484" text-anchor="middle" class="small">Сервопривод S</text>
+  <text x="497" y="508" text-anchor="middle" class="small">Центр и угол поворота</text>
+  <rect x="700" y="425" width="265" height="105" class="box" fill="#f1f5f9" stroke="#94a3b8"/>
+  <text x="832" y="458" text-anchor="middle" class="label">Мониторинг</text>
+  <text x="832" y="484" text-anchor="middle" class="small">battery_monitor · display_control</text>
+  <text x="832" y="508" text-anchor="middle" class="small">Батарея · Wi-Fi · OLED</text>
+  <path d="M832 425 V380 H625" class="line"/>
+  <rect x="160" y="565" width="680" height="53" rx="12" fill="#e2e8f0" stroke="#94a3b8"/>
+  <text x="500" y="587" text-anchor="middle" class="small">preferences_manager</text>
+  <text x="500" y="606" text-anchor="middle" class="muted">Сохраняет реверс и калибровку в NVS</text>
+</svg>
