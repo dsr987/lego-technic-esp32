@@ -1,0 +1,145 @@
+name: Publish Firmware Release
+
+on:
+  workflow_run:
+    workflows:
+      - Build, Extract and Deploy
+    types:
+      - completed
+    branches:
+      - main
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    name: Publish freshly compiled ESP32 firmware
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download firmware artifact from the completed build
+        uses: actions/download-artifact@v4
+        with:
+          name: esp32-firmware-main-${{ github.event.workflow_run.run_number }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: ${{ runner.temp }}/firmware-artifact
+
+      - name: Find freshly compiled firmware and calculate checksum
+        id: compiled
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          artifact_dir="$RUNNER_TEMP/firmware-artifact"
+          build_dir="$artifact_dir/build-output"
+
+          # The main workflow also uploads an artifact for site-only updates.
+          # Those artifacts do not contain build-output, so they must not create
+          # a new release containing an older firmware image.
+          if [[ ! -d "$build_dir" ]]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::This run did not compile firmware; release publication is skipped."
+            exit 0
+          fi
+
+          mapfile -t binaries < <(
+            find "$build_dir" -maxdepth 1 -type f -name '*.ino.bin' -print
+          )
+
+          if [[ "${#binaries[@]}" -eq 0 ]]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No compiled *.ino.bin found; release publication is skipped."
+            exit 0
+          fi
+
+          if [[ "${#binaries[@]}" -ne 1 ]]; then
+            echo "::error::Expected one compiled *.ino.bin; found ${#binaries[@]}."
+            printf '%s\n' "${binaries[@]}"
+            exit 1
+          fi
+
+          asset="$artifact_dir/lego_technic_esp32.ino.bin"
+          cp "${binaries[0]}" "$asset"
+          test -s "$asset"
+
+          (
+            cd "$artifact_dir"
+            sha256sum lego_technic_esp32.ino.bin > lego_technic_esp32.ino.bin.sha256
+          )
+
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+          echo "Compiled firmware SHA-256:"
+          cat "$artifact_dir/lego_technic_esp32.ino.bin.sha256"
+
+      - name: Check out the source commit
+        if: ${{ steps.compiled.outputs.publish == 'true' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Ensure this is the newest firmware source on main
+        if: ${{ steps.compiled.outputs.publish == 'true' }}
+        id: latest_source
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+
+          if git diff --quiet "$SOURCE_SHA" origin/main -- lego_technic_esp32; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+            echo "This build matches the current firmware source on main."
+          else
+            result=$?
+            if [[ "$result" -ne 1 ]]; then
+              echo "::error::Could not compare this build with the current main firmware source."
+              exit "$result"
+            fi
+            echo "current=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::A newer firmware source is already on main; skipping this older release."
+          fi
+
+      - name: Read firmware version
+        if: ${{ steps.compiled.outputs.publish == 'true' && steps.latest_source.outputs.current == 'true' }}
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          version="$(sed -n 's/^[[:space:]]*\*[[:space:]]*Версия разработки:[[:space:]]*//p' lego_technic_esp32/app.cpp | head -n 1 | tr -d '\r')"
+          if [[ -z "$version" ]]; then
+            echo "::error::Could not read firmware version from app.cpp."
+            exit 1
+          fi
+
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+          echo "Firmware version: $version"
+
+      - name: Publish firmware as a GitHub Release
+        if: ${{ steps.compiled.outputs.publish == 'true' && steps.latest_source.outputs.current == 'true' }}
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: firmware-build-${{ github.event.workflow_run.id }}
+          name: LEGO Technic ESP32 — ${{ steps.version.outputs.value }} (build ${{ github.event.workflow_run.run_number }})
+          target_commitish: ${{ github.event.workflow_run.head_sha }}
+          make_latest: true
+          body: |
+            Автоматически собранная прошивка проекта LEGO Technic ESP32.
+
+            Версия: `${{ steps.version.outputs.value }}`.
+            Исходный commit: `${{ github.event.workflow_run.head_sha }}`.
+
+            Файл `.ino.bin` предназначен для обновления уже настроенного контроллера через ElegantOTA. Для первоначальной прошивки новой платы через USB используйте инструкции в `firmware/bootstrap/`.
+
+            Контрольная сумма SHA-256 приложена отдельным файлом.
+          files: |
+            ${{ runner.temp }}/firmware-artifact/lego_technic_esp32.ino.bin
+            ${{ runner.temp }}/firmware-artifact/lego_technic_esp32.ino.bin.sha256
+          fail_on_unmatched_files: true
+          token: ${{ secrets.GITHUB_TOKEN }}
