@@ -20,7 +20,7 @@
 
 ## Демо
 
-<a href="https://dsr987.github.io/lego-technic-esp32/index.html?v=0.5.25%20GUI%20Update%203.0"><img src="https://img.shields.io/badge/Попробовать-WebGUI-blue?style=for-the-badge" alt="Попробовать WebGUI"></a>
+<a href="index.html"><img src="https://img.shields.io/badge/Попробовать-WebGUI-blue?style=for-the-badge" alt="Попробовать WebGUI"></a>
 
 Демо позволяет изучить интерфейс без подключения к физической модели.
 
