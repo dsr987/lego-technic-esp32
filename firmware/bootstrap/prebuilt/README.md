@@ -1,3 +1,3 @@
-The CI workflow writes `esp32_ota_bootstrap.bin` here after a successful bootstrap compile and commits it to the current branch.
+Рабочий процесс непрерывной интеграции записывает `esp32_ota_bootstrap.bin` сюда после успешной начальной компиляции и фиксирует изменения в текущей ветке.
 
-The generated `.bin` is an application image for OTA upload to an already provisioned ESP32; it is not a complete flash image for a blank device. Use `../flash_bootstrap.bat` for first-time USB flashing.
+Сгенерированный `.bin` — это образ приложения для OTA-обновления уже подготовленного ESP32; это не полный образ флэш-памяти для нового устройства. Используйте `../flash_bootstrap.bat` для первого обновления через USB.
