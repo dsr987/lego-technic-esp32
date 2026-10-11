@@ -30,8 +30,15 @@
 
 В технической документации собраны архитектура, устройство программных модулей, распиновка, аппаратная часть, сборка и план испытаний.
 
+
 ## Текущий статус
+
 **Текущая версия прошивки: 0.5.25 GUI Update 3.0**
+
+<a href="https://github.com/dsr987/lego-technic-esp32/blob/feature/four-dc-motors/lego_technic_esp32/app.cpp"><img src="https://img.shields.io/badge/Посмотреть-код-blue?style=for-the-badge" alt="Посмотреть код"></a>
+
+<a href="https://dsr987.github.io/lego-technic-esp32/downloads/build_firmware_for_esp32.bin" download><img src="https://img.shields.io/badge/Скачать-прошивку%20ESP32-blue?style=for-the-badge" alt="Скачать прошивку для ESP32"></a>
+
 Проект находится в стадии разработки. Перед выпуском необходимо проверить управление на реальной модели и подтвердить работу аппаратных функций.
 
 
