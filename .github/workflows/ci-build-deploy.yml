@@ -1,4 +1,3 @@
-
 name: Build, Extract and Deploy
 
 on:
@@ -38,6 +37,29 @@ jobs:
         with:
           ref: ${{ github.ref_name }}
 
+      - name: Detect changed files
+        uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          # On push, compare this update to the previous commit on the same branch.
+          # Manual runs are forced to regenerate and build below.
+          base: ${{ github.event_name == 'push' && github.ref || 'main' }}
+          filters: |
+            firmware:
+              - 'lego_technic_esp32/**'
+            generated:
+              - 'lego_technic_esp32/app.cpp'
+              - 'lego_technic_esp32/web_page.cpp'
+              - 'tools/extract_html.py'
+              - 'tools/extract_changelog.py'
+              - 'tools/update_readme_version.py'
+            site:
+              - 'index.html'
+              - 'README.md'
+              - 'CHANGELOG.md'
+              - 'docs/**'
+              - '.github/workflows/ci-build-deploy.yml'
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -45,6 +67,7 @@ jobs:
 
       - name: Select HTML source
         id: html_source
+        if: ${{ steps.changes.outputs.generated == 'true' || github.event_name == 'workflow_dispatch' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -59,24 +82,78 @@ jobs:
           fi
 
       - name: Extract GUI HTML
+        if: ${{ steps.changes.outputs.generated == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
           python3 tools/extract_html.py \
             "${{ steps.html_source.outputs.file }}" \
             index.html
 
       - name: Extract CHANGELOG
+        if: ${{ steps.changes.outputs.generated == 'true' || github.event_name == 'workflow_dispatch' }}
         run: |
           python3 tools/extract_changelog.py \
             lego_technic_esp32/app.cpp \
             CHANGELOG.md
 
       - name: Update README version
+        if: ${{ steps.changes.outputs.generated == 'true' || github.event_name == 'workflow_dispatch' }}
         run: python3 tools/update_readme_version.py
 
+      - name: Check for existing published firmware
+        id: existing_firmware
+        if: ${{ github.ref == 'refs/heads/main' && steps.changes.outputs.firmware != 'true' && github.event_name != 'workflow_dispatch' }}
+        shell: bash
+        env:
+          FIRMWARE_URL: https://dsr987.github.io/lego-technic-esp32/downloads/build_firmware_for_esp32.bin
+        run: |
+          set -uo pipefail
+          if curl --fail --silent --show-error --location --max-time 30 \
+              "${FIRMWARE_URL}?cachebust=${GITHUB_SHA}" \
+              --output "$RUNNER_TEMP/current-firmware.bin" \
+              && test -s "$RUNNER_TEMP/current-firmware.bin"; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Existing published firmware found; compilation can be skipped."
+          else
+            rm -f "$RUNNER_TEMP/current-firmware.bin"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No published firmware available; performing the initial build."
+          fi
+
+      - name: Decide whether ESP32 compilation is needed
+        id: build_decision
+        shell: bash
+        env:
+          FIRMWARE_CHANGED: ${{ steps.changes.outputs.firmware }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          EXISTING_FIRMWARE: ${{ steps.existing_firmware.outputs.exists }}
+        run: |
+          set -euo pipefail
+          if [[ "$FIRMWARE_CHANGED" == "true" || \
+                "$EVENT_NAME" == "workflow_dispatch" || \
+                ( "$REF" == "refs/heads/main" && "$EXISTING_FIRMWARE" != "true" ) ]]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+            echo "ESP32 build is required."
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "ESP32 build is not required for this change."
+          fi
+
+      - name: Install pyserial for esptool
+        if: ${{ steps.build_decision.outputs.build == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip pyserial==3.5
+          python -c "import serial; print('pySerial available:', serial.__version__)"
+          python3 -c "import serial; print('python3 can import pySerial:', serial.__version__)"
+
       - name: Install arduino-cli
+        if: ${{ steps.build_decision.outputs.build == 'true' }}
         uses: arduino/setup-arduino-cli@v2
 
       - name: Configure ESP32 board index
+        if: ${{ steps.build_decision.outputs.build == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -85,12 +162,16 @@ jobs:
             https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
 
       - name: Install ESP32 Core 2.0.9
+        if: ${{ steps.build_decision.outputs.build == 'true' }}
+        shell: bash
         run: |
           set -euo pipefail
           arduino-cli core update-index
           arduino-cli core install esp32:esp32@2.0.9
 
       - name: Install firmware libraries
+        if: ${{ steps.build_decision.outputs.build == 'true' }}
+        shell: bash
         run: |
           set -euo pipefail
           arduino-cli lib install \
@@ -104,20 +185,27 @@ jobs:
             "ElegantOTA"
 
       - name: Configure ElegantOTA for async web server
+        if: ${{ steps.build_decision.outputs.build == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
-
-          find ~/Arduino/libraries ~/.arduino15 \
-            -path '*ElegantOTA/src/ElegantOTA.h' \
-            -type f -print0 2>/dev/null |
+          found=0
           while IFS= read -r -d '' file; do
+            found=1
             sed -i \
               's/#define ELEGANTOTA_USE_ASYNC_WEBSERVER 0/#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1/' \
               "$file"
-          done
+          done < <(
+            find ~/Arduino/libraries ~/.arduino15 \
+              -path '*ElegantOTA/src/ElegantOTA.h' \
+              -type f -print0 2>/dev/null || true
+          )
+          if [[ "$found" == "0" ]]; then
+            echo "::warning::ElegantOTA.h not found by patch step; continuing to compile."
+          fi
 
       - name: Compile ESP32 firmware
+        if: ${{ steps.build_decision.outputs.build == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -128,38 +216,44 @@ jobs:
             --output-dir "$RUNNER_TEMP/esp32-build" \
             lego_technic_esp32
 
-      - name: Prepare firmware download
+      - name: Prepare newly compiled firmware
+        if: ${{ steps.build_decision.outputs.build == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
-
           mapfile -t firmware_bins < <(
             find "$RUNNER_TEMP/esp32-build" \
               -maxdepth 1 -type f -name '*.ino.bin' -print
           )
 
           if [[ "${#firmware_bins[@]}" -ne 1 ]]; then
-            echo "::error::Expected exactly one *.ino.bin file"
-            find "$RUNNER_TEMP/esp32-build" -maxdepth 1 -type f
+            echo "::error::Expected exactly one *.ino.bin file; found ${#firmware_bins[@]}."
+            find "$RUNNER_TEMP/esp32-build" -maxdepth 1 -type f -printf '%f\n' || true
             exit 1
           fi
 
           mkdir -p downloads
-          cp "${firmware_bins[0]}" \
-            downloads/build_firmware_for_esp32.bin
-
+          cp "${firmware_bins[0]}" downloads/build_firmware_for_esp32.bin
           test -s downloads/build_firmware_for_esp32.bin
           sha256sum downloads/build_firmware_for_esp32.bin
 
-      - name: Commit generated project files
+      - name: Reuse published firmware when compilation is skipped
+        if: ${{ github.ref == 'refs/heads/main' && steps.build_decision.outputs.build == 'false' }}
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p downloads
+          cp "$RUNNER_TEMP/current-firmware.bin" downloads/build_firmware_for_esp32.bin
+          test -s downloads/build_firmware_for_esp32.bin
+          echo "Reusing existing firmware for this site-only update."
 
+      - name: Commit generated project files
+        if: ${{ steps.changes.outputs.generated == 'true' || github.event_name == 'workflow_dispatch' }}
+        shell: bash
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
-          git config user.email \
-            "41898282+github-actions[bot]@users.noreply.github.com"
-
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html CHANGELOG.md README.md
 
           if git diff --cached --quiet; then
@@ -170,11 +264,11 @@ jobs:
           fi
 
       - name: Configure GitHub Pages
-        if: github.ref == 'refs/heads/main'
+        if: ${{ github.ref == 'refs/heads/main' }}
         uses: actions/configure-pages@v5
 
       - name: Upload Pages artifact
-        if: github.ref == 'refs/heads/main'
+        if: ${{ github.ref == 'refs/heads/main' }}
         uses: actions/upload-pages-artifact@v3
         with:
           path: .
@@ -182,7 +276,7 @@ jobs:
   deploy:
     name: Deploy GitHub Pages
     needs: build-and-package
-    if: github.ref == 'refs/heads/main'
+    if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
 
     environment:
