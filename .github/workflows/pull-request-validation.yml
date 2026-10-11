@@ -64,6 +64,8 @@ jobs:
 
       - name: Enable ElegantOTA async mode
         run: |
+          set -euo pipefail
+
           OTA_HEADER="$HOME/Arduino/libraries/ElegantOTA/src/ElegantOTA.h"
 
           if [ ! -f "$OTA_HEADER" ]; then
@@ -77,6 +79,11 @@ jobs:
               "$OTA_HEADER"
           fi
 
+          if ! grep -q '^#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1' "$OTA_HEADER"; then
+            echo "ERROR: Could not enable ElegantOTA async mode"
+            exit 1
+          fi
+
           grep -n 'ELEGANTOTA_USE_ASYNC_WEBSERVER' "$OTA_HEADER"
 
       - name: Compile ESP32 firmware
@@ -85,7 +92,7 @@ jobs:
 
           arduino-cli compile \
             --fqbn esp32:esp32:esp32 \
-            --warnings all \
+            --warnings default \
             --build-property "compiler.cpp.extra_flags=-DELEGANTOTA_USE_ASYNC_WEBSERVER=1" \
             lego_technic_esp32
 
