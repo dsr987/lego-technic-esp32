@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="510" viewBox="0 0 1000 510" role="img" aria-labelledby="title desc">
+  <title id="title">Программные модули</title>
+  <desc id="desc">app.cpp координирует веб-модули и аппаратные модули. Конфигурация и Preferences обслуживают общие настройки.</desc>
+  <defs>
+    <marker id="arr" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker>
+    <style>.t{font:600 17px system-ui,sans-serif;fill:#0f172a}.s{font:13px system-ui,sans-serif;fill:#334155}.l{stroke:#64748b;stroke-width:2.2;fill:none;marker-end:url(#arr)}.b{stroke-width:1.5;rx:13}</style>
+  </defs>
+  <rect width="1000" height="510" rx="20" fill="#f8fafc"/>
+  <rect x="360" y="28" width="280" height="68" class="b" fill="#dbeafe" stroke="#60a5fa"/>
+  <text x="500" y="56" text-anchor="middle" class="t">app.cpp</text><text x="500" y="78" text-anchor="middle" class="s">Запуск и координация</text>
+  <path d="M500 96 V123 H165 V155 M500 123 V155 M500 123 H835 V155" class="l"/>
+  <rect x="35" y="160" width="260" height="92" class="b" fill="#ede9fe" stroke="#a78bfa"/><text x="165" y="192" text-anchor="middle" class="t">web_page</text><text x="165" y="217" text-anchor="middle" class="s">Интерфейс HTML/CSS/JS</text><text x="165" y="237" text-anchor="middle" class="s">web_control · WebSocket</text>
+  <rect x="370" y="160" width="260" height="92" class="b" fill="#dcfce7" stroke="#4ade80"/><text x="500" y="192" text-anchor="middle" class="t">motor_control</text><text x="500" y="217" text-anchor="middle" class="s">Моторы A/B/C/D</text><text x="500" y="237" text-anchor="middle" class="s">STBY · PWM · остановка</text>
+  <rect x="705" y="160" width="260" height="92" class="b" fill="#fef3c7" stroke="#fbbf24"/><text x="835" y="192" text-anchor="middle" class="t">steering_control</text><text x="835" y="217" text-anchor="middle" class="s">Сервопривод S</text><text x="835" y="237" text-anchor="middle" class="s">Центр · угол</text>
+  <path d="M165 252 V294 H335 V321 M500 252 V321 M835 252 V294 H665 V321" class="l"/>
+  <rect x="75" y="327" width="260" height="88" class="b" fill="#e0f2fe" stroke="#38bdf8"/><text x="205" y="359" text-anchor="middle" class="t">hardware_config.h</text><text x="205" y="384" text-anchor="middle" class="s">GPIO и LEDC-каналы</text>
+  <rect x="370" y="327" width="260" height="88" class="b" fill="#f1f5f9" stroke="#94a3b8"/><text x="500" y="359" text-anchor="middle" class="t">battery_monitor</text><text x="500" y="384" text-anchor="middle" class="s">Батарея и Wi-Fi RSSI</text>
+  <rect x="665" y="327" width="260" height="88" class="b" fill="#fce7f3" stroke="#f472b6"/><text x="795" y="359" text-anchor="middle" class="t">display_control</text><text x="795" y="384" text-anchor="middle" class="s">Статус на OLED</text>
+  <rect x="260" y="445" width="480" height="45" rx="12" fill="#e2e8f0" stroke="#94a3b8"/><text x="500" y="464" text-anchor="middle" class="t">preferences_manager</text><text x="500" y="482" text-anchor="middle" class="s">Сохранение и загрузка параметров из NVS</text>
+</svg>

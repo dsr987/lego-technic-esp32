@@ -1,0 +1,89 @@
+name: Pull Request Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'lego_technic_esp32/**'
+      - 'tools/**'
+      - '.github/workflows/**'
+      - 'platformio.ini'
+      - 'arduino-cli.yaml'
+      - 'CHANGELOG.md'
+      - 'README.md'
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  firmware-build:
+    name: Build ESP32 Firmware
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install esptool Python dependencies
+        run: python3 -m pip install --upgrade pyserial
+
+      - name: Set up Arduino CLI
+        uses: arduino/setup-arduino-cli@v2
+
+      - name: Configure Arduino CLI
+        run: |
+          arduino-cli config init
+          arduino-cli config set board_manager.additional_urls \
+            https://espressif.github.io/arduino-esp32/package_esp32_index.json
+          arduino-cli core update-index
+
+      - name: Install ESP32 platform
+        run: arduino-cli core install esp32:esp32@2.0.9
+
+      - name: Install firmware libraries
+        run: |
+          arduino-cli lib install "ESPAsyncWebServer"
+          arduino-cli lib install "AsyncTCP"
+          arduino-cli lib install "ArduinoJson"
+          arduino-cli lib install "Adafruit GFX Library"
+          arduino-cli lib install "Adafruit SSD1306"
+          arduino-cli lib install "ESP32Servo"
+          arduino-cli lib install "ElegantOTA@3.1.0"
+
+      - name: Compile ESP32 firmware
+        run: |
+          set -euo pipefail
+
+          arduino-cli compile \
+            --fqbn esp32:esp32:esp32 \
+            --warnings default \
+            --build-property "compiler.cpp.extra_flags=-DELEGANTOTA_USE_ASYNC_WEBSERVER=1" \
+            lego_technic_esp32
+
+  project-audit:
+    name: Project Static Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run project auditor
+        run: python3 tools/project_auditor.py

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="390" viewBox="0 0 1000 390" role="img" aria-labelledby="title desc">
+  <title id="title">CI/CD: проверка, сборка и публикация</title>
+  <desc id="desc">Git push запускает определение изменений. При необходимости генерируются HTML и changelog, затем один раз собирается прошивка. В main сайт и бинарник публикуются через GitHub Pages. Project Auditor работает отдельно.</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#64748b"/></marker><style>.t{font:600 17px system-ui,sans-serif;fill:#0f172a}.s{font:13px system-ui,sans-serif;fill:#334155}.m{font:12px system-ui,sans-serif;fill:#475569}.line{stroke:#64748b;stroke-width:2.2;fill:none;marker-end:url(#arrow)}.b{stroke-width:1.5;rx:13}</style></defs>
+  <rect width="1000" height="390" rx="20" fill="#f8fafc"/>
+  <text x="500" y="34" text-anchor="middle" class="t" style="font-size:22px">Автоматизация проекта</text>
+  <rect x="30" y="82" width="150" height="76" class="b" fill="#e0f2fe" stroke="#38bdf8"/><text x="105" y="110" text-anchor="middle" class="t">Push / Run</text><text x="105" y="133" text-anchor="middle" class="s">GitHub Actions</text>
+  <path d="M180 120 H220" class="line"/>
+  <rect x="225" y="82" width="170" height="76" class="b" fill="#ede9fe" stroke="#a78bfa"/><text x="310" y="110" text-anchor="middle" class="t">Определение</text><text x="310" y="133" text-anchor="middle" class="s">изменённых файлов</text>
+  <path d="M395 120 H435" class="line"/>
+  <rect x="440" y="66" width="230" height="108" class="b" fill="#fef3c7" stroke="#fbbf24"/><text x="555" y="94" text-anchor="middle" class="t">Генерация файлов</text><text x="555" y="119" text-anchor="middle" class="s">HTML · CHANGELOG · README</text><text x="555" y="143" text-anchor="middle" class="m">только когда требуется</text>
+  <path d="M555 174 V212" class="line"/>
+  <rect x="420" y="216" width="270" height="82" class="b" fill="#dcfce7" stroke="#4ade80"/><text x="555" y="246" text-anchor="middle" class="t">Сборка ESP32</text><text x="555" y="271" text-anchor="middle" class="s">одна компиляция при изменении прошивки</text>
+  <path d="M690 257 H735" class="line"/>
+  <rect x="740" y="216" width="230" height="82" class="b" fill="#dbeafe" stroke="#60a5fa"/><text x="855" y="245" text-anchor="middle" class="t">Публикация Pages</text><text x="855" y="269" text-anchor="middle" class="s">только ветка main</text>
+  <path d="M310 158 V337 H500" class="line"/>
+  <rect x="505" y="315" width="300" height="54" class="b" fill="#f1f5f9" stroke="#94a3b8"/><text x="655" y="338" text-anchor="middle" class="t">Project Auditor</text><text x="655" y="357" text-anchor="middle" class="s">Отдельная проверка кода</text>
+  <text x="855" y="320" text-anchor="middle" class="m">index.html + downloads/*.bin</text>
+</svg>
