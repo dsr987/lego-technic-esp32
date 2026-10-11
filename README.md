@@ -1,3 +1,6 @@
+![Build, Extract and Deploy](https://github.com/dsr987/lego-technic-esp32/actions/workflows/ci-build-deploy.yml/badge.svg)
+![Project Auditor](https://github.com/dsr987/lego-technic-esp32/actions/workflows/project_auditor.yml/badge.svg)
+
 # LEGO Technic ESP32
 
 **Оживляем LEGO Technic с помощью ESP32, открытого кода и собственного веб-интерфейса.**
@@ -10,10 +13,10 @@
 
 - Управление четырьмя DC-моторами.
 - Рулевое управление сервоприводом.
-- Собственный веб-пульт без отдельного приложения.
+- Собственный веб-пульт без отдельного мобильного приложения.
 - Настройки и сохранение параметров контроллера.
 - Мониторинг состояния системы.
-- Развитие проекта на основе открытого исходного кода.
+- Развитие проекта на основе открытого кода.
 
 ## Демо
 
@@ -27,15 +30,21 @@
 
 В технической документации собраны архитектура, устройство программных модулей, распиновка, аппаратная часть, сборка и план испытаний.
 
+## Первоначальная прошивка ESP32
+
+Если у тебя новая ESP32 без прошивки, все необходимые файлы для первоначальной настройки через USB находятся в папке `firmware/bootstrap/`. Там есть стартовая прошивка с ElegantOTA, BAT-скрипт для Windows, вспомогательные скрипты и пошаговая инструкция. После первоначальной прошивки основную прошивку можно загружать через браузер с помощью ElegantOTA.
+
+<a href="firmware/bootstrap/README.md"><img src="https://img.shields.io/badge/Открыть-инструкцию%20первой%20прошивки-blue?style=for-the-badge" alt="Открыть инструкцию по первоначальной прошивке ESP32"></a>
 
 ## Текущий статус
+
 **Текущая версия прошивки: 0.5.25 GUI Update 3.0**
+
 <a href="https://github.com/dsr987/lego-technic-esp32/blob/feature/four-dc-motors/lego_technic_esp32/app.cpp"><img src="https://img.shields.io/badge/Посмотреть-код-blue?style=for-the-badge" alt="Посмотреть код"></a>
 
 <a href="https://dsr987.github.io/lego-technic-esp32/downloads/build_firmware_for_esp32.bin" download><img src="https://img.shields.io/badge/Скачать-прошивку%20ESP32-blue?style=for-the-badge" alt="Скачать прошивку для ESP32"></a>
 
 Проект находится в стадии разработки. Перед выпуском необходимо проверить управление на реальной модели и подтвердить работу аппаратных функций.
-
 
 ## История изменений
 
