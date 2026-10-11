@@ -402,19 +402,15 @@ V_batt = V_adc / 0.2680
 
 Статический аудит проекта
 
-Скрипт "tools/project_auditor.py" запускается в составе workflow "pull-request-validation.yml" как задача "Project Static Audit" при проверке Pull Request в "main".
+Скрипт `tools/project_auditor.py` запускается в составе workflow `pull-request-validation.yml` как задача `Project Static Audit` при проверке Pull Request в `main`.
 
 Аудит проверяет структуру исходников и наличие критически важных защитных механизмов, включая обработку heartbeat, переподключение WebSocket и остановку моторов при отсутствии управляющих команд.
 
-Отдельный workflow "project_auditor.yml" удалён, чтобы избежать дублирования запусков GitHub Actions. Сам скрипт и все его проверки сохранены.
+Отдельный workflow `project_auditor.yml` удалён, чтобы избежать дублирования запусков GitHub Actions. Сам скрипт и все его проверки сохранены.
 
-"pull-request-validation.yml"
+`pull-request-validation.yml`
 
 Workflow запускается при создании или обновлении Pull Request в "main", если изменены файлы, подпадающие под настроенные фильтры. Он выполняет статический аудит проекта и компилирует прошивку ESP32 перед слиянием. Он не публикует GitHub Pages и не создаёт релизы.
-
-### `pull-request-validation.yml`
-
-Workflow проверки PR запускается при создании или обновлении pull request в `main`. Он не публикует Pages, не создаёт релизы и не отправляет изменения в ветку. Он повторно проверяет структуру проекта и актуальность генерируемых файлов, затем компилирует основную прошивку и bootstrap, чтобы проверить результат, который планируется влить в `main`.
 
 ### `publish-release.yml`
 
