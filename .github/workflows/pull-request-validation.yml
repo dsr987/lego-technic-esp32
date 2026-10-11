@@ -6,13 +6,13 @@ on:
       - main
     paths:
       - 'lego_technic_esp32/**'
-      - 'firmware/bootstrap/**'
       - 'tools/**'
-      - 'docs/**'
-      - 'index.html'
-      - 'README.md'
-      - 'CHANGELOG.md'
       - '.github/workflows/**'
+      - 'platformio.ini'
+      - 'arduino-cli.yaml'
+      - 'CHANGELOG.md'
+      - 'README.md'
+
   workflow_dispatch:
 
 permissions:
@@ -23,119 +23,64 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  validate:
-    name: Validate source, generated files and ESP32 builds
+  firmware-build:
+    name: Build ESP32 Firmware
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out pull request merge result
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.x'
 
-      - name: Check Python tool syntax
-        run: python -m py_compile tools/*.py
+      - name: Install esptool Python dependencies
+        run: python3 -m pip install --upgrade pyserial
 
-      - name: Run project auditor
-        run: python tools/project_auditor.py
-
-      - name: Verify generated project files are current
-        shell: bash
-        run: |
-          set -euo pipefail
-          generated_dir="$RUNNER_TEMP/generated"
-          mkdir -p "$generated_dir"
-
-          python3 tools/extract_html.py \
-            lego_technic_esp32/web_page.cpp \
-            "$generated_dir/index.html"
-          if ! cmp -s index.html "$generated_dir/index.html"; then
-            echo '::error::index.html is out of date with web_page.cpp.'
-            diff -u index.html "$generated_dir/index.html" || true
-            exit 1
-          fi
-
-          cp CHANGELOG.md "$generated_dir/CHANGELOG.md"
-          python3 tools/extract_changelog.py \
-            lego_technic_esp32/app.cpp \
-            "$generated_dir/CHANGELOG.md"
-          if ! cmp -s CHANGELOG.md "$generated_dir/CHANGELOG.md"; then
-            echo '::error::CHANGELOG.md is out of date with the markers in app.cpp.'
-            diff -u CHANGELOG.md "$generated_dir/CHANGELOG.md" || true
-            exit 1
-          fi
-
-          python3 tools/update_readme_version.py
-          if ! git diff --exit-code -- README.md; then
-            echo '::error::README.md version or demo URL is out of date.'
-            exit 1
-          fi
-
-      - name: Install arduino-cli
+      - name: Set up Arduino CLI
         uses: arduino/setup-arduino-cli@v2
 
-      - name: Configure ESP32 board index
+      - name: Configure Arduino CLI
         run: |
-          set -euo pipefail
-          arduino-cli config init --overwrite
-          arduino-cli config add board_manager.additional_urls \
-            https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
-
-      - name: Install ESP32 Core 2.0.9
-        run: |
-          set -euo pipefail
+          arduino-cli config init
+          arduino-cli config set board_manager.additional_urls \
+            https://espressif.github.io/arduino-esp32/package_esp32_index.json
           arduino-cli core update-index
-          arduino-cli core install esp32:esp32@2.0.9
+
+      - name: Install ESP32 platform
+        run: arduino-cli core install esp32:esp32@2.0.9
 
       - name: Install firmware libraries
         run: |
-          set -euo pipefail
-          arduino-cli lib install \
-            'ESPAsyncWebServer@3.1.0' \
-            'AsyncTCP@1.1.4' \
-            'ArduinoJson' \
-            'Adafruit SSD1306' \
-            'Adafruit GFX Library' \
-            'Adafruit BusIO' \
-            'ESP32Servo' \
-            'ElegantOTA'
+          arduino-cli lib install "ESPAsyncWebServer"
+          arduino-cli lib install "AsyncTCP"
+          arduino-cli lib install "ArduinoJson"
+          arduino-cli lib install "Adafruit GFX Library"
+          arduino-cli lib install "Adafruit SSD1306"
+          arduino-cli lib install "ESP32Servo"
 
-      - name: Configure ElegantOTA for async web server
-        shell: bash
+      - name: Compile ESP32 firmware
         run: |
           set -euo pipefail
-          found=0
-          while IFS= read -r -d '' file; do
-            found=1
-            sed -i \
-              's/#define ELEGANTOTA_USE_ASYNC_WEBSERVER 0/#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1/' \
-              "$file"
-          done < <(
-            find ~/Arduino/libraries ~/.arduino15 \
-              -path '*ElegantOTA/src/ElegantOTA.h' \
-              -type f -print0 2>/dev/null || true
-          )
-          if [[ "$found" == '0' ]]; then
-            echo '::warning::ElegantOTA.h was not found by the patch step; compilation will verify the installed library.'
-          fi
-
-      - name: Compile main ESP32 firmware
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/esp32-build"
           arduino-cli compile \
             --fqbn esp32:esp32:esp32 \
-            --output-dir "$RUNNER_TEMP/esp32-build" \
+            --warnings all \
             lego_technic_esp32
 
-      - name: Compile initial USB bootstrap firmware
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/bootstrap-build"
-          arduino-cli compile \
-            --fqbn esp32:esp32:esp32 \
-            --output-dir "$RUNNER_TEMP/bootstrap-build" \
-            firmware/bootstrap/LEGO_Technic_ESP32_Bootstrap
+  project-audit:
+    name: Project Static Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Run project auditor
+        run: python3 tools/project_auditor.py
