@@ -1,5 +1,4 @@
 ![Build, Extract and Deploy](https://github.com/dsr987/lego-technic-esp32/actions/workflows/ci-build-deploy.yml/badge.svg)
-![Project Auditor](https://github.com/dsr987/lego-technic-esp32/actions/workflows/project_auditor.yml/badge.svg)
 
 # LEGO Technic ESP32
 
