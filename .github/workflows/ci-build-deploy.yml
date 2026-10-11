@@ -36,29 +36,79 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
+          fetch-depth: 0
 
       - name: Detect changed files
-        uses: dorny/paths-filter@v3
         id: changes
-        with:
-          # On push, compare this update to the previous commit on the same branch.
-          # Manual runs are forced to regenerate and build below.
-          base: ${{ github.event_name == 'push' && github.ref || 'main' }}
-          filters: |
-            firmware:
-              - 'lego_technic_esp32/**'
-            generated:
-              - 'lego_technic_esp32/app.cpp'
-              - 'lego_technic_esp32/web_page.cpp'
-              - 'tools/extract_html.py'
-              - 'tools/extract_changelog.py'
-              - 'tools/update_readme_version.py'
-            site:
-              - 'index.html'
-              - 'README.md'
-              - 'CHANGELOG.md'
-              - 'docs/**'
-              - '.github/workflows/ci-build-deploy.yml'
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          firmware=false
+          generated=false
+          site=false
+          workflow_changed=false
+
+          # Manual runs intentionally rebuild and regenerate everything.
+          if [[ "$EVENT_NAME" != "push" ]]; then
+            firmware=true
+            generated=true
+            site=true
+            workflow_changed=true
+          else
+            before="$EVENT_BEFORE"
+            if [[ -z "$before" || "$before" =~ ^0+$ ]]; then
+              # First push to a branch: treat it as a full update.
+              firmware=true
+              generated=true
+              site=true
+              workflow_changed=true
+            else
+              changed_files="$(git diff --name-only "$before" "$GITHUB_SHA")"
+              echo "Changed files:"
+              printf '%s\n' "$changed_files"
+
+              while IFS= read -r file; do
+                [[ -z "$file" ]] && continue
+
+                case "$file" in
+                  lego_technic_esp32/*)
+                    firmware=true
+                    ;;
+                esac
+
+                case "$file" in
+                  lego_technic_esp32/app.cpp|\
+                  lego_technic_esp32/web_page.cpp|\
+                  tools/extract_html.py|\
+                  tools/extract_changelog.py|\
+                  tools/update_readme_version.py)
+                    generated=true
+                    ;;
+                esac
+
+                case "$file" in
+                  index.html|README.md|CHANGELOG.md|docs/*)
+                    site=true
+                    ;;
+                  .github/workflows/ci-build-deploy.yml)
+                    site=true
+                    workflow_changed=true
+                    ;;
+                esac
+              done <<< "$changed_files"
+            fi
+          fi
+
+          {
+            echo "firmware=$firmware"
+            echo "generated=$generated"
+            echo "site=$site"
+            echo "workflow_changed=$workflow_changed"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -67,7 +117,7 @@ jobs:
 
       - name: Select HTML source
         id: html_source
-        if: ${{ steps.changes.outputs.generated == 'true' || github.event_name == 'workflow_dispatch' }}
+        if: ${{ steps.changes.outputs.generated == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -82,26 +132,26 @@ jobs:
           fi
 
       - name: Extract GUI HTML
-        if: ${{ steps.changes.outputs.generated == 'true' || github.event_name == 'workflow_dispatch' }}
+        if: ${{ steps.changes.outputs.generated == 'true' }}
         run: |
           python3 tools/extract_html.py \
             "${{ steps.html_source.outputs.file }}" \
             index.html
 
       - name: Extract CHANGELOG
-        if: ${{ steps.changes.outputs.generated == 'true' || github.event_name == 'workflow_dispatch' }}
+        if: ${{ steps.changes.outputs.generated == 'true' }}
         run: |
           python3 tools/extract_changelog.py \
             lego_technic_esp32/app.cpp \
             CHANGELOG.md
 
       - name: Update README version
-        if: ${{ steps.changes.outputs.generated == 'true' || github.event_name == 'workflow_dispatch' }}
+        if: ${{ steps.changes.outputs.generated == 'true' }}
         run: python3 tools/update_readme_version.py
 
       - name: Check for existing published firmware
         id: existing_firmware
-        if: ${{ github.ref == 'refs/heads/main' && steps.changes.outputs.firmware != 'true' && github.event_name != 'workflow_dispatch' }}
+        if: ${{ github.ref == 'refs/heads/main' && steps.changes.outputs.firmware != 'true' && steps.changes.outputs.workflow_changed != 'true' && github.event_name == 'push' }}
         shell: bash
         env:
           FIRMWARE_URL: https://dsr987.github.io/lego-technic-esp32/downloads/build_firmware_for_esp32.bin
@@ -124,12 +174,14 @@ jobs:
         shell: bash
         env:
           FIRMWARE_CHANGED: ${{ steps.changes.outputs.firmware }}
+          WORKFLOW_CHANGED: ${{ steps.changes.outputs.workflow_changed }}
           EVENT_NAME: ${{ github.event_name }}
           REF: ${{ github.ref }}
           EXISTING_FIRMWARE: ${{ steps.existing_firmware.outputs.exists }}
         run: |
           set -euo pipefail
           if [[ "$FIRMWARE_CHANGED" == "true" || \
+                "$WORKFLOW_CHANGED" == "true" || \
                 "$EVENT_NAME" == "workflow_dispatch" || \
                 ( "$REF" == "refs/heads/main" && "$EXISTING_FIRMWARE" != "true" ) ]]; then
             echo "build=true" >> "$GITHUB_OUTPUT"
@@ -144,7 +196,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m pip install --upgrade pip pyserial==3.5
+          python -m pip install pyserial==3.5
           python -c "import serial; print('pySerial available:', serial.__version__)"
           python3 -c "import serial; print('python3 can import pySerial:', serial.__version__)"
 
@@ -258,7 +310,7 @@ jobs:
           cp downloads/build_firmware_for_esp32.bin \
             firmware-artifact/build_firmware_for_esp32.bin
 
-          # Keep the full Arduino build output as well, for serial-flashing workflows.
+          # Include all Arduino build files when this run compiled firmware.
           if [[ -d "$RUNNER_TEMP/esp32-build" ]]; then
             mkdir -p firmware-artifact/build-output
             cp -a "$RUNNER_TEMP/esp32-build/." \
@@ -267,21 +319,36 @@ jobs:
 
           cat > firmware-artifact/README.txt <<'EOF'
           build_firmware_for_esp32.bin is the compiled application image intended for OTA update of an already provisioned ESP32.
-          The build-output directory contains the additional files emitted by arduino-cli, if available.
-          For first-time USB flashing, use the matching bootloader and partition files from build-output and the correct flash offsets; do not assume the application-only BIN is a complete flash image.
+          The build-output directory contains additional Arduino CLI build files when they are available.
+          For initial USB flashing, use the matching bootloader, partition table and application files with their correct flash offsets. Do not assume the application-only BIN is a complete flash image.
           EOF
+
+      - name: Prepare safe artifact name
+        id: artifact_name
+        shell: bash
+        run: |
+          set -euo pipefail
+          safe_branch="$(printf '%s' "$GITHUB_REF_NAME" \
+            | sed -E 's/[^A-Za-z0-9._-]+/-/g; s/^-+//; s/-+$//')"
+          if [[ -z "$safe_branch" ]]; then
+            safe_branch="branch"
+          fi
+          artifact_name="esp32-firmware-${safe_branch}-${GITHUB_RUN_NUMBER}"
+          echo "name=${artifact_name}" >> "$GITHUB_OUTPUT"
+          echo "Artifact name: ${artifact_name}"
 
       - name: Upload firmware artifact
         if: ${{ steps.build_decision.outputs.build == 'true' || github.ref == 'refs/heads/main' }}
         uses: actions/upload-artifact@v4
         with:
-          name: esp32-firmware-${{ github.ref_name == 'feature/four-dc-motors' && 'feature-four-dc-motors' || github.ref_name }}-${{ github.run_number }}
+          name: ${{ steps.artifact_name.outputs.name }}
           path: firmware-artifact/
           if-no-files-found: error
           retention-days: 14
+          compression-level: 6
 
       - name: Commit generated project files
-        if: ${{ steps.changes.outputs.generated == 'true' || github.event_name == 'workflow_dispatch' }}
+        if: ${{ steps.changes.outputs.generated == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
