@@ -9,6 +9,7 @@ on:
       - 'lego_technic_esp32/**'
       - 'firmware/bootstrap/**'
       - 'tools/extract_html.py'
+      - 'tools/update_gui_version.py'
       - 'tools/extract_changelog.py'
       - 'tools/update_readme_version.py'
       - 'index.html'
@@ -95,6 +96,7 @@ jobs:
                   lego_technic_esp32/app.cpp|\
                   lego_technic_esp32/web_page.cpp|\
                   tools/extract_html.py|\
+                  tools/update_gui_version.py|\
                   tools/extract_changelog.py|\
                   tools/update_readme_version.py)
                     generated=true
@@ -142,6 +144,10 @@ jobs:
             echo "::error::PAGE_HTML not found in web_page.cpp or app.cpp"
             exit 1
           fi
+
+      - name: Sync GUI version from app.cpp
+        if: ${{ steps.changes.outputs.generated == 'true' }}
+        run: python3 tools/update_gui_version.py
 
       - name: Extract GUI HTML
         if: ${{ steps.changes.outputs.generated == 'true' }}
