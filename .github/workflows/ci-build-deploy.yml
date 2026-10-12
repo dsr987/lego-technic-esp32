@@ -357,7 +357,7 @@ jobs:
           echo "name=esp32-firmware-${safe_branch}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
           echo "Safe artifact branch: ${safe_branch}"
 
-            - name: Compile OTA bootstrap firmware
+      - name: Compile OTA bootstrap firmware
         if: ${{ steps.build_decision.outputs.bootstrap_build == 'true' }}
         shell: bash
         run: |
