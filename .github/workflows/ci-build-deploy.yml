@@ -272,27 +272,7 @@ jobs:
             "Adafruit GFX Library" \
             "Adafruit BusIO" \
             "ESP32Servo" \
-            "ElegantOTA"
-
-      - name: Configure ElegantOTA for async web server
-        if: ${{ steps.build_decision.outputs.toolchain == 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          found=0
-          while IFS= read -r -d '' file; do
-            found=1
-            sed -i \
-              's/#define ELEGANTOTA_USE_ASYNC_WEBSERVER 0/#define ELEGANTOTA_USE_ASYNC_WEBSERVER 1/' \
-              "$file"
-          done < <(
-            find ~/Arduino/libraries ~/.arduino15 \
-              -path '*ElegantOTA/src/ElegantOTA.h' \
-              -type f -print0 2>/dev/null || true
-          )
-          if [[ "$found" == "0" ]]; then
-            echo "::warning::ElegantOTA.h not found by patch step; continuing to compile."
-          fi
+            "ElegantOTA@3.1.0"
 
       - name: Compile ESP32 firmware
         if: ${{ steps.build_decision.outputs.app_build == 'true' }}
@@ -303,6 +283,8 @@ jobs:
 
           arduino-cli compile \
             --fqbn esp32:esp32:esp32 \
+            --warnings default \
+            --build-property "compiler.cpp.extra_flags=-DELEGANTOTA_USE_ASYNC_WEBSERVER=1" \
             --output-dir "$RUNNER_TEMP/esp32-build" \
             lego_technic_esp32
 
