@@ -16,16 +16,15 @@
  * - ElegantOTA
  *
  * CHANGELOG_VERSION: 0.5.26
- * CHANGELOG_START
- * - Мелкие исправления и фикс багов
+ *  * CHANGELOG_START
+ * - Настройки Wi-Fi (имя сети и пароль) и учётные данные ElegantOTA вынесены в отдельный блок в начале app.cpp с поясняющими комментариями.
+ * - Настроена единая логика включения асинхронного режима ElegantOTA при компиляции основной и стартовой прошивок OTA Bootstrap.
+ * - Исправлена сборка OTA Bootstrap: добавлен необходимый параметр компиляции для работы ElegantOTA с AsyncWebServer.
+ * - Уточнена конфигурация GitHub Actions для сборки основной прошивки и OTA Bootstrap.
+ * - Удалены отдельные workflows Project Auditor и Check motor channels; статический аудит проекта сохранён в Pull Request Validation.
+ * - Обновлена схема автоматизации CI/CD в соответствии с текущей структурой GitHub Actions.
  * CHANGELOG_END
  *
- * Перед выпуском:
- * - Проверить управление всеми четырьмя моторами на реальной модели;
- * - Проверить остановку моторов при потере WebSocket-соединения;
- * - Проверить восстановление управления после переподключения;
- * - Проверить измерение батареи и работу OLED.
- * 
  */
 
 #include <Arduino.h>
@@ -48,6 +47,25 @@
 #include "display_control.h"
 #include "steering_control.h"
 #include "preferences_manager.h"
+
+// ============================================================
+// НАСТРОЙКИ ДОСТУПА — МЕНЯТЬ ЗДЕСЬ
+// ============================================================
+
+// Имя и пароль Wi-Fi-точки доступа ESP32.
+// Пароль Wi-Fi должен содержать не менее 8 символов.
+constexpr char AP_SSID[]     = "LegoTechnic";
+constexpr char AP_PASSWORD[] = "12345678";
+
+// Логин и пароль для входа в ElegantOTA (/update).
+constexpr char OTA_USERNAME[] = "admin";
+constexpr char OTA_PASSWORD[] = "admin";
+
+// ВАЖНО:
+// Такие же значения необходимо указать в файле
+// firmware/bootstrap/LEGO_Technic_ESP32_Bootstrap/
+// LEGO_Technic_ESP32_Bootstrap.ino
+// ============================================================
 
 // ---------- Периферия ----------
 
@@ -236,7 +254,7 @@ void setup() {
   applyLeds();
 
   // 7. Запуск точки доступа Wi-Fi.
-  WiFi.softAP("LegoTechnic", "12345678");
+  WiFi.softAP(AP_SSID, AP_PASSWORD);
 
   // 8. Настройка WebSocket и HTTP-сервера.
   ws.onEvent(onWsEvent);
@@ -273,8 +291,7 @@ void setup() {
    */
 
   // 9. Запуск OTA-обновления и HTTP-сервера.
-  ElegantOTA.begin(&server, "admin", "admin");
-  server.begin();
+  ElegantOTA.begin(&server, OTA_USERNAME, OTA_PASSWORD);
 
   // 10. Приводим моторы и руль в начальное состояние.
   stopAll();
