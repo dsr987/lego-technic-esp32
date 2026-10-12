@@ -1,8 +1,8 @@
 /*
  * LEGO Technic ESP32
- * Версия разработки: 0.5.27 GUI Update 3.0
+ * Версия разработки: 0.5.28 OLED Update 2.0
  *
- * Обновление веб-интерфейса GUI Update 3.0.
+ * OLED Update 2.0: новые иконки режимов, телеметрия и заставка запуска.
  *
  * Совместимость:
  * - ESP32 Arduino Core 2.0.9
@@ -14,8 +14,9 @@
  * - Preferences
  * - ElegantOTA
  *
- * CHANGELOG_VERSION: 0.5.27
+ * CHANGELOG_VERSION: 0.5.28
  * CHANGELOG_START
+ * - Обновлён OLED: иконки режимов, заряд/напряжение/клиенты, стартовый логотип и анимация Initialising.
  * - PWM мотора D перенесён на GPIO2; обновлены распиновка и техническая схема.
  * - Настройки Wi-Fi (имя сети и пароль) и учётные данные ElegantOTA вынесены в отдельный блок в начале app.cpp с поясняющими комментариями.
  * - Настроена единая логика включения асинхронного режима ElegantOTA при компиляции основной и стартовой прошивок OTA Bootstrap.
@@ -82,6 +83,7 @@ Preferences prefs;
 
 // OLED-дисплей
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
+bool oledAvailable = false;
 
 // Рулевой сервопривод
 Servo steerServo;
@@ -91,6 +93,8 @@ AsyncWebServer server(80);
 AsyncWebSocket ws("/ws");
 
 // ---------- Тайм-аут управления ----------
+
+unsigned long lastDisplayStatusMillis = 0;
 
 // Если команды управления не поступают в течение
 // указанного времени, моторы должны быть остановлены.
@@ -232,17 +236,16 @@ void setup() {
 
   // 5. Инициализация OLED-дисплея.
   Wire.begin(OLED_SDA, OLED_SCL);
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  oledAvailable = display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
 
-  display.clearDisplay();
-  display.setTextSize(2);
-  display.setCursor(20, 20);
-  display.print("INIT...");
-  display.display();
+  if (oledAvailable) {
+    // Фирменный логотип виден одну секунду.
+    showBootLogo();
+    delay(1000);
 
-  // Короткая пауза для отображения сообщения запуска.
-  // Драйверы всё это время остаются выключенными.
-  delay(1000);
+    // Сообщение остаётся на экране во время оставшейся инициализации.
+    showInitialisingScreen();
+  }
 
   // 6. Открытие хранилища и загрузка настроек.
   // prefs.begin() обязательно выполняется до loadPreferences().
@@ -299,14 +302,15 @@ void setup() {
   // Первичное обновление данных мониторинга.
   updateStatus();
 
-  // Запускаем отсчёт тайм-аута управления.
+  // Запускаем отсчёт тайм-аутов после первичной инициализации.
   lastCmdMillis = millis();
+  lastDisplayStatusMillis = millis();
+  startDisplayStartupAnimation();
 }
 
 // ---------- Основной цикл ----------
 
 void loop() {
-  static unsigned long lastStatus = 0;
 
   // Аварийная остановка при отсутствии команд управления.
   if (millis() - lastCmdMillis > CMD_TIMEOUT_MS) {
@@ -320,12 +324,17 @@ void loop() {
     }
   }
 
+  // Анимация не блокирует обработку Wi-Fi, WebSocket, OTA и watchdog.
+  const bool startupAnimating = updateDisplayStartup();
+
   // Периодическое обновление мониторинга и OLED.
-  if (millis() - lastStatus > 1000) {
-    lastStatus = millis();
+  if (millis() - lastDisplayStatusMillis > 1000) {
+    lastDisplayStatusMillis = millis();
 
     updateStatus();
-    updateDisplay();
+    if (!startupAnimating) {
+      updateDisplay();
+    }
 
     // Отправляем актуальный статус подключённым клиентам.
     if (ws.count() > 0) {
