@@ -1,7 +1,6 @@
 /*
  * LEGO Technic ESP32
  * Версия разработки: 0.5.26 GUI Update 3.0
- * Ветка: feature/four-dc-motors
  *
  * Обновление веб-интерфейса GUI Update 3.0.
  *
