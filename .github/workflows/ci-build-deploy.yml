@@ -357,7 +357,7 @@ jobs:
           echo "name=esp32-firmware-${safe_branch}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
           echo "Safe artifact branch: ${safe_branch}"
 
-      - name: Compile OTA bootstrap firmware
+            - name: Compile OTA bootstrap firmware
         if: ${{ steps.build_decision.outputs.bootstrap_build == 'true' }}
         shell: bash
         run: |
@@ -366,6 +366,8 @@ jobs:
 
           arduino-cli compile \
             --fqbn esp32:esp32:esp32 \
+            --warnings default \
+            --build-property "compiler.cpp.extra_flags=-DELEGANTOTA_USE_ASYNC_WEBSERVER=1" \
             --output-dir "$RUNNER_TEMP/bootstrap-build" \
             firmware/bootstrap/LEGO_Technic_ESP32_Bootstrap
 
