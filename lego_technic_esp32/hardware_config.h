@@ -19,7 +19,7 @@
 
 #define TB2_BIN1  32
 #define TB2_BIN2  33
-#define TB2_PWMB  1
+#define TB2_PWMB  2
 
 // ---------- Каналы LEDC ----------
 #define LEDC_CH_A 4
