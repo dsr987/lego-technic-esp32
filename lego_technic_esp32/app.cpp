@@ -15,7 +15,7 @@
  * - ElegantOTA
  *
  * CHANGELOG_VERSION: 0.5.26
- *  * CHANGELOG_START
+ * CHANGELOG_START
  * - Настройки Wi-Fi (имя сети и пароль) и учётные данные ElegantOTA вынесены в отдельный блок в начале app.cpp с поясняющими комментариями.
  * - Настроена единая логика включения асинхронного режима ElegantOTA при компиляции основной и стартовой прошивок OTA Bootstrap.
  * - Исправлена сборка OTA Bootstrap: добавлен необходимый параметр компиляции для работы ElegantOTA с AsyncWebServer.
