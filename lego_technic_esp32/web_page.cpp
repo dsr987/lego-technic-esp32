@@ -1043,10 +1043,9 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     var cGroup = $('motor-c-group');
     var dGroup = $('motor-d-group');
 
-    /* A не рисуем: он отображается приборами.
-       B отвечает за имитацию ДВС и потому скрывается при eng=true.
-       Оставшиеся моторы каждый раз собираются вокруг центра кузова (120,100):
-       один — в центре, два — симметрично сверху/снизу, три — верх/центр/низ. */
+    /* A отображается приборами.
+       B связан с имитацией ДВС и скрывается при eng=true.
+       Координаты слоёв B, C и D постоянны и не зависят от motorCount. */
     var showB = auxMode && motorCount >= 2 && !eng;
     var showC = auxMode && motorCount >= 3;
     var showD = auxMode && motorCount >= 4;
@@ -1084,7 +1083,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   }
 
   function paintLights(){
-    var yOn='#eab308', rOn='#f43f5e', off='#3a4252';
+    var yOn='#eab308', rOn='#f43f5e';
     var fl=$('hl-fl'),fr=$('hl-fr'),rl=$('hl-rl'),rr=$('hl-rr');
     if(fl){
       [fl,fr].forEach(function(lamp){
