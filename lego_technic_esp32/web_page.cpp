@@ -1057,13 +1057,21 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     if(lightFRGroup) lightFRGroup.setAttribute('transform', 'translate(228,125) rotate('+ang+') scale(-1,1)');
 
     var activeDrive = Math.abs(A) > 8;
+    // В текущей конфигурации классической машины мотор A приводит заднюю ось,
+    // а передняя ось используется для руления. Здесь указан только визуальный привод;
+    // при появлении настройки типа привода это значение будет браться из неё.
+    var drivenAxle = 'rear';
+    var frontAxleGlows = activeDrive && drivenAxle === 'front';
+    var rearAxleGlows = activeDrive && drivenAxle === 'rear';
+
     var driveColor = A>8 ? '#10b981' : (A<-8 ? '#f43f5e' : 'var(--svg-stroke)');
     var tintFlood = $('wheel-tint-flood');
     if(tintFlood) tintFlood.setAttribute('flood-color', driveColor);
 
-    // Фильтр использует SourceAlpha изображения шины вместо маскированного прямоугольника.
-    [glowFL,glowFR,glowRL,glowRR].forEach(function(glow){
-      if(glow) glow.setAttribute('opacity', activeDrive ? '0.58' : '0');
+    // Подсветка включается только на ведущей оси; передние колёса не светятся лишь от движения A.
+    [[glowFL,frontAxleGlows],[glowFR,frontAxleGlows],
+     [glowRL,rearAxleGlows],[glowRR,rearAxleGlows]].forEach(function(item){
+      if(item[0]) item[0].setAttribute('opacity', item[1] ? '0.58' : '0');
     });
 
     var bGroup = $('motor-b-group');
