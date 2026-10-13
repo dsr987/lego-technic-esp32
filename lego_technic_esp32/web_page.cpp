@@ -37,7 +37,7 @@ body{padding:max(env(safe-area-inset-top,0px),6px) 10px max(env(safe-area-inset-
 .brand{display:flex;align-items:center;gap:8px;min-width:0}
 .brand-icon{width:28px;height:28px;border-radius:8px;background:rgba(59,130,246,.15);
   border:1px solid rgba(59,130,246,.4);display:flex;align-items:center;justify-content:center;color:var(--blue);flex-shrink:0;padding:0;cursor:pointer}
-.brand-title{font-size:12px;font-weight:700;line-height:1}
+.brand-title{font-size:11px;font-weight:800;line-height:1;letter-spacing:.025em;white-space:nowrap}
 .brand-info{min-width:0}
 .brand-monitor{max-width:min(230px,27vw);min-width:125px;display:flex;align-items:center;
   overflow:hidden;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:4px 7px;}
@@ -419,13 +419,18 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   <div class="header">
     <div class="brand">
       <button class="brand-icon" id="brand-toggle" type="button" title="Показать монитор порта" aria-label="Переключить заголовок и монитор порта" aria-expanded="false" aria-controls="brand-monitor">
-        <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-          <rect x="2" y="5" width="20" height="15" rx="3" fill="none" stroke="currentColor" stroke-width="2"/>
-          <circle cx="7" cy="9" r="2"/><circle cx="17" cy="9" r="2"/><circle cx="7" cy="16" r="2"/><circle cx="17" cy="16" r="2"/>
+        <svg viewBox="0 0 32 32" width="24" height="24" role="img" aria-label="LEGO Technic ESP32">
+          <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9 3H23L29 9V23L23 29H9L3 23V9Z" stroke="#E2E8F0" stroke-width="2"/>
+            <path d="M10 9H22V23H10Z" stroke="#E2E8F0" stroke-width="1.8"/>
+            <path d="M7 7L10 10M25 7L22 10M7 25L10 22M25 25L22 22" stroke="#EF4444" stroke-width="2.4"/>
+            <path d="M12 14.5Q16 10.5 20 14.5M13.8 17Q16 14.8 18.2 17" stroke="#38BDF8" stroke-width="2"/>
+          </g>
+          <circle cx="16" cy="19.5" r="1.5" fill="#38BDF8"/>
         </svg>
       </button>
       <div class="brand-info" id="brand-info">
-        <div class="brand-title">Lego Control Center</div>
+        <div class="brand-title">LEGO TECHNIC ESP32</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-addr">192.168.4.1</span></div>
         <div class="brand-ver">0.5.27 · beta</div>
       </div>
