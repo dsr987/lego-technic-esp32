@@ -294,8 +294,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 @keyframes boltPulse{0%,100%{opacity:.55}50%{opacity:1}}
 .bolt-glow{filter:drop-shadow(0 0 5px #22d3ee)}
 .bolt-pulse{animation:boltPulse 1s ease-in-out infinite}
-.spark{position:absolute;width:3px;height:3px;border-radius:50%;background:var(--amber);
-  box-shadow:0 0 6px 2px rgba(245,158,11,.8);animation:sparkFly .9s ease-out infinite}
 
 .footer{flex:none;background:var(--panel);border:1px solid var(--border);border-radius:12px;
   padding:5px 10px;display:flex;justify-content:space-between;align-items:center}
