@@ -278,7 +278,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 #car-body { transition: stroke 1.00s cubic-bezier(.22,.9,.3,1), stroke-width 1.00s cubic-bezier(.22,.9,.3,1), filter 1.00s cubic-bezier(.22,.9,.3,1); }
 #car-body.eng-glow { transition: stroke 0.50s cubic-bezier(.22,.9,.3,1), stroke-width 0.50s cubic-bezier(.22,.9,.3,1), filter 0.50s cubic-bezier(.22,.9,.3,1); }
 
-.engine-smoke { pointer-events:none; opacity:0; transition:opacity .45s ease; }
+.engine-smoke { position:absolute;inset:0;z-index:2;pointer-events:none;opacity:0;transition:opacity .45s ease; }
 .engine-smoke.on { opacity:1; }
 @keyframes exhaustSmoke{0%{transform:translate(0,0) scale(.38);opacity:0}12%{opacity:.48}100%{transform:translate(var(--dx),22px) scale(2.15);opacity:0}}
 .smoke-puff{position:absolute;width:11px;height:9px;border-radius:50%;background:radial-gradient(ellipse at 42% 42%,rgba(148,163,184,.68) 0%,rgba(148,163,184,.4) 40%,rgba(100,116,139,0) 78%);filter:blur(1px);animation:exhaustSmoke 1.8s ease-out infinite;animation-play-state:paused;will-change:transform,opacity}
@@ -294,7 +294,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 @keyframes boltPulse{0%,100%{opacity:.55}50%{opacity:1}}
 .bolt-glow{filter:drop-shadow(0 0 5px #22d3ee)}
 .bolt-pulse{animation:boltPulse 1s ease-in-out infinite}
-@keyframes sparkFly{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--sx),var(--sy)) scale(.2);opacity:0}}
 .spark{position:absolute;width:3px;height:3px;border-radius:50%;background:var(--amber);
   box-shadow:0 0 6px 2px rgba(245,158,11,.8);animation:sparkFly .9s ease-out infinite}
 
