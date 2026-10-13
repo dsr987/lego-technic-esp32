@@ -114,5 +114,26 @@ jobs:
       - name: Embed Web GUI image assets
         run: python3 tools/embed_web_gui_assets.py
 
+      - name: Verify HTML extraction and workflow YAML
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.parse_file(path); puts "PASS: YAML syntax #{path}" }' \
+            .github/workflows/ci-build-deploy.yml \
+            .github/workflows/pull-request-validation.yml
+
+          python3 tools/extract_html.py \
+            lego_technic_esp32/web_page.cpp \
+            "$RUNNER_TEMP/extracted-index.html"
+
+          if ! cmp -s index.html "$RUNNER_TEMP/extracted-index.html"; then
+            echo "::error::index.html differs from HTML extracted from web_page.cpp"
+            diff -u index.html "$RUNNER_TEMP/extracted-index.html" || true
+            exit 1
+          fi
+
+          echo "PASS: index.html exactly matches extracted PAGE_HTML"
+
       - name: Run project auditor
         run: python3 tools/project_auditor.py
