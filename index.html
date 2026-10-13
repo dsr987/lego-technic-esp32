@@ -130,6 +130,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .layered-car-svg .motor-overlay{opacity:0;transition:opacity .22s ease}
 .layered-car-svg .vehicle-light{transition:opacity .15s ease,filter .15s ease}
 .layered-car-svg use{transition:filter .12s ease}
+.layered-car-svg .wheel-tint{mix-blend-mode:screen;transition:opacity .12s ease,fill .12s ease;pointer-events:none}
 .car-wrap{position:relative;display:flex;flex-direction:column;align-items:center}
 .btn-row{display:flex;gap:8px;margin-top:6px;flex-shrink:0}
 
@@ -555,15 +556,19 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 
             <g id="c-fl" class="wheel" transform="translate(35,125) rotate(0)">
               <use id="w-fl" href="#wheel-art" x="-35" y="-65"/>
+              <rect id="tint-fl" class="wheel-tint" x="-35" y="-65" width="70" height="130" rx="19" fill="#3b82f6" opacity="0" pointer-events="none"/>
             </g>
             <g id="c-fr" class="wheel" transform="translate(217,125) rotate(0)">
               <use id="w-fr" href="#wheel-art" x="-35" y="-65"/>
+              <rect id="tint-fr" class="wheel-tint" x="-35" y="-65" width="70" height="130" rx="19" fill="#3b82f6" opacity="0" pointer-events="none"/>
             </g>
             <g id="c-rl" transform="translate(35,315)">
               <use id="w-rl" href="#wheel-art" x="-35" y="-65"/>
+              <rect id="tint-rl" class="wheel-tint" x="-35" y="-65" width="70" height="130" rx="19" fill="#10b981" opacity="0" pointer-events="none"/>
             </g>
             <g id="c-rr" transform="translate(217,315)">
               <use id="w-rr" href="#wheel-art" x="-35" y="-65"/>
+              <rect id="tint-rr" class="wheel-tint" x="-35" y="-65" width="70" height="130" rx="19" fill="#10b981" opacity="0" pointer-events="none"/>
             </g>
           </svg>
         </div>
@@ -1018,23 +1023,35 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     if(fl) fl.setAttribute('transform', 'translate(35,125) rotate('+ang+')');
     if(fr) fr.setAttribute('transform', 'translate(217,125) rotate('+ang+')');
     var wfl=$('w-fl'), wfr=$('w-fr');
+    var tintFL=$('tint-fl'), tintFR=$('tint-fr');
     var steerOn = Math.abs(S)>5;
     if(wfl && wfr){
-      wfl.setAttribute('stroke', steerOn ? '#3b82f6' : 'var(--svg-stroke)');
+      // The source wheel is a raster image, so tint overlays provide the actual colour.
+      [tintFL,tintFR].forEach(function(tint){
+        if(!tint) return;
+        tint.setAttribute('fill', '#3b82f6');
+        tint.setAttribute('opacity', steerOn ? '0.28' : '0');
+        tint.style.filter = steerOn ? 'drop-shadow(0 0 6px #3b82f6)' : '';
+      });
       wfl.style.filter = steerOn ? 'drop-shadow(0 0 6px #3b82f6)' : '';
-      wfr.setAttribute('stroke', steerOn ? '#3b82f6' : 'var(--svg-stroke)');
       wfr.style.filter = steerOn ? 'drop-shadow(0 0 6px #3b82f6)' : '';
     }
 
     var wrl=$('w-rl'), wrr=$('w-rr');
+    var tintRL=$('tint-rl'), tintRR=$('tint-rr');
+    var driveColor = A>8 ? '#10b981' : (A<-8 ? '#f43f5e' : 'var(--svg-stroke)');
+    var driveFilter = A>8 ? 'drop-shadow(0 0 6px #10b981)' : (A<-8 ? 'drop-shadow(0 0 6px #f43f5e)' : '');
     if(wrl && wrr){
       toggleLightState(wrl, Math.abs(A)>8);
       toggleLightState(wrr, Math.abs(A)>8);
-      var col = 'var(--svg-stroke)', filt = '';
-      if(A>8){ col='#10b981'; filt='drop-shadow(0 0 6px #10b981)'; }
-      else if(A<-8){ col='#f43f5e'; filt='drop-shadow(0 0 6px #f43f5e)'; }
-      wrl.setAttribute('stroke', col); wrl.style.filter=filt;
-      wrr.setAttribute('stroke', col); wrr.style.filter=filt;
+      [tintRL,tintRR].forEach(function(tint){
+        if(!tint) return;
+        tint.setAttribute('fill', driveColor);
+        tint.setAttribute('opacity', Math.abs(A)>8 ? '0.30' : '0');
+        tint.style.filter = driveFilter;
+      });
+      wrl.style.filter = driveFilter;
+      wrr.style.filter = driveFilter;
     }
 
     var bGroup = $('motor-b-group');
