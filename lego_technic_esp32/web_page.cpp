@@ -593,10 +593,25 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
               </g>
             </g>
 
-            <circle id="hl-fl" class="vehicle-light" cx="72" cy="26" r="7" fill="#3a4252" opacity="0"/>
-            <circle id="hl-fr" class="vehicle-light" cx="180" cy="26" r="7" fill="#3a4252" opacity="0"/>
-            <circle id="hl-rl" class="vehicle-light" cx="42" cy="404" r="8" fill="#3a4252" opacity="0"/>
-            <circle id="hl-rr" class="vehicle-light" cx="210" cy="404" r="8" fill="#3a4252" opacity="0"/>
+            <!-- Свет фар: широкое радиальное свечение без отдельной точки в центре. Координаты сохранены. -->
+            <defs>
+              <radialGradient id="front-headlight-gradient">
+                <stop offset="0" stop-color="#ffffff" stop-opacity="0.98"/>
+                <stop offset="0.22" stop-color="#ffffff" stop-opacity="0.88"/>
+                <stop offset="0.55" stop-color="#ffffff" stop-opacity="0.38"/>
+                <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
+              </radialGradient>
+              <radialGradient id="rear-headlight-gradient">
+                <stop offset="0" stop-color="#ff334f" stop-opacity="0.98"/>
+                <stop offset="0.24" stop-color="#ff334f" stop-opacity="0.86"/>
+                <stop offset="0.58" stop-color="#f43f5e" stop-opacity="0.4"/>
+                <stop offset="1" stop-color="#f43f5e" stop-opacity="0"/>
+              </radialGradient>
+            </defs>
+            <ellipse id="hl-fl" class="vehicle-light" cx="72" cy="26" rx="18" ry="13" fill="url(#front-headlight-gradient)" opacity="0"/>
+            <ellipse id="hl-fr" class="vehicle-light" cx="180" cy="26" rx="18" ry="13" fill="url(#front-headlight-gradient)" opacity="0"/>
+            <ellipse id="hl-rl" class="vehicle-light" cx="42" cy="404" rx="17" ry="12" fill="url(#rear-headlight-gradient)" opacity="0"/>
+            <ellipse id="hl-rr" class="vehicle-light" cx="210" cy="404" rx="17" ry="12" fill="url(#rear-headlight-gradient)" opacity="0"/>
           </svg>
         </div>
         <div class="btn-row">
@@ -1118,22 +1133,18 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   }
 
   function paintLights(){
-    var yOn='#eab308', rOn='#f43f5e';
     var fl=$('hl-fl'),fr=$('hl-fr'),rl=$('hl-rl'),rr=$('hl-rr');
-    if(fl){
-      [fl,fr].forEach(function(lamp){
-        lamp.setAttribute('fill', led.F ? yOn : 'transparent');
-        lamp.setAttribute('opacity', led.F ? '0.95' : '0');
-        lamp.style.filter = led.F ? 'drop-shadow(0 0 7px #eab308)' : '';
-      });
-    }
-    if(rl){
-      [rl,rr].forEach(function(lamp){
-        lamp.setAttribute('fill', led.R ? rOn : 'transparent');
-        lamp.setAttribute('opacity', led.R ? '0.95' : '0');
-        lamp.style.filter = led.R ? 'drop-shadow(0 0 7px #f43f5e)' : '';
-      });
-    }
+    // Цвет и плавное затухание задаются radialGradient; не рисуем отдельные светящиеся точки.
+    [fl,fr].forEach(function(lamp){
+      if(!lamp) return;
+      lamp.setAttribute('opacity', led.F ? '1' : '0');
+      lamp.style.filter = led.F ? 'drop-shadow(0 0 5px rgba(255,255,255,.72))' : '';
+    });
+    [rl,rr].forEach(function(lamp){
+      if(!lamp) return;
+      lamp.setAttribute('opacity', led.R ? '1' : '0');
+      lamp.style.filter = led.R ? 'drop-shadow(0 0 5px rgba(244,63,94,.72))' : '';
+    });
   }
 
   function engineBFromDrive(){ return Math.round(33+67*Math.abs(drive)/100); }
