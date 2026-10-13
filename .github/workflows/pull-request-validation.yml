@@ -36,6 +36,9 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Embed Web GUI image assets
+        run: python3 tools/embed_web_gui_assets.py
+
       - name: Install esptool Python dependencies
         run: python3 -m pip install --upgrade pyserial
 
@@ -84,6 +87,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Embed Web GUI image assets
+        run: python3 tools/embed_web_gui_assets.py
 
       - name: Run project auditor
         run: python3 tools/project_auditor.py
