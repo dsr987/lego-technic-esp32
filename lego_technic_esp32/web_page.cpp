@@ -328,7 +328,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .svg-body{fill:var(--svg-fill);stroke:var(--svg-stroke)}
 .svg-deep{fill:var(--svg-deep);stroke:var(--svg-stroke)}
 /* Корпуса дополнительных моторов повторяют контур машины; каналы различаются только молниями. */
-#b-motor-body,#c-motor-body,#d-motor-body{fill:none;stroke:#c5ceda;stroke-width:3px}
+#b-motor-body,#c-motor-body,#d-motor-body{fill:none;stroke:#f1f5f9;stroke-width:3.5px}
 
 /* Скрываем внешние рамки карточек для конфигураций с тремя и четырьмя моторами. */
 #classic-panel.motor-count-3 #field-B,
@@ -1121,12 +1121,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     [[al, val < -8], [ar, val > 8]].forEach(function(item){
       var arrow = item[0], arrowOn = active && item[1];
       if(!arrow) return;
-      arrow.setAttribute('fill', arrowOn ? channelColor : '#aeb9c8');
+      arrow.setAttribute('fill', arrowOn ? channelColor : '#f1f5f9');
       arrow.setAttribute('class', arrowOn ? 'bolt-glow bolt-pulse' : '');
       arrow.style.filter = arrowOn ? 'drop-shadow(0 0 5px '+channelColor+')' : '';
     });
     if(bolt){
-      bolt.setAttribute('fill', active ? channelColor : '#aeb9c8');
+      bolt.setAttribute('fill', active ? channelColor : '#f1f5f9');
       bolt.setAttribute('class', active ? 'bolt-glow bolt-pulse' : '');
       bolt.style.filter = active ? 'drop-shadow(0 0 5px '+channelColor+')' : '';
     }
