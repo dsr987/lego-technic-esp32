@@ -126,7 +126,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 #classic-panel:not(.motor-count-4) #eng-label{writing-mode:horizontal-tb;width:100%;height:52px;letter-spacing:.04em;font-size:13px;}
 
 .tank-svg{height:calc(var(--sh) - 8px);width:auto;aspect-ratio:240/280;max-height:100%}
-.car-svg{height:min(calc(var(--sh) + 56px), 246px);width:auto;aspect-ratio:252/427;max-height:100%;flex-shrink:1;display:block}
+.car-svg{height:min(calc(var(--sh) + 56px), 246px);width:auto;aspect-ratio:256/427;max-height:100%;flex-shrink:1;display:block}
 .layered-car-svg .motor-overlay{opacity:0;transition:opacity .22s ease}
 .layered-car-svg .vehicle-light{transition:opacity .15s ease,filter .15s ease}
 .layered-car-svg use{transition:filter .12s ease}
@@ -521,30 +521,30 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
             <i class="spark" style="left:35%;top:28%;--sx:-8px;--sy:-24px;animation-delay:.6s"></i>
             <i class="spark" style="left:55%;top:70%;--sx:10px;--sy:20px;animation-delay:.75s"></i>
           </div>
-          <svg class="car-svg layered-car-svg" viewBox="0 0 252 427" xmlns="http://www.w3.org/2000/svg">
+          <svg class="car-svg layered-car-svg" viewBox="-2 0 256 427" xmlns="http://www.w3.org/2000/svg">
             <defs>
-              <image id="wheel-art" href="data:image/webp;base64,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" x="0" y="0" width="54" height="92" preserveAspectRatio="none"/>
-              <mask id="wheel-alpha-mask" maskUnits="userSpaceOnUse" x="-27" y="-46" width="54" height="92" style="mask-type:alpha">
-                <use href="#wheel-art" x="-27" y="-46"/>
+              <image id="wheel-art" href="data:image/webp;base64,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" x="0" y="0" width="58" height="103" preserveAspectRatio="none"/>
+              <mask id="wheel-alpha-mask" maskUnits="userSpaceOnUse" x="-29" y="-51.5" width="58" height="103" style="mask-type:alpha">
+                <use href="#wheel-art" x="-29" y="-51.5"/>
               </mask>
             </defs>
 
             <!-- Колёса находятся под шасси; наружные края чуть выступают по бокам. -->
             <g id="c-fl" class="wheel" transform="translate(28,125) rotate(0)">
-              <use id="w-fl" href="#wheel-art" x="-27" y="-46"/>
-              <rect id="tint-fl" class="wheel-tint" x="-27" y="-46" width="54" height="92" rx="12" fill="#10b981" opacity="0" mask="url(#wheel-alpha-mask)" pointer-events="none"/>
+              <use id="w-fl" href="#wheel-art" x="-29" y="-51.5"/>
+              <rect id="tint-fl" class="wheel-tint" x="-29" y="-51.5" width="58" height="103" rx="12" fill="#10b981" opacity="0" mask="url(#wheel-alpha-mask)" pointer-events="none"/>
             </g>
             <g id="c-fr" class="wheel" transform="translate(224,125) rotate(0)">
-              <use id="w-fr" href="#wheel-art" x="-27" y="-46"/>
-              <rect id="tint-fr" class="wheel-tint" x="-27" y="-46" width="54" height="92" rx="12" fill="#10b981" opacity="0" mask="url(#wheel-alpha-mask)" pointer-events="none"/>
+              <use id="w-fr" href="#wheel-art" x="-29" y="-51.5"/>
+              <rect id="tint-fr" class="wheel-tint" x="-29" y="-51.5" width="58" height="103" rx="12" fill="#10b981" opacity="0" mask="url(#wheel-alpha-mask)" pointer-events="none"/>
             </g>
             <g id="c-rl" transform="translate(28,315)">
-              <use id="w-rl" href="#wheel-art" x="-27" y="-46"/>
-              <rect id="tint-rl" class="wheel-tint" x="-27" y="-46" width="54" height="92" rx="12" fill="#10b981" opacity="0" mask="url(#wheel-alpha-mask)" pointer-events="none"/>
+              <use id="w-rl" href="#wheel-art" x="-29" y="-51.5"/>
+              <rect id="tint-rl" class="wheel-tint" x="-29" y="-51.5" width="58" height="103" rx="12" fill="#10b981" opacity="0" mask="url(#wheel-alpha-mask)" pointer-events="none"/>
             </g>
             <g id="c-rr" transform="translate(224,315)">
-              <use id="w-rr" href="#wheel-art" x="-27" y="-46"/>
-              <rect id="tint-rr" class="wheel-tint" x="-27" y="-46" width="54" height="92" rx="12" fill="#10b981" opacity="0" mask="url(#wheel-alpha-mask)" pointer-events="none"/>
+              <use id="w-rr" href="#wheel-art" x="-29" y="-51.5"/>
+              <rect id="tint-rr" class="wheel-tint" x="-29" y="-51.5" width="58" height="103" rx="12" fill="#10b981" opacity="0" mask="url(#wheel-alpha-mask)" pointer-events="none"/>
             </g>
 
             <!-- Кузов поверх колёс, чтобы колёса визуально уходили под шасси. -->
@@ -553,22 +553,22 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
             <!-- Прозрачные контурные пиктограммы моторов, без залитого фона. -->
             <g id="motors-icon" pointer-events="none">
               <g id="motor-b-group" class="motor-overlay" opacity="0" transform="translate(126 88)">
-                <polygon id="b-al" points="-68,0 -51,-16 -51,16" fill="var(--svg-stroke)"/>
-                <rect id="b-motor-body" x="-30" y="-30" width="60" height="60" rx="8" class="motor-body" stroke-width="3" fill="none"/>
-                <polygon id="b-bolt" points="8,-23 -12,2 -2,2 -8,23 14,-6 3,-6" fill="var(--svg-stroke)"/>
-                <polygon id="b-ar" points="68,0 51,-16 51,16" fill="var(--svg-stroke)"/>
+                <polygon id="b-al" points="-62,0 -46,-18 -46,18" fill="var(--svg-stroke)"/>
+                <rect id="b-motor-body" x="-38" y="-38" width="76" height="76" rx="10" class="motor-body" stroke-width="3" fill="none"/>
+                <polygon id="b-bolt" points="10,-28 -14,2 -3,2 -10,28 17,-7 4,-7" fill="var(--svg-stroke)"/>
+                <polygon id="b-ar" points="62,0 46,-18 46,18" fill="var(--svg-stroke)"/>
               </g>
               <g id="motor-c-group" class="motor-overlay" opacity="0" transform="translate(126 212)">
-                <polygon id="c-al" points="-68,0 -51,-16 -51,16" fill="var(--svg-stroke)"/>
-                <rect id="c-motor-body" x="-30" y="-30" width="60" height="60" rx="8" class="motor-body" stroke-width="3" fill="none"/>
-                <polygon id="c-bolt" points="8,-23 -12,2 -2,2 -8,23 14,-6 3,-6" fill="var(--svg-stroke)"/>
-                <polygon id="c-ar" points="68,0 51,-16 51,16" fill="var(--svg-stroke)"/>
+                <polygon id="c-al" points="-62,0 -46,-18 -46,18" fill="var(--svg-stroke)"/>
+                <rect id="c-motor-body" x="-38" y="-38" width="76" height="76" rx="10" class="motor-body" stroke-width="3" fill="none"/>
+                <polygon id="c-bolt" points="10,-28 -14,2 -3,2 -10,28 17,-7 4,-7" fill="var(--svg-stroke)"/>
+                <polygon id="c-ar" points="62,0 46,-18 46,18" fill="var(--svg-stroke)"/>
               </g>
               <g id="motor-d-group" class="motor-overlay" opacity="0" transform="translate(126 340)">
-                <polygon id="d-al" points="-68,0 -51,-16 -51,16" fill="var(--svg-stroke)"/>
-                <rect id="d-motor-body" x="-30" y="-30" width="60" height="60" rx="8" class="motor-body" stroke-width="3" fill="none"/>
-                <polygon id="d-bolt" points="8,-23 -12,2 -2,2 -8,23 14,-6 3,-6" fill="var(--svg-stroke)"/>
-                <polygon id="d-ar" points="68,0 51,-16 51,16" fill="var(--svg-stroke)"/>
+                <polygon id="d-al" points="-62,0 -46,-18 -46,18" fill="var(--svg-stroke)"/>
+                <rect id="d-motor-body" x="-38" y="-38" width="76" height="76" rx="10" class="motor-body" stroke-width="3" fill="none"/>
+                <polygon id="d-bolt" points="10,-28 -14,2 -3,2 -10,28 17,-7 4,-7" fill="var(--svg-stroke)"/>
+                <polygon id="d-ar" points="62,0 46,-18 46,18" fill="var(--svg-stroke)"/>
               </g>
             </g>
 
