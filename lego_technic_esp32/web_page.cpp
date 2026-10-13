@@ -278,8 +278,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 #car-body { transition: stroke 1.00s cubic-bezier(.22,.9,.3,1), stroke-width 1.00s cubic-bezier(.22,.9,.3,1), filter 1.00s cubic-bezier(.22,.9,.3,1); }
 #car-body.eng-glow { transition: stroke 0.50s cubic-bezier(.22,.9,.3,1), stroke-width 0.50s cubic-bezier(.22,.9,.3,1), filter 0.50s cubic-bezier(.22,.9,.3,1); }
 
-.sparks { pointer-events:none; opacity: 0; transition: opacity 1.00s ease; }
-.sparks.on { opacity: 1; transition: opacity 0.50s ease; }
+.engine-smoke { pointer-events:none; opacity:0; transition:opacity .45s ease; }
+.engine-smoke.on { opacity:1; }
+@keyframes exhaustSmoke{0%{transform:translate(0,0) scale(.38);opacity:0}12%{opacity:.48}100%{transform:translate(var(--dx),22px) scale(2.15);opacity:0}}
+.smoke-puff{position:absolute;width:11px;height:9px;border-radius:50%;background:radial-gradient(ellipse at 42% 42%,rgba(148,163,184,.68) 0%,rgba(148,163,184,.4) 40%,rgba(100,116,139,0) 78%);filter:blur(1px);animation:exhaustSmoke 1.8s ease-out infinite;animation-play-state:paused;will-change:transform,opacity}
+.engine-smoke.on .smoke-puff{animation-play-state:running}
 
 #motors-icon { transition: opacity 0.40s ease; }
 #motor-b-group, #motor-c-group, #motor-d-group {
@@ -516,13 +519,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       </div>
       <div class="col">
         <div class="car-wrap">
-          <div class="sparks" id="sparks" style="position:absolute;inset:0">
-            <i class="spark" style="left:30%;top:40%;--sx:-18px;--sy:-22px;animation-delay:0s"></i>
-            <i class="spark" style="left:70%;top:35%;--sx:16px;--sy:-20px;animation-delay:.15s"></i>
-            <i class="spark" style="left:45%;top:55%;--sx:-12px;--sy:18px;animation-delay:.3s"></i>
-            <i class="spark" style="left:60%;top:50%;--sx:14px;--sy:16px;animation-delay:.45s"></i>
-            <i class="spark" style="left:35%;top:28%;--sx:-8px;--sy:-24px;animation-delay:.6s"></i>
-            <i class="spark" style="left:55%;top:70%;--sx:10px;--sy:20px;animation-delay:.75s"></i>
+          <div class="engine-smoke" id="engine-smoke" aria-hidden="true">
+            <i class="smoke-puff" style="left:48%;top:97%;--dx:-18px;animation-delay:0s"></i>
+            <i class="smoke-puff" style="left:49%;top:98%;--dx:-8px;animation-delay:.36s"></i>
+            <i class="smoke-puff" style="left:50%;top:97%;--dx:10px;animation-delay:.72s"></i>
+            <i class="smoke-puff" style="left:51%;top:98%;--dx:21px;animation-delay:1.08s"></i>
+            <i class="smoke-puff" style="left:49%;top:97%;--dx:4px;animation-delay:1.44s"></i>
           </div>
           <svg class="car-svg layered-car-svg" viewBox="-2 0 256 427" xmlns="http://www.w3.org/2000/svg">
             <defs>
@@ -1151,7 +1153,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 
   function updateEngUI(){
     var b=$('eng-btn'); if(b) b.classList.toggle('active', eng);
-    var s=$('sparks'); if(s) s.classList.toggle('on', eng);
+    var smoke=$('engine-smoke'); if(smoke) smoke.classList.toggle('on', eng);
     paintCar();
   }
   
