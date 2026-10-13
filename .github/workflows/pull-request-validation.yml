@@ -36,8 +36,12 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Embed Web GUI image assets
-        run: python3 tools/embed_web_gui_assets.py
+      - name: Validate and embed Web GUI assets
+        run: |
+          set -euo pipefail
+          python3 -m py_compile tools/embed_web_gui_assets.py
+          python3 tools/embed_web_gui_assets.py
+          git diff --exit-code -- lego_technic_esp32/web_page.cpp
 
       - name: Install esptool Python dependencies
         run: python3 -m pip install --upgrade pyserial
@@ -68,12 +72,31 @@ jobs:
       - name: Compile ESP32 firmware
         run: |
           set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/esp32-build"
 
           arduino-cli compile \
             --fqbn esp32:esp32:esp32 \
             --warnings default \
             --build-property "compiler.cpp.extra_flags=-DELEGANTOTA_USE_ASYNC_WEBSERVER=1" \
+            --output-dir "$RUNNER_TEMP/esp32-build" \
             lego_technic_esp32
+
+      - name: Report firmware binary size
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t firmware_bins < <(
+            find "$RUNNER_TEMP/esp32-build" -maxdepth 1 -type f -name '*.ino.bin' -print
+          )
+
+          if [[ "${#firmware_bins[@]}" -ne 1 ]]; then
+            echo "::error::Expected exactly one *.ino.bin file; found ${#firmware_bins[@]}."
+            find "$RUNNER_TEMP/esp32-build" -maxdepth 1 -type f -printf '%f\\n' || true
+            exit 1
+          fi
+
+          stat -c 'Firmware BIN size: %s bytes (%n)' "${firmware_bins[0]}"
+          sha256sum "${firmware_bins[0]}"
 
   project-audit:
     name: Project Static Audit
