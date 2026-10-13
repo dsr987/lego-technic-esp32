@@ -128,7 +128,10 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 #classic-panel:not(.motor-count-4) #eng-label{writing-mode:horizontal-tb;width:100%;height:52px;letter-spacing:.04em;font-size:13px;}
 
 .tank-svg{height:calc(var(--sh) - 8px);width:auto;aspect-ratio:240/280;max-height:100%}
-.car-svg{height:calc(var(--sh) - 4px);width:auto;aspect-ratio:240/200;max-height:100%}
+.car-svg{height:min(calc(var(--sh) + 56px), 246px);width:auto;aspect-ratio:252/427;max-height:100%;flex-shrink:1;display:block}
+.layered-car-svg .motor-overlay{opacity:0;transition:opacity .22s ease}
+.layered-car-svg .vehicle-light{transition:opacity .15s ease,filter .15s ease}
+.layered-car-svg use{transition:filter .12s ease}
 .car-wrap{position:relative;display:flex;flex-direction:column;align-items:center}
 .btn-row{display:flex;gap:8px;margin-top:6px;flex-shrink:0}
 
@@ -519,40 +522,51 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
             <i class="spark" style="left:35%;top:28%;--sx:-8px;--sy:-24px;animation-delay:.6s"></i>
             <i class="spark" style="left:55%;top:70%;--sx:10px;--sy:20px;animation-delay:.75s"></i>
           </div>
-          <svg class="car-svg" viewBox="0 0 240 200">
-            <rect id="car-body" x="70" y="20" width="100" height="160" rx="18" class="svg-body" stroke-width="3"/>
-            <polygon id="c-fwd" points="120,27 105,44 135,44" fill="var(--svg-stroke)"/>
-            <polygon id="c-rev" points="120,173 105,156 135,156" fill="var(--svg-stroke)"/>
-            <g id="motors-icon" opacity="0">
-              <!-- Каждый дополнительный мотор построен вокруг единого центра (120,100).
-                   JS размещает группы строго симметрично по продольной оси кузова. -->
-              <g id="motor-b-group" opacity="1" transform="translate(0 0)">
-                <polygon id="b-al" points="76,100 90,91 90,109" fill="var(--svg-stroke)"/>
-                <rect id="b-motor-body" x="104" y="89" width="32" height="22" rx="6" class="motor-body" stroke-width="2"/>
-                <polygon id="b-bolt" points="121,91 114,100 120,100 117,108 127,97 121,97" fill="var(--svg-stroke)"/>
-                <polygon id="b-ar" points="164,100 150,91 150,109" fill="var(--svg-stroke)"/>
+          <svg class="car-svg layered-car-svg" viewBox="0 0 252 427" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <image id="wheel-art" href="data:image/webp;base64,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" x="0" y="0" width="70" height="130" preserveAspectRatio="none"/>
+            </defs>
+
+            <image id="car-body" href="data:image/webp;base64,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" x="0" y="0" width="252" height="427" preserveAspectRatio="none"/>
+
+            <g id="motors-icon" pointer-events="none">
+              <g id="motor-b-group" class="motor-overlay" opacity="0" transform="translate(126 112)">
+                <polygon id="b-al" points="-44,0 -31,-11 -31,11" fill="var(--svg-stroke)"/>
+                <rect id="b-motor-body" x="-25" y="-18" width="50" height="36" rx="7" class="motor-body" stroke-width="2"/>
+                <polygon id="b-bolt" points="4,-14 -5,0 2,0 -3,13 10,-3 3,-3" fill="var(--svg-stroke)"/>
+                <polygon id="b-ar" points="44,0 31,-11 31,11" fill="var(--svg-stroke)"/>
               </g>
-              <g id="motor-c-group" opacity="0" transform="translate(0 0)">
-                <polygon id="c-al" points="76,100 90,91 90,109" fill="var(--svg-stroke)"/>
-                <rect id="c-motor-body" x="104" y="89" width="32" height="22" rx="6" class="motor-body" stroke-width="2"/>
-                <polygon id="c-bolt" points="121,91 114,100 120,100 117,108 127,97 121,97" fill="var(--svg-stroke)"/>
-                <polygon id="c-ar" points="164,100 150,91 150,109" fill="var(--svg-stroke)"/>
+              <g id="motor-c-group" class="motor-overlay" opacity="0" transform="translate(126 220)">
+                <polygon id="c-al" points="-44,0 -31,-11 -31,11" fill="var(--svg-stroke)"/>
+                <rect id="c-motor-body" x="-25" y="-18" width="50" height="36" rx="7" class="motor-body" stroke-width="2"/>
+                <polygon id="c-bolt" points="4,-14 -5,0 2,0 -3,13 10,-3 3,-3" fill="var(--svg-stroke)"/>
+                <polygon id="c-ar" points="44,0 31,-11 31,11" fill="var(--svg-stroke)"/>
               </g>
-              <g id="motor-d-group" opacity="0" transform="translate(0 0)">
-                <polygon id="d-al" points="76,100 90,91 90,109" fill="var(--svg-stroke)"/>
-                <rect id="d-motor-body" x="104" y="89" width="32" height="22" rx="6" class="motor-body" stroke-width="2"/>
-                <polygon id="d-bolt" points="121,91 114,100 120,100 117,108 127,97 121,97" fill="var(--svg-stroke)"/>
-                <polygon id="d-ar" points="164,100 150,91 150,109" fill="var(--svg-stroke)"/>
+              <g id="motor-d-group" class="motor-overlay" opacity="0" transform="translate(126 333)">
+                <polygon id="d-al" points="-44,0 -31,-11 -31,11" fill="var(--svg-stroke)"/>
+                <rect id="d-motor-body" x="-25" y="-18" width="50" height="36" rx="7" class="motor-body" stroke-width="2"/>
+                <polygon id="d-bolt" points="4,-14 -5,0 2,0 -3,13 10,-3 3,-3" fill="var(--svg-stroke)"/>
+                <polygon id="d-ar" points="44,0 31,-11 31,11" fill="var(--svg-stroke)"/>
               </g>
             </g>
-            <circle id="hl-fl" cx="88" cy="32" r="5" fill="#3a4252"/>
-            <circle id="hl-fr" cx="152" cy="32" r="5" fill="#3a4252"/>
-            <circle id="hl-rl" cx="88" cy="168" r="5" fill="#3a4252"/>
-            <circle id="hl-rr" cx="152" cy="168" r="5" fill="#3a4252"/>
-            <g id="c-fl" class="wheel" transform="translate(36,45)"><rect id="w-fl" x="-11" y="-20" width="22" height="40" rx="6" class="svg-deep" stroke="var(--blue)" stroke-width="2"/></g>
-            <g id="c-fr" class="wheel" transform="translate(204,45)"><rect id="w-fr" x="-11" y="-20" width="22" height="40" rx="6" class="svg-deep" stroke="var(--blue)" stroke-width="2"/></g>
-            <g id="c-rl" transform="translate(36,155)"><rect id="w-rl" x="-11" y="-22" width="22" height="45" rx="6" class="svg-deep" stroke="var(--svg-stroke)" stroke-width="2"/></g>
-            <g id="c-rr" transform="translate(204,155)"><rect id="w-rr" x="-11" y="-22" width="22" height="45" rx="6" class="svg-deep" stroke="var(--svg-stroke)" stroke-width="2"/></g>
+
+            <circle id="hl-fl" class="vehicle-light" cx="72" cy="26" r="7" fill="#3a4252" opacity="0"/>
+            <circle id="hl-fr" class="vehicle-light" cx="180" cy="26" r="7" fill="#3a4252" opacity="0"/>
+            <circle id="hl-rl" class="vehicle-light" cx="42" cy="404" r="8" fill="#3a4252" opacity="0"/>
+            <circle id="hl-rr" class="vehicle-light" cx="210" cy="404" r="8" fill="#3a4252" opacity="0"/>
+
+            <g id="c-fl" class="wheel" transform="translate(35,125) rotate(0)">
+              <use id="w-fl" href="#wheel-art" x="-35" y="-65"/>
+            </g>
+            <g id="c-fr" class="wheel" transform="translate(217,125) rotate(0)">
+              <use id="w-fr" href="#wheel-art" x="-35" y="-65"/>
+            </g>
+            <g id="c-rl" transform="translate(35,315)">
+              <use id="w-rl" href="#wheel-art" x="-35" y="-65"/>
+            </g>
+            <g id="c-rr" transform="translate(217,315)">
+              <use id="w-rr" href="#wheel-art" x="-35" y="-65"/>
+            </g>
           </svg>
         </div>
         <div class="btn-row">
@@ -1000,37 +1014,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 
   function paintCar(){
     var A=drive, S=steer, B=auxB, C=auxC;
-    var fwd=$('c-fwd'), revp=$('c-rev');
-    // Стрелки движения остаются видимыми во всех режимах и не должны перекрываться моторами.
-    if(fwd){
-      fwd.setAttribute('opacity', '1');
-      toggleLightState(fwd, A>8);
-      fwd.setAttribute('fill', A>8?'var(--blue)':'var(--svg-stroke)');
-    }
-    if(revp){
-      revp.setAttribute('opacity', '1');
-      toggleLightState(revp, A<-8);
-      revp.setAttribute('fill', A<-8?'var(--blue)':'var(--svg-stroke)');
-    }
-
-    var body=$('car-body');
-    if(body){
-      body.classList.toggle('eng-glow', eng);
-      if(eng){
-        body.setAttribute('stroke', '#f59e0b');
-        body.setAttribute('stroke-width', '4');
-        body.style.filter = 'drop-shadow(0 0 8px rgba(245,158,11,.7))';
-      } else {
-        body.setAttribute('stroke', 'var(--svg-stroke)');
-        body.setAttribute('stroke-width', '3');
-        body.style.filter = '';
-      }
-    }
-
+    // Шасси является неподвижной растровой подложкой; передние колёса вращаются отдельно.
     var ang = S * 0.28;
     var fl=$('c-fl'), fr=$('c-fr');
-    if(fl) fl.setAttribute('transform', 'translate(36,45) rotate('+ang+')');
-    if(fr) fr.setAttribute('transform', 'translate(204,45) rotate('+ang+')');
+    if(fl) fl.setAttribute('transform', 'translate(35,125) rotate('+ang+')');
+    if(fr) fr.setAttribute('transform', 'translate(217,125) rotate('+ang+')');
     var wfl=$('w-fl'), wfr=$('w-fr');
     var steerOn = Math.abs(S)>5;
     if(wfl && wfr){
@@ -1051,11 +1039,9 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       wrr.setAttribute('stroke', col); wrr.style.filter=filt;
     }
 
-    var icon=$('motors-icon');
     var bGroup = $('motor-b-group');
     var cGroup = $('motor-c-group');
     var dGroup = $('motor-d-group');
-    if(icon) icon.setAttribute('opacity', auxMode && motorCount>=2 ? '1' : '0');
 
     /* A не рисуем: он отображается приборами.
        B отвечает за имитацию ДВС и потому скрывается при eng=true.
@@ -1064,35 +1050,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     var showB = auxMode && motorCount >= 2 && !eng;
     var showC = auxMode && motorCount >= 3;
     var showD = auxMode && motorCount >= 4;
-    if(bGroup) bGroup.setAttribute('opacity', showB ? '1' : '0');
-    if(cGroup) cGroup.setAttribute('opacity', showC ? '1' : '0');
-    if(dGroup) dGroup.setAttribute('opacity', showD ? '1' : '0');
-
-    var bY = 0, cY = 0, dY = 0;
-    if(motorCount === 3){
-      if(eng){
-        // B скрыт для имитации ДВС, единственный оставшийся C — в центре.
-        cY = 0;
-      } else {
-        // Два мотора B/C располагаются симметрично относительно центра.
-        bY = -32;
-        cY = 32;
-      }
-    } else if(motorCount === 4){
-      if(eng){
-        // B скрыт; C и D занимают симметричные позиции двухмоторного режима.
-        cY = -32;
-        dY = 32;
-      } else {
-        // Три мотора B/C/D: верх, центр, низ.
-        bY = -32;
-        cY = 0;
-        dY = 32;
-      }
-    }
-    if(bGroup) bGroup.setAttribute('transform', 'translate(0 ' + bY + ')');
-    if(cGroup) cGroup.setAttribute('transform', 'translate(0 ' + cY + ')');
-    if(dGroup) dGroup.setAttribute('transform', 'translate(0 ' + dY + ')');
+    // B расположен над капотом, C в районе кабины, D в багажнике.
+    // Конфигурация меняет только видимость слоёв, не их координаты.
+    if(bGroup) bGroup.style.opacity = showB ? '1' : '0';
+    if(cGroup) cGroup.style.opacity = showC ? '1' : '0';
+    if(dGroup) dGroup.style.opacity = showD ? '1' : '0';
 
     setMotorViz('b', eng ? engineBFromDrive() : B);
     setMotorViz('c', C);
@@ -1125,12 +1087,18 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     var yOn='#eab308', rOn='#f43f5e', off='#3a4252';
     var fl=$('hl-fl'),fr=$('hl-fr'),rl=$('hl-rl'),rr=$('hl-rr');
     if(fl){
-      fl.setAttribute('fill', led.F?yOn:off); fr.setAttribute('fill', led.F?yOn:off);
-      fl.style.filter = fr.style.filter = led.F?'drop-shadow(0 0 5px #eab308)':'';
+      [fl,fr].forEach(function(lamp){
+        lamp.setAttribute('fill', led.F ? yOn : 'transparent');
+        lamp.setAttribute('opacity', led.F ? '0.95' : '0');
+        lamp.style.filter = led.F ? 'drop-shadow(0 0 7px #eab308)' : '';
+      });
     }
     if(rl){
-      rl.setAttribute('fill', led.R?rOn:off); rr.setAttribute('fill', led.R?rOn:off);
-      rl.style.filter = rr.style.filter = led.R?'drop-shadow(0 0 5px #f43f5e)':'';
+      [rl,rr].forEach(function(lamp){
+        lamp.setAttribute('fill', led.R ? rOn : 'transparent');
+        lamp.setAttribute('opacity', led.R ? '0.95' : '0');
+        lamp.style.filter = led.R ? 'drop-shadow(0 0 7px #f43f5e)' : '';
+      });
     }
   }
 
