@@ -134,18 +134,47 @@ int steerCenterUs    = 1500;
 int steerMaxAngleDeg = 45;
 
 // ---------- Свет ----------
+// GPIO5 и GPIO15 не настраиваются при загрузке: это strapping-пины.
+// Выводы впервые становятся OUTPUT только после команды включения по WebSocket.
+namespace {
+bool ledFrontOutputInitialized = false;
+bool ledRearOutputInitialized = false;
+
+void applyLedOutput(uint8_t pin, bool requestedOn, bool &outputInitialized) {
+  if (!requestedOn) {
+    if (outputInitialized) {
+#if LED_ACTIVE_LOW
+      digitalWrite(pin, HIGH);
+#else
+      digitalWrite(pin, LOW);
+#endif
+    }
+    return;
+  }
+
+  if (!outputInitialized) {
+    // Сначала заранее выставляем неактивный уровень, чтобы не создать импульс
+    // при переключении GPIO в OUTPUT. Код выполняется только по команде ON.
+#if LED_ACTIVE_LOW
+    digitalWrite(pin, HIGH);
+#else
+    digitalWrite(pin, LOW);
+#endif
+    pinMode(pin, OUTPUT);
+    outputInitialized = true;
+  }
+
+#if LED_ACTIVE_LOW
+  digitalWrite(pin, LOW);
+#else
+  digitalWrite(pin, HIGH);
+#endif
+}
+} // namespace
 
 void applyLeds() {
-  /*
-   * Временно пустая функция.
-   *
-   * GPIO32 и GPIO33 используются вторым TB6612FNG:
-   * GPIO32 — TB2_BIN1
-   * GPIO33 — TB2_BIN2
-   *
-   * После выбора отдельных GPIO для фар здесь
-   * будет реализовано управление светом.
-   */
+  applyLedOutput(LED_FRONT_PIN, ledFrontOn, ledFrontOutputInitialized);
+  applyLedOutput(LED_REAR_PIN, ledRearOn, ledRearOutputInitialized);
 }
 
 // ---------- Формирование статуса для веб-интерфейса ----------
@@ -264,9 +293,8 @@ void setup() {
   prefs.begin("cfg", false);
   loadPreferences();
 
-  // Свет пока не управляется физически, функция оставлена
-  // для совместимости с веб-командами.
-  applyLeds();
+  // GPIO фар намеренно не настраиваем при загрузке.
+  // Они будут настроены только после WebSocket-команды включения света.
 
   // 7. Запуск точки доступа Wi-Fi.
   WiFi.softAP(AP_SSID, AP_PASSWORD);
