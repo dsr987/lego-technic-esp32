@@ -1,4 +1,3 @@
-
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_wifi.h>
@@ -9,8 +8,16 @@
 // GPIO34 — вход измерения напряжения батареи
 #define BATT_PIN 34
 
-// Коэффициент делителя напряжения
+// Коэффициент делителя напряжения: отношение V_ADC / V_battery.
+// Он описывает физическую резистивную схему и не является калибровочной поправкой.
 #define BATT_DIVIDER_FACTOR 0.2680
+
+// >>> КАЛИБРОВКА НАПРЯЖЕНИЯ БАТАРЕИ <<<
+// Это единственный коэффициент, который нужно менять после сравнения с мультиметром.
+// 1.0000 = дополнительная поправка отключена; исходное поведение сохраняется.
+// Для расчёта используй tools/calibrate_battery.py и текущие показания GUI/OLED.
+// Не изменяй BATT_DIVIDER_FACTOR вместо этой поправки, если делитель физически не менялся.
+static const float BATT_CALIBRATION_FACTOR = 1.0000f;
 
 // Пороговые значения и параметры фильтрации
 static const float LOW_BATTERY_THRESHOLD_V = 6.0;
@@ -50,7 +57,7 @@ float readBatteryVoltage() {
   }
 
   float vAdc = (sum / 8.0) / 4095.0 * 3.3;
-  return vAdc / BATT_DIVIDER_FACTOR;
+  return (vAdc / BATT_DIVIDER_FACTOR) * BATT_CALIBRATION_FACTOR;
 }
 
 
