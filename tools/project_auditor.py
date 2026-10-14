@@ -17,6 +17,7 @@ MODULES = (
     "display_control",
     "steering_control",
     "preferences_manager",
+    "i2c_motor_backend",
 )
 
 REQUIRED_FILES = (
