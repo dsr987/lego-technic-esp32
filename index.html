@@ -131,10 +131,9 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .car-svg{height:min(calc(var(--sh) + 56px), 246px);width:auto;aspect-ratio:256/427;max-height:100%;flex-shrink:1;display:block}
 .layered-car-svg .motor-overlay{opacity:0;transition:opacity .22s ease}
 .layered-car-svg .vehicle-light{transition:opacity .15s ease,filter .15s ease}
-.turn-signal{opacity:0;pointer-events:none;filter:drop-shadow(0 0 5px rgba(245,158,11,.9))}
-.turn-signal.on{animation:turn-signal-blink .8s ease-in-out infinite}
-@keyframes turn-signal-blink{0%,44%{opacity:1}45%,100%{opacity:0}}
-@media(prefers-reduced-motion:reduce){.turn-signal.on{animation:none;opacity:1}}
+.turn-signal-blink{pointer-events:none;filter:drop-shadow(0 0 6.25px rgba(245,158,11,.9));animation:turnSignalBlink .8s ease-in-out infinite}
+@keyframes turnSignalBlink{0%,44%{opacity:1}45%,100%{opacity:0}}
+@media(prefers-reduced-motion:reduce){.turn-signal-blink{animation:none;opacity:1}}
 .layered-car-svg use{transition:filter .12s ease}
 .layered-car-svg{overflow:visible}
 .layered-car-svg #wheel-light-overlays use{mix-blend-mode:screen;transition:opacity .12s ease;pointer-events:none}
@@ -637,8 +636,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
             <ellipse id="hl-fr" class="vehicle-light" cx="180" cy="26" rx="18" ry="13" fill="url(#front-headlight-gradient)" opacity="0"/>
             <ellipse id="hl-rl" class="vehicle-light" cx="42" cy="404" rx="17" ry="12" fill="url(#rear-headlight-gradient)" opacity="0"/>
             <ellipse id="hl-rr" class="vehicle-light" cx="210" cy="404" rx="17" ry="12" fill="url(#rear-headlight-gradient)" opacity="0"/>
-            <ellipse id="turn-signal-left" class="turn-signal" cx="72" cy="26" rx="18" ry="13" fill="url(#turn-signal-gradient)" opacity="0"/>
-            <ellipse id="turn-signal-right" class="turn-signal" cx="180" cy="26" rx="18" ry="13" fill="url(#turn-signal-gradient)" opacity="0"/>
           </svg>
         </div>
         <div class="btn-row">
@@ -1087,11 +1084,9 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 
   function paintCar(){
     var A=drive, S=steer, B=auxB, C=auxC;
-    // Поворотники — только визуальная индикация по положению слайдера руля.
-    // Отрицательное значение соответствует повороту влево, положительное — вправо.
-    var turnLeft=$('turn-signal-left'), turnRight=$('turn-signal-right');
-    if(turnLeft) turnLeft.classList.toggle('on', S < -8);
-    if(turnRight) turnRight.classList.toggle('on', S > 8);
+    // Поворотники используют те же элементы, что и штатная подсветка фар,
+    // чтобы не создавать отдельные SVG-слои со смещёнными координатами.
+    paintTurnSignals();
     // Шасси является неподвижной растровой подложкой; передние колёса вращаются отдельно.
     var ang = S * 0.28;
     var fl=$('c-fl'), fr=$('c-fr');
@@ -1162,19 +1157,45 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     }
   }
 
+  function paintSignalLamp(lamp, active, normalFill, enabled, normalFilter){
+    if(!lamp) return;
+    lamp.classList.toggle('turn-signal-blink', active);
+    lamp.setAttribute('fill', active ? 'url(#turn-signal-gradient)' : normalFill);
+    lamp.style.filter = active
+      ? 'brightness(1.25) drop-shadow(0 0 6.25px rgba(245,158,11,.9))'
+      : (enabled ? normalFilter : '');
+  }
+
+  function paintTurnSignals(){
+    var turningLeft = steer < -8, turningRight = steer > 8;
+    // Левая/правая сторона включает передний и задний указатели одновременно.
+    paintSignalLamp($('hl-fl'), turningLeft, 'url(#front-headlight-gradient)', led.F,
+      'brightness(1.25) drop-shadow(0 0 6.25px rgba(255,255,255,.9))');
+    paintSignalLamp($('hl-rl'), turningLeft, 'url(#rear-headlight-gradient)', led.R,
+      'brightness(1.25) drop-shadow(0 0 6.25px rgba(244,63,94,.9))');
+    paintSignalLamp($('hl-fr'), turningRight, 'url(#front-headlight-gradient)', led.F,
+      'brightness(1.25) drop-shadow(0 0 6.25px rgba(255,255,255,.9))');
+    paintSignalLamp($('hl-rr'), turningRight, 'url(#rear-headlight-gradient)', led.R,
+      'brightness(1.25) drop-shadow(0 0 6.25px rgba(244,63,94,.9))');
+  }
+
   function paintLights(){
     var fl=$('hl-fl'),fr=$('hl-fr'),rl=$('hl-rl'),rr=$('hl-rr');
-    // Цвет и плавное затухание задаются radialGradient; не рисуем отдельные светящиеся точки.
+    // Видимость штатных фар сохраняется отдельно от мигающего слоя поворотника.
     [fl,fr].forEach(function(lamp){
       if(!lamp) return;
       lamp.setAttribute('opacity', led.F ? '1' : '0');
+      lamp.setAttribute('fill', 'url(#front-headlight-gradient)');
       lamp.style.filter = led.F ? 'brightness(1.25) drop-shadow(0 0 6.25px rgba(255,255,255,.9))' : '';
     });
     [rl,rr].forEach(function(lamp){
       if(!lamp) return;
       lamp.setAttribute('opacity', led.R ? '1' : '0');
+      lamp.setAttribute('fill', 'url(#rear-headlight-gradient)');
       lamp.style.filter = led.R ? 'brightness(1.25) drop-shadow(0 0 6.25px rgba(244,63,94,.9))' : '';
     });
+    // Поверх штатных настроек применяем жёлтый указатель к тем же четырём элементам.
+    paintTurnSignals();
   }
 
   function engineBFromDrive(){ return Math.round(33+67*Math.abs(drive)/100); }
