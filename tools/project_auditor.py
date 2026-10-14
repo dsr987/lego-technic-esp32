@@ -444,10 +444,10 @@ def check_accent_theme_regressions() -> None:
         report("FAIL", "Accent selector options are missing or in an unexpected order")
 
     theme_css = (
-        (r'\[data-accent="racing-red"\]\s*\{[^}]*--blue:#f43f5e;--blue-dk:#e11d48', "Racing Red dark palette"),
-        (r'\[data-theme="light"\]\[data-accent="racing-red"\]\s*\{[^}]*--blue:#e11d48;--blue-dk:#be123c', "Racing Red light palette"),
-        (r'\[data-accent="neon-green"\]\s*\{[^}]*--blue:#22c55e;--blue-dk:#16a34a', "Neon Green dark palette"),
-        (r'\[data-theme="light"\]\[data-accent="neon-green"\]\s*\{[^}]*--blue:#16a34a;--blue-dk:#15803d', "Neon Green light palette"),
+        (r'\[data-accent="racing-red"\]\s*\{[^}]*--blue:#f43f5e;--blue-dk:#e11d48;--accent-rgb:244,63,94', "Racing Red dark palette"),
+        (r'\[data-theme="light"\]\[data-accent="racing-red"\]\s*\{[^}]*--blue:#e11d48;--blue-dk:#be123c;--accent-rgb:225,29,72', "Racing Red light palette"),
+        (r'\[data-accent="neon-green"\]\s*\{[^}]*--blue:#22c55e;--blue-dk:#16a34a;--accent-rgb:34,197,94', "Neon Green dark palette"),
+        (r'\[data-theme="light"\]\[data-accent="neon-green"\]\s*\{[^}]*--blue:#16a34a;--blue-dk:#15803d;--accent-rgb:22,163,74', "Neon Green light palette"),
     )
     for pattern, description in theme_css:
         if re.search(pattern, html):
@@ -481,6 +481,12 @@ def check_accent_theme_regressions() -> None:
         report("PASS", "Saved accent preset is restored and the settings control responds to changes")
     else:
         report("FAIL", "Accent preset must load on startup and respond to selector changes")
+
+
+    if "rgba(var(--accent-rgb)," in html and "rgba(59,130,246," not in html:
+        report("PASS", "Accent-dependent interface glows use the selected palette")
+    else:
+        report("FAIL", "Accent-dependent interface glows must use --accent-rgb")
 
     if (
         "localStorage.setItem('lcc_th',t)" in html
