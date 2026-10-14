@@ -81,7 +81,7 @@ The motor driver's nominal current figure is not enough to approve compatibility
 - [x] Add the `i2c_motor_backend.h/.cpp` board-specific backend using the Arduino Adafruit Motor Shield V2 library, pinned to version 1.1.4 in CI.
 - [x] Pass the existing I²C `TwoWire` instance to library initialization instead of starting a second bus.
 - [x] Map the logical motor channels A–D to library motor ports M1–M4; preserve signed `-100..100` speed semantics at the adapter boundary.
-- [x] Keep the old implementation available; the application does not initialize or call the experimental backend yet.
+- [x] During the scaffold milestone, keep the original GPIO/LEDC path active until the I2C backend and validation hooks are in place. This was superseded by Step 2 on this branch.
 - [x] Extend the project auditor with checks for the backend API, initialization, channel mapping, and no premature integration.
 - [ ] Confirm ESP32 CI build and project auditor results. The push validation workflow is configured, but its push-run result is not yet verified from the available GitHub status response.
 
