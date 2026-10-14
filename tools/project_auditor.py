@@ -650,6 +650,91 @@ def check_diagnostics_regressions() -> None:
 
 
 
+
+def check_physical_light_control_safety() -> None:
+    """GPIO5/15 are touched only after a WebSocket ON command; light states are volatile."""
+    hardware = read_text(SOURCE_DIR / "hardware_config.h")
+    app = read_text(SOURCE_DIR / "app.cpp")
+    control = read_text(SOURCE_DIR / "web_control.cpp")
+    preferences = read_text(SOURCE_DIR / "preferences_manager.cpp")
+    preferences_header = read_text(SOURCE_DIR / "preferences_manager.h")
+
+    if any(item is None for item in (hardware, app, control, preferences, preferences_header)):
+        report("FAIL", "Cannot read all source files for physical-light safety checks")
+        return
+
+    pin_checks = (
+        (r"^#define\s+LED_FRONT_PIN\s+5\s*$", "Front light is assigned to GPIO5"),
+        (r"^#define\s+LED_REAR_PIN\s+15\s*$", "Rear light is assigned to GPIO15"),
+        (r"^#define\s+LED_ACTIVE_LOW\s+1\s*$", "Light outputs use the documented active-low polarity"),
+    )
+    for pattern, description in pin_checks:
+        if re.search(pattern, hardware, re.MULTILINE):
+            report("PASS", description)
+        else:
+            report("FAIL", f"Physical-light pin configuration missing: {description}")
+
+    setup_match = re.search(
+        r"void\s+setup\s*\(\s*\)\s*\{(.*?)//\s*9\.\s*Запуск OTA",
+        app,
+        re.DOTALL,
+    )
+    if setup_match and not re.search(
+        r"(?:pinMode|digitalWrite)\s*\(\s*LED_(?:FRONT|REAR)_PIN|applyLeds\s*\(",
+        setup_match.group(1),
+    ):
+        report("PASS", "setup() does not configure or drive the light GPIOs")
+    else:
+        report("FAIL", "setup() must leave GPIO5/15 untouched until a WebSocket light-on command")
+
+    helper_match = re.search(
+        r"void\s+applyLedOutput\s*\([^)]*\)\s*\{(.*?)\n\}",
+        app,
+        re.DOTALL,
+    )
+    helper_ok = bool(helper_match) and all(
+        token in helper_match.group(1)
+        for token in ("if (!requestedOn)", "if (outputInitialized)", "if (!outputInitialized)", "pinMode(pin, OUTPUT)")
+    )
+    if helper_ok and "return;" in helper_match.group(1):
+        report("PASS", "Light GPIO initialization is lazy and OFF-before-initialization performs no writes")
+    else:
+        report("FAIL", "applyLedOutput() must avoid GPIO writes until first ON and initialize output safely")
+
+    defaults_ok = (
+        re.search(r"bool\s+ledFrontOn\s*=\s*false\s*;", app) is not None
+        and re.search(r"bool\s+ledRearOn\s*=\s*false\s*;", app) is not None
+    )
+    if defaults_ok:
+        report("PASS", "Front/rear light states default to OFF after reset")
+    else:
+        report("FAIL", "Front/rear light states must default to OFF after reset")
+
+    websocket_ok = (
+        'doc.containsKey("ledF")' in control
+        and 'doc.containsKey("ledR")' in control
+        and 'ledFrontOn = doc["ledF"].as<int>() == 1;' in control
+        and 'ledRearOn = doc["ledR"].as<int>() == 1;' in control
+        and control.count("applyLeds();") >= 2
+    )
+    if websocket_ok:
+        report("PASS", "Existing ledF/ledR WebSocket commands still update and apply light states")
+    else:
+        report("FAIL", "Existing ledF/ledR WebSocket behavior must be preserved")
+
+    persisted_light_state = (
+        "saveLedFront" in control
+        or "saveLedRear" in control
+        or re.search(r"prefs\.(?:get|put)\w*\s*\(\s*['\"]led[FR]['\"]", preferences) is not None
+        or "saveLedFront" in preferences_header
+        or "saveLedRear" in preferences_header
+    )
+    if not persisted_light_state:
+        report("PASS", "Light states are no longer loaded from or saved to NVS")
+    else:
+        report("FAIL", "Remove all NVS persistence of ledF/ledR; light states must be volatile")
+
+
 def main() -> int:
     print("=" * 64)
     print("LEGO TECHNIC ESP32 — PROJECT AUDITOR")
@@ -679,6 +764,8 @@ def main() -> int:
         check_accent_theme_regressions()
         print("\n--- Read-only diagnostics regression checks ---")
         check_diagnostics_regressions()
+        print("\n--- Physical light-control safety checks ---")
+        check_physical_light_control_safety()
 
     print()
     print("=" * 64)
