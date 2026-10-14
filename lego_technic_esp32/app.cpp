@@ -318,6 +318,15 @@ void setup() {
   lastCmdMillis = millis();
 }
 
+// Записывает одно срабатывание защиты на текущем цикле потери команд.
+void recordSafetyTimeout() {
+  if (!safetyTimeoutLatched) {
+    safetyTimeoutCount++;
+    lastSafetyTimeoutMillis = millis();
+    safetyTimeoutLatched = true;
+  }
+}
+
 // ---------- Основной цикл ----------
 
 void loop() {
@@ -331,13 +340,7 @@ void loop() {
         motorDVal != 0 ||
         servoVal != 0 ||
         engineSimOn) {
-      // Считаем переход в защитную остановку один раз, даже если stopAll()
-      // повторно вызывается до восстановления командного обмена.
-      if (!safetyTimeoutLatched) {
-        safetyTimeoutCount++;
-        lastSafetyTimeoutMillis = millis();
-        safetyTimeoutLatched = true;
-      }
+      recordSafetyTimeout();
       stopAll();
     }
   } else {
