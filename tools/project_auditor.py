@@ -544,7 +544,7 @@ def check_diagnostics_regressions() -> None:
         "diag-minheap", "diag-message-age",
     )
     for element_id in diag_ids:
-        if re.search(rf'id=["\\']{re.escape(element_id)}["\\']', html):
+        if re.search(rf"""id=["']{re.escape(element_id)}["']""", html):
             report("PASS", f"Diagnostics display contains {element_id}")
         else:
             report("FAIL", f"Diagnostics display is missing {element_id}")
