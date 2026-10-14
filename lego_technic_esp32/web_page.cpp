@@ -855,6 +855,9 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="line"><span>Свободная память</span><span class="grow"></span><b class="diag-value" id="diag-heap">--</b></div>
       <div class="line"><span>Минимум свободной памяти</span><span class="grow"></span><b class="diag-value" id="diag-minheap">--</b></div>
       <div class="line"><span>Последняя активность WS</span><span class="grow"></span><b class="diag-value" id="diag-message-age">--</b></div>
+      <div class="line"><span>Срабатываний защиты с запуска</span><span class="grow"></span><b class="diag-value" id="diag-failsafe-count">--</b></div>
+      <div class="line"><span>Последнее срабатывание защиты</span><span class="grow"></span><b class="diag-value" id="diag-failsafe-last">--</b></div>
+      <div style="font-size:10px;line-height:1.45;color:var(--muted)">Счётчик защиты хранится в RAM и сбрасывается при перезапуске ESP32. Код закрытия WebSocket не всегда раскрывает причину обрыва.</div>
       <div class="diag-log-head"><b>Журнал событий</b><button type="button" class="diag-clear" id="diag-log-clear">Очистить</button></div>
       <div class="diag-log" id="diag-log" role="log" aria-live="polite"><div class="diag-log-empty" id="diag-log-empty">Событий пока нет</div></div>
       <div style="font-size:10px;line-height:1.45;color:var(--muted)">Последние 20 событий этой вкладки. Журнал очищается при перезагрузке страницы и не сохраняется в ESP32.</div>
@@ -881,6 +884,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   var diagnosticStale = false;
   var diagnosticBatteryState = null;
   var diagnosticStationCount = null;
+  var diagnosticFailsafeCount = null;
 
   // Нажатие на кубик переключает шапку между названием устройства и последними TX-данными.
   var brandToggle = $('brand-toggle');
@@ -973,8 +977,14 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       zeroAll();
       txWS({eng:0});
     };
-    ws.onclose = function(){ 
-      addDiagnosticEvent('Соединение с ESP32 потеряно', 'error');
+    ws.onclose = function(event){ 
+      var closeMessage = 'Соединение с ESP32 потеряно';
+      if(event && Number.isFinite(Number(event.code))){
+        closeMessage += ' · WebSocket ' + Number(event.code);
+        closeMessage += event.wasClean ? ' (штатное закрытие)' : ' (нештатное закрытие)';
+        if(event.reason) closeMessage += ': ' + String(event.reason).slice(0,80);
+      }
+      addDiagnosticEvent(closeMessage, event && event.wasClean ? 'warn' : 'error');
       renderDiagnosticFreshness();
       $('ws-status').textContent='НЕТ СВЯЗИ'; 
       $('ws-status').style.color='var(--rose)'; 
@@ -1076,6 +1086,19 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     var rssi = Number(d.r);
     var voltage = Number(d.v);
     var warningCount = Number(d.lb);
+    var failsafeCount = Number(d.fsc);
+    var failsafeAge = Number(d.fsa);
+    if(Number.isFinite(failsafeCount)){
+      failsafeCount = Math.max(0, Math.floor(failsafeCount));
+      if(diagnosticFailsafeCount === null && failsafeCount > 0){
+        addDiagnosticEvent('На ESP32 с запуска зафиксировано срабатываний защиты: ' + failsafeCount, 'warn');
+      } else if(diagnosticFailsafeCount !== null && failsafeCount > diagnosticFailsafeCount){
+        addDiagnosticEvent('Сработала защита по тайм-ауту на ESP32 (всего: ' + failsafeCount + ')', 'error');
+      } else if(diagnosticFailsafeCount !== null && failsafeCount < diagnosticFailsafeCount){
+        addDiagnosticEvent('Счётчик защиты на ESP32 сброшен (возможен перезапуск)', 'warn');
+      }
+      diagnosticFailsafeCount = failsafeCount;
+    }
     if(Number.isFinite(stations) && diagnosticStationCount !== null && stations !== diagnosticStationCount){
       addDiagnosticEvent('Число Wi-Fi-клиентов: ' + diagnosticStationCount + ' → ' + stations, 'info');
     }
@@ -1103,6 +1126,14 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     put('diag-heap', Number.isFinite(Number(d.heap)) ? Math.round(Number(d.heap)/1024) + ' KB' : '--');
     put('diag-minheap', Number.isFinite(Number(d.minh)) ? Math.round(Number(d.minh)/1024) + ' KB' : '--');
     put('diag-message-age', Number.isFinite(Number(d.age)) ? Math.max(0, Math.round(Number(d.age))) + ' мс' : '--');
+    put('diag-failsafe-count', Number.isFinite(failsafeCount) ? String(failsafeCount) : '--');
+    if(Number.isFinite(failsafeCount) && failsafeCount === 0){
+      put('diag-failsafe-last', 'Не срабатывал с запуска');
+    } else if(Number.isFinite(failsafeCount) && failsafeCount > 0 && Number.isFinite(failsafeAge)){
+      put('diag-failsafe-last', Math.max(0, Math.floor(failsafeAge)) + ' с назад');
+    } else {
+      put('diag-failsafe-last', '--');
+    }
     renderDiagnosticFreshness();
   }
 
