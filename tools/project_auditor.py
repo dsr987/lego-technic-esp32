@@ -498,6 +498,86 @@ def check_accent_theme_regressions() -> None:
         report("FAIL", "Accent presets must not replace existing theme mode or vehicle signal colors")
 
 
+
+def check_diagnostics_regressions() -> None:
+    """Validate read-only diagnostic telemetry and its GUI without control commands."""
+    app = read_text(SOURCE_DIR / "app.cpp")
+    control = read_text(SOURCE_DIR / "web_control.cpp")
+    html = read_text(REPO_ROOT / "index.html")
+    if app is None or control is None or html is None:
+        report("FAIL", "Cannot read app.cpp, web_control.cpp or index.html for diagnostics checks")
+        return
+
+    status_fields = ("sta", "up", "heap", "minh", "age", "lb")
+    status_function = re.search(
+        r"void\s+buildStatus\s*\(\s*char\s*\*\s*buf\s*,\s*size_t\s+n\s*\)\s*\{(.*?)"
+        r"\n\s*\}\s*\n",
+        app,
+        re.DOTALL,
+    )
+    if status_function:
+        body = status_function.group(1)
+        required_sources = (
+            ("sta", "WiFi.softAPgetStationNum()"),
+            ("up", "millis() / 1000UL"),
+            ("heap", "ESP.getFreeHeap()"),
+            ("minh", "ESP.getMinFreeHeap()"),
+            ("age", "millis() - lastCmdMillis"),
+            ("lb", "lowBattCount"),
+        )
+        for field, source in required_sources:
+            if re.search(rf'\\"{field}\\"\s*:', body) and source in body:
+                report("PASS", f"Diagnostic field {field} uses {source}")
+            else:
+                report("FAIL", f"Diagnostic status field {field} missing or has an unexpected source")
+
+        if "char buf[256];" in app and "char buf[256];" in control:
+            report("PASS", "Status buffers fit the extended diagnostic JSON")
+        else:
+            report("FAIL", "Extended diagnostic JSON requires 256-byte status buffers")
+    else:
+        report("FAIL", "Could not locate buildStatus() for diagnostic telemetry checks")
+
+    diag_ids = (
+        "diag-link", "diag-age", "diag-wifi", "diag-clients", "diag-rssi",
+        "diag-battery", "diag-battery-state", "diag-uptime", "diag-heap",
+        "diag-minheap", "diag-message-age",
+    )
+    for element_id in diag_ids:
+        if re.search(rf'id=["\\']{re.escape(element_id)}["\\']', html):
+            report("PASS", f"Diagnostics display contains {element_id}")
+        else:
+            report("FAIL", f"Diagnostics display is missing {element_id}")
+
+    update_match = re.search(
+        r"function\s+updateDiagnostics\s*\(\s*d\s*\)\s*\{(.*?)"
+        r"\n\s*\}\s*\n\s*function\s+renderDiagnosticFreshness",
+        html,
+        re.DOTALL,
+    )
+    if update_match:
+        body = update_match.group(1)
+        if all(token in body for token in ("d.sta", "d.c", "d.r", "d.v", "d.p", "d.lb", "d.up", "d.heap", "d.minh", "d.age")):
+            report("PASS", "GUI renders all transmitted read-only diagnostic values")
+        else:
+            report("FAIL", "GUI parser is missing one or more diagnostic telemetry fields")
+        if not re.search(r"\btxWS\s*\(", body):
+            report("PASS", "Diagnostic rendering does not send control commands")
+        else:
+            report("FAIL", "Diagnostic rendering must not send WebSocket control commands")
+    else:
+        report("FAIL", "updateDiagnostics() is missing")
+
+    if (
+        "updateDiagnostics(d);" in html
+        and "setInterval(renderDiagnosticFreshness, 1000)" in html
+        and "now - lastTelemetryAt > 3000" in html
+    ):
+        report("PASS", "Diagnostic connection freshness updates and detects stale telemetry")
+    else:
+        report("FAIL", "Diagnostic screen must update freshness and flag stale telemetry")
+
+
 def main() -> int:
     print("=" * 64)
     print("LEGO TECHNIC ESP32 — PROJECT AUDITOR")
@@ -525,6 +605,8 @@ def main() -> int:
         check_turn_signal_regressions()
         print("\n--- Accent-theme regression checks ---")
         check_accent_theme_regressions()
+        print("\n--- Read-only diagnostics regression checks ---")
+        check_diagnostics_regressions()
 
     print()
     print("=" * 64)
