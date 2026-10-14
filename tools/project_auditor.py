@@ -538,6 +538,22 @@ def check_diagnostics_regressions() -> None:
     else:
         report("FAIL", "Could not locate buildStatus() for diagnostic telemetry checks")
 
+    diag_heading = html.find("<h3>Диагностика системы</h3>")
+    buttons_heading = html.find("<h3>Кнопки</h3>")
+    diag_block_start = html.rfind('<div class="block">', 0, diag_heading)
+    buttons_block_start = html.rfind('<div class="block">', 0, buttons_heading)
+    if (
+        diag_heading >= 0
+        and buttons_heading > diag_heading
+        and diag_block_start >= 0
+        and buttons_block_start > diag_block_start
+        and len(re.findall(r'<div class="block">', html[diag_block_start:buttons_block_start])) == 1
+        and html[diag_block_start:buttons_block_start].rstrip().endswith("</div>")
+    ):
+        report("PASS", "Diagnostics block is last in settings, immediately before the Buttons guide")
+    else:
+        report("FAIL", "Diagnostics must be placed at the end of settings immediately before the Buttons guide")
+
     diag_ids = (
         "diag-link", "diag-age", "diag-wifi", "diag-clients", "diag-rssi",
         "diag-battery", "diag-battery-state", "diag-uptime", "diag-heap",
