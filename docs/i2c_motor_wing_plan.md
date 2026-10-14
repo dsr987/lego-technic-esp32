@@ -94,6 +94,8 @@ The motor driver's nominal current figure is not enough to approve compatibility
 - [x] Show `MOTOR / I2C ERR` on the OLED if the PCA9685 board is not detected during startup (unless the low-battery warning is active).
 - [ ] Confirm ESP32 CI build and static audit before connecting motor power.
 
+Software check performed locally: a C++11 syntax smoke test with mocked Arduino, Adafruit Motor Shield and ESP32 FreeRTOS APIs passed for the backend/control code. This is not a build with the real ESP32 Arduino Core or official library binaries. The GitHub push-run result remains unverified through the available status endpoint.
+
 ### Step 3 — bench tests, one motor at a time
 1. With motor supply disconnected, boot ESP32 and OLED; verify the PCA9685 is detected on `0x60`.
 2. Verify an absent board does not hang boot or activate motor commands.
