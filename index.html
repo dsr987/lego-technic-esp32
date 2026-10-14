@@ -743,6 +743,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
         <select id="drive-axle-select">
           <option value="rear">Задняя (RWD)</option>
           <option value="front">Передняя (FWD)</option>
+          <option value="awd">Полный привод (AWD)</option>
         </select>
         <div style="font-size:10px;line-height:1.45">Меняет только свечение ведущих колёс. Управление моторами не меняется.</div>
       </div>
@@ -830,7 +831,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   var drive=0, auxB=0, auxC=0, auxD=0, steer=0;
   var motorCount = +(localStorage.getItem("lcc_motor_count") || 3);
   // Это настройка только визуальной подсветки, не маршрутизация команд мотора A.
-  var drivenAxle = localStorage.getItem('lcc_driven_axle') === 'front' ? 'front' : 'rear';
+  var savedDrivenAxle = localStorage.getItem('lcc_driven_axle');
+  var drivenAxle = (savedDrivenAxle === 'front' || savedDrivenAxle === 'awd') ? savedDrivenAxle : 'rear';
   
   var holdConfig = { A: false, B: false, C: false, D: false };
   var holdActive = { A: false, B: false, C: false, D: false };
@@ -1089,8 +1091,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 
     var activeDrive = Math.abs(A) > 8;
     // Выбранная ведущая ось управляет только визуальной подсветкой; команды моторам не меняются.
-    var frontAxleGlows = activeDrive && drivenAxle === 'front';
-    var rearAxleGlows = activeDrive && drivenAxle === 'rear';
+    var frontAxleGlows = activeDrive && (drivenAxle === 'front' || drivenAxle === 'awd');
+    var rearAxleGlows = activeDrive && (drivenAxle === 'rear' || drivenAxle === 'awd');
 
     var driveColor = A>8 ? '#10b981' : (A<-8 ? '#f43f5e' : 'var(--svg-stroke)');
     var tintFlood = $('wheel-tint-flood');
