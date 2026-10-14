@@ -508,7 +508,7 @@ def check_diagnostics_regressions() -> None:
         report("FAIL", "Cannot read app.cpp, web_control.cpp or index.html for diagnostics checks")
         return
 
-    status_fields = ("sta", "up", "heap", "minh", "age", "lb")
+    status_fields = ("sta", "up", "heap", "minh", "age", "lb", "fsc", "fsa")
     status_function = re.search(
         r"void\s+buildStatus\s*\(\s*char\s*\*\s*buf\s*,\s*size_t\s+n\s*\)\s*\{(.*?)"
         r"\n\s*\}\s*\n",
@@ -524,6 +524,8 @@ def check_diagnostics_regressions() -> None:
             ("minh", "ESP.getMinFreeHeap()"),
             ("age", "millis() - lastCmdMillis"),
             ("lb", "lowBattCount"),
+            ("fsc", "safetyTimeoutCount"),
+            ("fsa", "lastSafetyTimeoutMillis"),
         )
         for field, source in required_sources:
             if re.search(rf'\\"{field}\\"\s*:', body) and source in body:
@@ -537,6 +539,31 @@ def check_diagnostics_regressions() -> None:
             report("FAIL", "Extended diagnostic JSON requires 256-byte status buffers")
     else:
         report("FAIL", "Could not locate buildStatus() for diagnostic telemetry checks")
+
+    timeout_loop = re.search(
+        r"void\s+loop\s*\(\s*\)\s*\{(.*?)//\s*Обслуживание OTA",
+        app,
+        re.DOTALL,
+    )
+    timeout_body = timeout_loop.group(1) if timeout_loop else ""
+    timeout_diagnostics_ok = (
+        "unsigned long safetyTimeoutCount = 0;" in app
+        and "unsigned long lastSafetyTimeoutMillis = 0;" in app
+        and "bool safetyTimeoutLatched = false;" in app
+        and re.search(
+            r"if\s*\(\s*!safetyTimeoutLatched\s*\)\s*\{.*?"
+            r"safetyTimeoutCount\+\+;.*?lastSafetyTimeoutMillis\s*=\s*millis\(\);.*?"
+            r"safetyTimeoutLatched\s*=\s*true;",
+            timeout_body,
+            re.DOTALL,
+        )
+        and "safetyTimeoutLatched = false;" in timeout_body
+        and "stopAll();" in timeout_body
+    )
+    if timeout_diagnostics_ok:
+        report("PASS", "Safety timeout activations are counted once without changing the stop action")
+    else:
+        report("FAIL", "Safety timeout diagnostics must count the protected stop once and retain stopAll()")
 
     diag_heading = html.find("<h3>Диагностика системы</h3>")
     buttons_heading = html.find("<h3>Кнопки</h3>")
@@ -557,7 +584,8 @@ def check_diagnostics_regressions() -> None:
     diag_ids = (
         "diag-link", "diag-age", "diag-wifi", "diag-clients", "diag-rssi",
         "diag-battery", "diag-battery-state", "diag-uptime", "diag-heap",
-        "diag-minheap", "diag-message-age",
+        "diag-minheap", "diag-message-age", "diag-failsafe-count",
+        "diag-failsafe-last",
     )
     for element_id in diag_ids:
         if re.search(rf"""id=["']{re.escape(element_id)}["']""", html):
@@ -573,7 +601,7 @@ def check_diagnostics_regressions() -> None:
     )
     if update_match:
         body = update_match.group(1)
-        if all(token in body for token in ("d.sta", "d.c", "d.r", "d.v", "d.p", "d.lb", "d.up", "d.heap", "d.minh", "d.age")):
+        if all(token in body for token in ("d.sta", "d.c", "d.r", "d.v", "d.p", "d.lb", "d.up", "d.heap", "d.minh", "d.age", "d.fsc", "d.fsa")):
             report("PASS", "GUI renders all transmitted read-only diagnostic values")
         else:
             report("FAIL", "GUI parser is missing one or more diagnostic telemetry fields")
@@ -600,6 +628,10 @@ def check_diagnostics_regressions() -> None:
         ("Телеметрия не обновляется более 3 секунд", "stale telemetry event"),
         ("Получение телеметрии восстановлено", "telemetry recovery event"),
         ("Состояние батареи: ", "battery state change event"),
+        ("Сработала защита по тайм-ауту на ESP32", "firmware safety-timeout event"),
+        ("event.code", "WebSocket close code"),
+        ("event.wasClean", "WebSocket clean-close flag"),
+        ("event.reason", "WebSocket close reason"),
         ("message.textContent = event.message", "safe text rendering"),
     )
     for token, description in event_log_checks:
