@@ -592,6 +592,22 @@ def check_diagnostics_regressions() -> None:
         report("PASS", "Diagnostic connection freshness updates and detects stale telemetry")
     else:
         report("FAIL", "Diagnostic screen must update freshness and flag stale telemetry")
+    event_log_checks = (
+        ('id="diag-log"', "event log container"),
+        ('id="diag-log-clear"', "clear-log button"),
+        ("if(diagnosticEvents.length > 20) diagnosticEvents.length = 20", "bounded 20-event history"),
+        ("Соединение с ESP32 потеряно", "disconnect event"),
+        ("Телеметрия не обновляется более 3 секунд", "stale telemetry event"),
+        ("Получение телеметрии восстановлено", "telemetry recovery event"),
+        ("Состояние батареи: ", "battery state change event"),
+        ("message.textContent = event.message", "safe text rendering"),
+    )
+    for token, description in event_log_checks:
+        if token in html:
+            report("PASS", f"Diagnostic event log includes {description}")
+        else:
+            report("FAIL", f"Diagnostic event log is missing {description}")
+
 
 
 def main() -> int:
