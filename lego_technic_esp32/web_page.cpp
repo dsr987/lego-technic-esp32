@@ -133,6 +133,10 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .car-svg{height:min(calc(var(--sh) + 56px), 246px);width:auto;aspect-ratio:256/427;max-height:100%;flex-shrink:1;display:block}
 .layered-car-svg .motor-overlay{opacity:0;transition:opacity .22s ease}
 .layered-car-svg .vehicle-light{transition:opacity .15s ease,filter .15s ease}
+.turn-signal{opacity:0;pointer-events:none;filter:drop-shadow(0 0 5px rgba(245,158,11,.9))}
+.turn-signal.on{animation:turn-signal-blink .8s ease-in-out infinite}
+@keyframes turn-signal-blink{0%,44%{opacity:1}45%,100%{opacity:0}}
+@media(prefers-reduced-motion:reduce){.turn-signal.on{animation:none;opacity:1}}
 .layered-car-svg use{transition:filter .12s ease}
 .layered-car-svg{overflow:visible}
 .layered-car-svg #wheel-light-overlays use{mix-blend-mode:screen;transition:opacity .12s ease;pointer-events:none}
@@ -624,11 +628,19 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
                 <stop offset="0.58" stop-color="#f43f5e" stop-opacity="0.4"/>
                 <stop offset="1" stop-color="#f43f5e" stop-opacity="0"/>
               </radialGradient>
+              <radialGradient id="turn-signal-gradient">
+                <stop offset="0" stop-color="#fde047" stop-opacity="1"/>
+                <stop offset="0.32" stop-color="#facc15" stop-opacity="0.98"/>
+                <stop offset="0.68" stop-color="#f59e0b" stop-opacity="0.72"/>
+                <stop offset="1" stop-color="#f59e0b" stop-opacity="0"/>
+              </radialGradient>
             </defs>
             <ellipse id="hl-fl" class="vehicle-light" cx="72" cy="26" rx="18" ry="13" fill="url(#front-headlight-gradient)" opacity="0"/>
             <ellipse id="hl-fr" class="vehicle-light" cx="180" cy="26" rx="18" ry="13" fill="url(#front-headlight-gradient)" opacity="0"/>
             <ellipse id="hl-rl" class="vehicle-light" cx="42" cy="404" rx="17" ry="12" fill="url(#rear-headlight-gradient)" opacity="0"/>
             <ellipse id="hl-rr" class="vehicle-light" cx="210" cy="404" rx="17" ry="12" fill="url(#rear-headlight-gradient)" opacity="0"/>
+            <ellipse id="turn-signal-left" class="turn-signal" cx="72" cy="26" rx="18" ry="13" fill="url(#turn-signal-gradient)" opacity="0"/>
+            <ellipse id="turn-signal-right" class="turn-signal" cx="180" cy="26" rx="18" ry="13" fill="url(#turn-signal-gradient)" opacity="0"/>
           </svg>
         </div>
         <div class="btn-row">
@@ -1077,6 +1089,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 
   function paintCar(){
     var A=drive, S=steer, B=auxB, C=auxC;
+    // Поворотники — только визуальная индикация по положению слайдера руля.
+    // Отрицательное значение соответствует повороту влево, положительное — вправо.
+    var turnLeft=$('turn-signal-left'), turnRight=$('turn-signal-right');
+    if(turnLeft) turnLeft.classList.toggle('on', S < -8);
+    if(turnRight) turnRight.classList.toggle('on', S > 8);
     // Шасси является неподвижной растровой подложкой; передние колёса вращаются отдельно.
     var ang = S * 0.28;
     var fl=$('c-fl'), fr=$('c-fr');
