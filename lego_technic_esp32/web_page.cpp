@@ -870,7 +870,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   if (driveAxleSelect) {
     driveAxleSelect.value = drivenAxle;
     driveAxleSelect.addEventListener('change', function(){
-      drivenAxle = this.value === 'front' ? 'front' : 'rear';
+      drivenAxle = (this.value === 'front' || this.value === 'awd') ? this.value : 'rear';
       localStorage.setItem('lcc_driven_axle', drivenAxle);
       vibrateClick();
       paintCar();
