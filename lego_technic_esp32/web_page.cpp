@@ -280,8 +280,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 
 .engine-smoke { position:absolute;inset:0;z-index:2;pointer-events:none;opacity:0;transition:opacity .45s ease; }
 .engine-smoke.on { opacity:1; }
-@keyframes exhaustSmoke{0%{transform:translate(0,0) scale(.38);opacity:0}12%{opacity:.48}100%{transform:translate(var(--dx),22px) scale(2.15);opacity:0}}
-.smoke-puff{position:absolute;width:11px;height:9px;border-radius:50%;background:radial-gradient(ellipse at 42% 42%,rgba(148,163,184,.68) 0%,rgba(148,163,184,.4) 40%,rgba(100,116,139,0) 78%);filter:blur(1px);animation:exhaustSmoke 1.8s ease-out infinite;animation-play-state:paused;will-change:transform,opacity}
+@keyframes exhaustSmoke{0%{transform:translate(0,0) scale(.38);opacity:0}12%{opacity:.72}100%{transform:translate(var(--dx),22px) scale(2.15);opacity:0}}
+.smoke-puff{position:absolute;width:11px;height:9px;border-radius:50%;background:radial-gradient(ellipse at 42% 42%,rgba(148,163,184,1) 0%,rgba(148,163,184,.6) 40%,rgba(100,116,139,0) 78%);filter:blur(1px);animation:exhaustSmoke 1.8s ease-out infinite;animation-play-state:paused;will-change:transform,opacity}
 .engine-smoke.on .smoke-puff{animation-play-state:running}
 
 #motors-icon { transition: opacity 0.40s ease; }
@@ -517,11 +517,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="col">
         <div class="car-wrap">
           <div class="engine-smoke" id="engine-smoke" aria-hidden="true">
-            <i class="smoke-puff" style="left:48%;top:97%;--dx:-18px;animation-delay:0s"></i>
-            <i class="smoke-puff" style="left:49%;top:98%;--dx:-8px;animation-delay:.36s"></i>
-            <i class="smoke-puff" style="left:50%;top:97%;--dx:10px;animation-delay:.72s"></i>
-            <i class="smoke-puff" style="left:51%;top:98%;--dx:21px;animation-delay:1.08s"></i>
-            <i class="smoke-puff" style="left:49%;top:97%;--dx:4px;animation-delay:1.44s"></i>
+            <i class="smoke-puff" style="left:48%;top:95%;--dx:-18px;animation-delay:0s"></i>
+            <i class="smoke-puff" style="left:49%;top:96%;--dx:-8px;animation-delay:.36s"></i>
+            <i class="smoke-puff" style="left:50%;top:95%;--dx:10px;animation-delay:.72s"></i>
+            <i class="smoke-puff" style="left:51%;top:96%;--dx:21px;animation-delay:1.08s"></i>
+            <i class="smoke-puff" style="left:49%;top:95%;--dx:4px;animation-delay:1.44s"></i>
           </div>
           <svg class="car-svg layered-car-svg" viewBox="-2 0 256 427" xmlns="http://www.w3.org/2000/svg">
             <defs>
@@ -1137,12 +1137,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     [fl,fr].forEach(function(lamp){
       if(!lamp) return;
       lamp.setAttribute('opacity', led.F ? '1' : '0');
-      lamp.style.filter = led.F ? 'drop-shadow(0 0 5px rgba(255,255,255,.72))' : '';
+      lamp.style.filter = led.F ? 'brightness(1.25) drop-shadow(0 0 6.25px rgba(255,255,255,.9))' : '';
     });
     [rl,rr].forEach(function(lamp){
       if(!lamp) return;
       lamp.setAttribute('opacity', led.R ? '1' : '0');
-      lamp.style.filter = led.R ? 'drop-shadow(0 0 5px rgba(244,63,94,.72))' : '';
+      lamp.style.filter = led.R ? 'brightness(1.25) drop-shadow(0 0 6.25px rgba(244,63,94,.9))' : '';
     });
   }
 
