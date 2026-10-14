@@ -273,6 +273,15 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .num{width:48px;height:28px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:2px;text-align:center;font-weight:700;font-size:12px}
 
 .diag-value{font-size:11px;text-align:right;max-width:60%;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.diag-log-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;margin-bottom:6px;font-size:12px}
+.diag-clear{border:1px solid var(--border);border-radius:6px;background:var(--panel);color:var(--muted);padding:4px 8px;font-size:10px;cursor:pointer}
+.diag-log{display:flex;flex-direction:column;gap:5px;max-height:190px;overflow-y:auto}
+.diag-log-entry{display:grid;grid-template-columns:auto 1fr;gap:7px;font-size:10px;line-height:1.4;padding:6px 7px;border-radius:6px;background:var(--panel)}
+.diag-log-time{color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.diag-log-empty{font-size:10px;color:var(--muted);padding:8px 0}
+.diag-log-entry.warn .diag-log-message{color:var(--amber)}
+.diag-log-entry.error .diag-log-message{color:var(--rose)}
+
 .sheet select {
   width: 100%; padding: 8px; background: var(--panel); color: var(--text);
   border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 600; outline: none;
@@ -844,6 +853,9 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="line"><span>Свободная память</span><span class="grow"></span><b class="diag-value" id="diag-heap">--</b></div>
       <div class="line"><span>Минимум свободной памяти</span><span class="grow"></span><b class="diag-value" id="diag-minheap">--</b></div>
       <div class="line"><span>Последняя активность WS</span><span class="grow"></span><b class="diag-value" id="diag-message-age">--</b></div>
+      <div class="diag-log-head"><b>Журнал событий</b><button type="button" class="diag-clear" id="diag-log-clear">Очистить</button></div>
+      <div class="diag-log" id="diag-log" role="log" aria-live="polite"><div class="diag-log-empty" id="diag-log-empty">Событий пока нет</div></div>
+      <div style="font-size:10px;line-height:1.45;color:var(--muted)">Последние 20 событий этой вкладки. Журнал очищается при перезагрузке страницы и не сохраняется в ESP32.</div>
       <div style="font-size:10px;line-height:1.45;color:var(--muted)">Только просмотр. RSSI относится к подключённому клиенту; минимальная память — наименьшее свободное значение с момента запуска. Наличие команды мотора не подтверждает физическое вращение.</div>
     </div>
         <div class="block">
@@ -863,6 +875,10 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   function $(id){ return document.getElementById(id); }
   var ws = null;
   var lastTelemetryAt = 0;
+  var diagnosticEvents = [];
+  var diagnosticStale = false;
+  var diagnosticBatteryState = null;
+  var diagnosticStationCount = null;
 
   // Нажатие на кубик переключает шапку между названием устройства и последними TX-данными.
   var brandToggle = $('brand-toggle');
@@ -941,6 +957,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     ws = new WebSocket('ws://' + location.host + '/ws');
     ws.onopen = function(){
       lastTelemetryAt = 0;
+      diagnosticStale = false;
+      addDiagnosticEvent('Связь с ESP32 установлена', 'ok');
       renderDiagnosticFreshness();
       $('ws-status').textContent='ESP32';
       $('ws-status').style.color='var(--emerald)';
@@ -954,6 +972,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       txWS({eng:0});
     };
     ws.onclose = function(){ 
+      addDiagnosticEvent('Соединение с ESP32 потеряно', 'error');
       renderDiagnosticFreshness();
       $('ws-status').textContent='НЕТ СВЯЗИ'; 
       $('ws-status').style.color='var(--rose)'; 
@@ -991,6 +1010,49 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     ws.send(JSON.stringify({hb:1}));
   }, 150);
 
+  function addDiagnosticEvent(message, level){
+    var now = new Date();
+    var time = now.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    diagnosticEvents.unshift({time:time,message:message,level:level || 'info'});
+    if(diagnosticEvents.length > 20) diagnosticEvents.length = 20;
+    renderDiagnosticEvents();
+  }
+
+  function renderDiagnosticEvents(){
+    var list = $('diag-log');
+    if(!list) return;
+    list.textContent = '';
+    if(!diagnosticEvents.length){
+      var empty = document.createElement('div');
+      empty.className = 'diag-log-empty';
+      empty.id = 'diag-log-empty';
+      empty.textContent = 'Событий пока нет';
+      list.appendChild(empty);
+      return;
+    }
+    diagnosticEvents.forEach(function(event){
+      var row = document.createElement('div');
+      row.className = 'diag-log-entry' + (event.level === 'warn' ? ' warn' : '') + (event.level === 'error' ? ' error' : '');
+      var time = document.createElement('span');
+      time.className = 'diag-log-time';
+      time.textContent = event.time;
+      var message = document.createElement('span');
+      message.className = 'diag-log-message';
+      message.textContent = event.message;
+      row.appendChild(time);
+      row.appendChild(message);
+      list.appendChild(row);
+    });
+  }
+
+  var clearDiagnosticLog = $('diag-log-clear');
+  if(clearDiagnosticLog){
+    clearDiagnosticLog.addEventListener('click', function(){
+      diagnosticEvents = [];
+      renderDiagnosticEvents();
+    });
+  }
+
   function formatUptime(totalSeconds){
     var total = Math.max(0, Math.floor(Number(totalSeconds) || 0));
     var days = Math.floor(total / 86400);
@@ -1012,6 +1074,16 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     var rssi = Number(d.r);
     var voltage = Number(d.v);
     var warningCount = Number(d.lb);
+    if(Number.isFinite(stations) && diagnosticStationCount !== null && stations !== diagnosticStationCount){
+      addDiagnosticEvent('Число Wi-Fi-клиентов: ' + diagnosticStationCount + ' → ' + stations, 'info');
+    }
+    if(Number.isFinite(stations)) diagnosticStationCount = stations;
+    var batteryState = (!Number.isFinite(voltage) || voltage <= 0.5) ? 'Нет показаний' : (warningCount >= 3 ? 'Низкое напряжение' : (voltage < 6.0 ? 'Проверка ' + Math.max(0, warningCount) + '/3' : 'Порог не достигнут'));
+    if(diagnosticBatteryState !== null && batteryState !== diagnosticBatteryState){
+      var level = batteryState === 'Низкое напряжение' || batteryState === 'Нет показаний' ? 'warn' : 'info';
+      addDiagnosticEvent('Состояние батареи: ' + batteryState, level);
+    }
+    diagnosticBatteryState = batteryState;
     put('diag-wifi', 'Активна · ' + (Number.isFinite(stations) ? stations : 0));
     put('diag-clients', Number.isFinite(Number(d.c)) ? String(Number(d.c)) : '--');
     put('diag-rssi', stations > 0 && Number.isFinite(rssi) && rssi < 0 ? rssi + ' dBm' : 'нет клиента');
@@ -1041,8 +1113,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     } else if(!lastTelemetryAt){
       if(link) { link.textContent = 'Ожидание телеметрии'; link.style.color = 'var(--amber)'; }
     } else if(now - lastTelemetryAt > 3000){
+      if(!diagnosticStale) addDiagnosticEvent('Телеметрия не обновляется более 3 секунд', 'error');
+      diagnosticStale = true;
       if(link) { link.textContent = 'Нет свежих данных'; link.style.color = 'var(--rose)'; }
     } else if(link){
+      if(diagnosticStale) addDiagnosticEvent('Получение телеметрии восстановлено', 'ok');
+      diagnosticStale = false;
       link.textContent = 'На связи'; link.style.color = 'var(--emerald)';
     }
     if(ageLabel){
