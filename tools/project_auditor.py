@@ -546,15 +546,23 @@ def check_diagnostics_regressions() -> None:
         re.DOTALL,
     )
     timeout_body = timeout_loop.group(1) if timeout_loop else ""
+    counter_function_start = app.find("void recordSafetyTimeout()")
+    counter_function_end = app.find("// ---------- Основной цикл ----------", counter_function_start)
+    counter_body = (
+        app[counter_function_start:counter_function_end]
+        if counter_function_start >= 0 and counter_function_end > counter_function_start
+        else ""
+    )
     timeout_diagnostics_ok = (
         "unsigned long safetyTimeoutCount = 0;" in app
         and "unsigned long lastSafetyTimeoutMillis = 0;" in app
         and "bool safetyTimeoutLatched = false;" in app
+        and "recordSafetyTimeout();" in timeout_body
         and re.search(
             r"if\s*\(\s*!safetyTimeoutLatched\s*\)\s*\{.*?"
             r"safetyTimeoutCount\+\+;.*?lastSafetyTimeoutMillis\s*=\s*millis\(\);.*?"
             r"safetyTimeoutLatched\s*=\s*true;",
-            timeout_body,
+            counter_body,
             re.DOTALL,
         )
         and "safetyTimeoutLatched = false;" in timeout_body
