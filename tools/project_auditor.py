@@ -359,6 +359,66 @@ def check_tank_visual_regressions() -> None:
         report("FAIL", "Tank layer order must be left track, right track, then crawler body")
 
 
+
+def check_turn_signal_regressions() -> None:
+    """Keep front/rear turn signals attached to the four original light positions."""
+    html = read_text(REPO_ROOT / "index.html")
+    if html is None:
+        report("FAIL", "Cannot read index.html for turn-signal regression checks")
+        return
+
+    original_lamps = (
+        (
+            r'<ellipse\s+id="hl-fl"\s+class="vehicle-light"\s+cx="72"\s+cy="26"\s+rx="18"\s+ry="13"\s+fill="url\(#front-headlight-gradient\)"',
+            "front-left headlight retains its original position",
+        ),
+        (
+            r'<ellipse\s+id="hl-fr"\s+class="vehicle-light"\s+cx="180"\s+cy="26"\s+rx="18"\s+ry="13"\s+fill="url\(#front-headlight-gradient\)"',
+            "front-right headlight retains its original position",
+        ),
+        (
+            r'<ellipse\s+id="hl-rl"\s+class="vehicle-light"\s+cx="42"\s+cy="404"\s+rx="17"\s+ry="12"\s+fill="url\(#rear-headlight-gradient\)"',
+            "rear-left light retains its original position",
+        ),
+        (
+            r'<ellipse\s+id="hl-rr"\s+class="vehicle-light"\s+cx="210"\s+cy="404"\s+rx="17"\s+ry="12"\s+fill="url\(#rear-headlight-gradient\)"',
+            "rear-right light retains its original position",
+        ),
+    )
+    for pattern, description in original_lamps:
+        if re.search(pattern, html):
+            report("PASS", description)
+        else:
+            report("FAIL", f"Turn-signal regression: {description}")
+
+    if not re.search(r'id="turn-signal-(?:left|right)"', html):
+        report("PASS", "Turn signals reuse original headlight SVG elements")
+    else:
+        report("FAIL", "Extra turn-signal overlays may misalign with the original lights")
+
+    required_calls = (
+        (r"paintSignalLamp\(\$\(['\"]hl-fl['\"]\),\s*turningLeft", "left front indicator follows left turn"),
+        (r"paintSignalLamp\(\$\(['\"]hl-rl['\"]\),\s*turningLeft", "left rear indicator follows left turn"),
+        (r"paintSignalLamp\(\$\(['\"]hl-fr['\"]\),\s*turningRight", "right front indicator follows right turn"),
+        (r"paintSignalLamp\(\$\(['\"]hl-rr['\"]\),\s*turningRight", "right rear indicator follows right turn"),
+    )
+    for pattern, description in required_calls:
+        if re.search(pattern, html):
+            report("PASS", description)
+        else:
+            report("FAIL", f"Turn-signal regression: {description}")
+
+    if re.search(r"@keyframes\s+turnSignalBlink\s*\{0%,44%\s*\{\s*opacity:1\s*\}\s*45%,100%\s*\{\s*opacity:0\s*\}\}", html):
+        report("PASS", "Turn-signal blink timing remains unchanged")
+    else:
+        report("FAIL", "Turn-signal blink animation or timing has changed")
+
+    if re.search(r"function\s+paintLights\s*\(\s*\).*?paintTurnSignals\(\)\s*;", html, re.DOTALL):
+        report("PASS", "Light-button updates preserve turn-signal state")
+    else:
+        report("FAIL", "paintLights() must reapply turn-signal state after headlight updates")
+
+
 def main() -> int:
     print("=" * 64)
     print("LEGO TECHNIC ESP32 — PROJECT AUDITOR")
@@ -382,6 +442,8 @@ def main() -> int:
         check_firmware_heartbeat_and_watchdog()
         print("\n--- GUI visual regression checks ---")
         check_tank_visual_regressions()
+        print("\\n--- Turn-signal regression checks ---")
+        check_turn_signal_regressions()
 
     print()
     print("=" * 64)
