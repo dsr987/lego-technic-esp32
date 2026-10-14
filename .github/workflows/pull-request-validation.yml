@@ -135,5 +135,8 @@ jobs:
 
           echo "PASS: index.html exactly matches extracted PAGE_HTML"
 
+      - name: Test battery calibration calculator
+        run: python3 -m unittest discover -s tools -p 'test_calibrate_battery.py' -v
+
       - name: Run project auditor
         run: python3 tools/project_auditor.py
