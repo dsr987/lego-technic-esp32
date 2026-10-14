@@ -281,6 +281,7 @@ jobs:
             "ESPAsyncWebServer@3.1.0" \
             "AsyncTCP@1.1.4" \
             "ArduinoJson" \
+            "Adafruit Motor Shield V2 Library@1.1.4" \
             "Adafruit SSD1306" \
             "Adafruit GFX Library" \
             "Adafruit BusIO" \
