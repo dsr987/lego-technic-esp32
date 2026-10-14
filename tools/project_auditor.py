@@ -260,6 +260,105 @@ def check_firmware_heartbeat_and_watchdog() -> None:
         report("FAIL", "Firmware must stop all outputs when the 500 ms command timeout expires")
 
 
+
+def check_tank_visual_regressions() -> None:
+    """Protect the reviewed tank GUI from arrow, tint, layering and sync regressions."""
+    html = read_text(REPO_ROOT / "index.html")
+    page = read_text(SOURCE_DIR / "web_page.cpp")
+    if html is None:
+        report("FAIL", "Cannot read index.html for tank visual regression checks")
+        return
+    if page is None:
+        report("FAIL", "Cannot read web_page.cpp for tank visual regression checks")
+        return
+
+    embedded_start = page.find("<!DOCTYPE html>")
+    embedded_end = page.find(')HTML";', embedded_start)
+    if embedded_start < 0 or embedded_end < 0:
+        report("FAIL", "Cannot locate embedded PAGE_HTML boundaries in web_page.cpp")
+    else:
+        embedded_html = page[embedded_start:embedded_end]
+        if embedded_html == html.lstrip():
+            report("PASS", "index.html exactly matches embedded PAGE_HTML")
+        else:
+            report("FAIL", "index.html differs from embedded PAGE_HTML")
+
+    arrow_pattern = re.compile(
+        r'track-direction-markers|id=["\']t-(?:left|right)-(?:f|r)["\']'
+    )
+    if not arrow_pattern.search(html):
+        report("PASS", "Tank direction arrows remain removed")
+    else:
+        report("FAIL", "Tank direction-arrow markup has returned")
+
+    required_tank_tokens = (
+        'id="t-left-glow"',
+        'id="t-right-glow"',
+        'id="tank-left-tint-filter"',
+        'id="tank-right-tint-filter"',
+        'id="tank-left-tint-flood"',
+        'id="tank-right-tint-flood"',
+        'overflow:visible}',
+    )
+    for token in required_tank_tokens:
+        if token in html:
+            report("PASS", f"Tank visual layer present: {token}")
+        else:
+            report("FAIL", f"Tank visual layer missing: {token}")
+
+    paint_match = re.search(
+        r"function\s+paintTank\s*\(\s*L\s*,\s*R\s*\)\s*\{(.*?)"
+        r"\n\s*\}\s*\n\s*function\s+paintCar\s*\(",
+        html,
+        re.DOTALL,
+    )
+    if not paint_match:
+        report("FAIL", "Cannot locate paintTank() for visual direction checks")
+        return
+
+    paint = paint_match.group(1)
+    direction_patterns = (
+        (r"leftForward\s*=\s*L\s*>\s*8", "left forward threshold"),
+        (r"leftReverse\s*=\s*L\s*<\s*-8", "left reverse threshold"),
+        (r"rightForward\s*=\s*R\s*>\s*8", "right forward threshold"),
+        (r"rightReverse\s*=\s*R\s*<\s*-8", "right reverse threshold"),
+        (
+            r"leftFlood\.setAttribute\(\s*['\"]flood-color['\"]\s*,\s*leftReverse\s*\?\s*red\s*:\s*green\s*\)",
+            "left track uses green forward and red reverse",
+        ),
+        (
+            r"rightFlood\.setAttribute\(\s*['\"]flood-color['\"]\s*,\s*rightReverse\s*\?\s*red\s*:\s*green\s*\)",
+            "right track uses green forward and red reverse",
+        ),
+        (
+            r"leftGlow\.setAttribute\(\s*['\"]opacity['\"]\s*,\s*\(leftForward\s*\|\|\s*leftReverse\)\s*\?\s*['\"]0\.58['\"]\s*:\s*['\"]0['\"]\s*\)",
+            "left track tint is translucent and off at rest",
+        ),
+        (
+            r"rightGlow\.setAttribute\(\s*['\"]opacity['\"]\s*,\s*\(rightForward\s*\|\|\s*rightReverse\)\s*\?\s*['\"]0\.58['\"]\s*:\s*['\"]0['\"]\s*\)",
+            "right track tint is translucent and off at rest",
+        ),
+    )
+    for pattern, description in direction_patterns:
+        if re.search(pattern, paint):
+            report("PASS", description)
+        else:
+            report("FAIL", f"Tank lighting regression: {description}")
+
+    if "drop-shadow" not in paint and "style.filter" not in paint:
+        report("PASS", "Tank lighting uses translucent fills instead of contour-only shadows")
+    else:
+        report("FAIL", "Tank lighting reverted to contour-only shadow effects")
+
+    left_track = html.find('<g id="t-left-group">')
+    right_track = html.find('<g id="t-right-group">')
+    chassis = html.find('<image id="crawler-body"')
+    if 0 <= left_track < right_track < chassis:
+        report("PASS", "Both tank tracks are rendered beneath the crawler body")
+    else:
+        report("FAIL", "Tank layer order must be left track, right track, then crawler body")
+
+
 def main() -> int:
     print("=" * 64)
     print("LEGO TECHNIC ESP32 — PROJECT AUDITOR")
@@ -281,6 +380,8 @@ def main() -> int:
         check_gui_heartbeat_safety()
         check_gui_engine_guards()
         check_firmware_heartbeat_and_watchdog()
+        print("\n--- GUI visual regression checks ---")
+        check_tank_visual_regressions()
 
     print()
     print("=" * 64)
