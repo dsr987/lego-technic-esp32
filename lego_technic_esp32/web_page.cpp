@@ -274,6 +274,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .sheet .num{width:72px;height:44px;font-size:16px}
 .num{width:48px;height:28px;background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:7px;padding:2px;text-align:center;font-weight:700;font-size:12px}
 
+.diag-value{font-size:11px;text-align:right;max-width:60%;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 .sheet select {
   width: 100%; padding: 8px; background: var(--panel); color: var(--text);
   border: 1px solid var(--border); border-radius: 8px; font-size: 13px; font-weight: 600; outline: none;
@@ -775,6 +776,21 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       </div>
     </div>
     <div class="block">
+      <h3>Диагностика системы</h3>
+      <div class="line"><span>Связь с ESP32</span><span class="grow"></span><b class="diag-value" id="diag-link">Ожидание</b></div>
+      <div class="line"><span>Последние данные</span><span class="grow"></span><b class="diag-value" id="diag-age">Ожидание</b></div>
+      <div class="line"><span>Wi-Fi AP / клиенты</span><span class="grow"></span><b class="diag-value" id="diag-wifi">--</b></div>
+      <div class="line"><span>WebSocket-клиенты</span><span class="grow"></span><b class="diag-value" id="diag-clients">--</b></div>
+      <div class="line"><span>Лучший RSSI клиента</span><span class="grow"></span><b class="diag-value" id="diag-rssi">--</b></div>
+      <div class="line"><span>Батарея</span><span class="grow"></span><b class="diag-value" id="diag-battery">--</b></div>
+      <div class="line"><span>Контроль напряжения</span><span class="grow"></span><b class="diag-value" id="diag-battery-state">--</b></div>
+      <div class="line"><span>Время работы ESP32</span><span class="grow"></span><b class="diag-value" id="diag-uptime">--</b></div>
+      <div class="line"><span>Свободная память</span><span class="grow"></span><b class="diag-value" id="diag-heap">--</b></div>
+      <div class="line"><span>Минимум свободной памяти</span><span class="grow"></span><b class="diag-value" id="diag-minheap">--</b></div>
+      <div class="line"><span>Последняя активность WS</span><span class="grow"></span><b class="diag-value" id="diag-message-age">--</b></div>
+      <div style="font-size:10px;line-height:1.45;color:var(--muted)">Только просмотр. RSSI относится к подключённому клиенту; минимальная память — наименьшее свободное значение с момента запуска. Наличие команды мотора не подтверждает физическое вращение.</div>
+    </div>
+    <div class="block">
       <h3>Классический режим</h3>
       <div class="line" style="flex-direction:column;align-items:stretch;gap:8px">
         <label for="motor-count-select" style="font-size:12px;color:var(--text)">Количество моторов</label>
@@ -847,6 +863,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 (function(){
   function $(id){ return document.getElementById(id); }
   var ws = null;
+  var lastTelemetryAt = 0;
 
   // Нажатие на кубик переключает шапку между названием устройства и последними TX-данными.
   var brandToggle = $('brand-toggle');
@@ -924,6 +941,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   function initWS(){
     ws = new WebSocket('ws://' + location.host + '/ws');
     ws.onopen = function(){
+      lastTelemetryAt = 0;
+      renderDiagnosticFreshness();
       $('ws-status').textContent='ESP32';
       $('ws-status').style.color='var(--emerald)';
 
@@ -936,6 +955,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       txWS({eng:0});
     };
     ws.onclose = function(){ 
+      renderDiagnosticFreshness();
       $('ws-status').textContent='НЕТ СВЯЗИ'; 
       $('ws-status').style.color='var(--rose)'; 
       updateWifi(0);
@@ -945,6 +965,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       try{
         var d = JSON.parse(e.data);
         if(d.st){
+          updateDiagnostics(d);
           $('batt-txt').textContent = d.p + '% · ' + d.v.toFixed(1) + 'V';
           $('bat-fill').style.width = d.p + '%';
           updateWifi(d.r);
@@ -970,6 +991,71 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     ws.send(JSON.stringify({hb:1}));
   }, 150);
+
+  function formatUptime(totalSeconds){
+    var total = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+    var days = Math.floor(total / 86400);
+    total %= 86400;
+    var hours = Math.floor(total / 3600);
+    total %= 3600;
+    var minutes = Math.floor(total / 60);
+    var seconds = total % 60;
+    return (days ? days + ' д ' : '') + hours + ' ч ' + minutes + ' мин ' + seconds + ' с';
+  }
+
+  function updateDiagnostics(d){
+    lastTelemetryAt = Date.now();
+    var put = function(id, value){
+      var el = $(id);
+      if(el) el.textContent = value;
+    };
+    var stations = Number(d.sta);
+    var rssi = Number(d.r);
+    var voltage = Number(d.v);
+    var warningCount = Number(d.lb);
+    put('diag-wifi', 'Активна · ' + (Number.isFinite(stations) ? stations : 0));
+    put('diag-clients', Number.isFinite(Number(d.c)) ? String(Number(d.c)) : '--');
+    put('diag-rssi', stations > 0 && Number.isFinite(rssi) && rssi < 0 ? rssi + ' dBm' : 'нет клиента');
+    put('diag-battery', Number.isFinite(voltage) ? voltage.toFixed(2) + ' V · ' + Number(d.p || 0) + '%' : '--');
+    if(!Number.isFinite(voltage) || voltage <= 0.5){
+      put('diag-battery-state', 'Нет показаний');
+    } else if(warningCount >= 3){
+      put('diag-battery-state', 'Низкое напряжение');
+    } else if(voltage < 6.0){
+      put('diag-battery-state', 'Проверка ' + Math.max(0, warningCount) + '/3');
+    } else {
+      put('diag-battery-state', 'Порог не достигнут');
+    }
+    put('diag-uptime', formatUptime(d.up));
+    put('diag-heap', Number.isFinite(Number(d.heap)) ? Math.round(Number(d.heap)/1024) + ' KB' : '--');
+    put('diag-minheap', Number.isFinite(Number(d.minh)) ? Math.round(Number(d.minh)/1024) + ' KB' : '--');
+    put('diag-message-age', Number.isFinite(Number(d.age)) ? Math.max(0, Math.round(Number(d.age))) + ' мс' : '--');
+    renderDiagnosticFreshness();
+  }
+
+  function renderDiagnosticFreshness(){
+    var link = $('diag-link');
+    var ageLabel = $('diag-age');
+    var now = Date.now();
+    if(!ws || ws.readyState !== WebSocket.OPEN){
+      if(link) { link.textContent = 'Нет связи'; link.style.color = 'var(--rose)'; }
+    } else if(!lastTelemetryAt){
+      if(link) { link.textContent = 'Ожидание телеметрии'; link.style.color = 'var(--amber)'; }
+    } else if(now - lastTelemetryAt > 3000){
+      if(link) { link.textContent = 'Нет свежих данных'; link.style.color = 'var(--rose)'; }
+    } else if(link){
+      link.textContent = 'На связи'; link.style.color = 'var(--emerald)';
+    }
+    if(ageLabel){
+      if(!lastTelemetryAt) ageLabel.textContent = 'Ожидание';
+      else {
+        var ageSeconds = Math.max(0, Math.floor((now - lastTelemetryAt)/1000));
+        ageLabel.textContent = ageSeconds === 0 ? 'меньше 1 с' : ageSeconds + ' с назад';
+      }
+    }
+  }
+
+  setInterval(renderDiagnosticFreshness, 1000);
 
   function updateWifi(r){
     var n = 0, txt = '--';
