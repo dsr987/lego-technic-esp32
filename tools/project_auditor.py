@@ -442,7 +442,7 @@ def main() -> int:
         check_firmware_heartbeat_and_watchdog()
         print("\n--- GUI visual regression checks ---")
         check_tank_visual_regressions()
-        print("\\n--- Turn-signal regression checks ---")
+        print("\n--- Turn-signal regression checks ---")
         check_turn_signal_regressions()
 
     print()
