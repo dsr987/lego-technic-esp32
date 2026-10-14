@@ -11,6 +11,9 @@ PAGE = ROOT / "lego_technic_esp32" / "web_page.cpp"
 ASSETS = {
     "car-body": ROOT / "lego_technic_esp32" / "assets" / "classic_chassis.webp.b64",
     "wheel-art": ROOT / "lego_technic_esp32" / "assets" / "classic_wheel.webp.b64",
+    "crawler-body": ROOT / "lego_technic_esp32" / "assets" / "crawler_chassis.webp.b64",
+    "t-left-body": ROOT / "lego_technic_esp32" / "assets" / "crawler_track.webp.b64",
+    "t-right-body": ROOT / "lego_technic_esp32" / "assets" / "crawler_track.webp.b64",
 }
 
 
