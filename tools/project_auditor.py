@@ -369,20 +369,20 @@ def check_turn_signal_regressions() -> None:
 
     original_lamps = (
         (
-            r'<ellipse\s+id="hl-fl"\s+class="vehicle-light"\s+cx="72"\s+cy="26"\s+rx="18"\s+ry="13"\s+fill="url\(#front-headlight-gradient\)"',
-            "front-left headlight retains its original position",
+            r'<ellipse\s+id="hl-fl"\s+class="vehicle-light"\s+cx="71"\s+cy="57"\s+rx="15"\s+ry="11"\s+fill="url\(#front-headlight-gradient\)"',
+            "front-left headlight glow matches the car artwork",
         ),
         (
-            r'<ellipse\s+id="hl-fr"\s+class="vehicle-light"\s+cx="180"\s+cy="26"\s+rx="18"\s+ry="13"\s+fill="url\(#front-headlight-gradient\)"',
-            "front-right headlight retains its original position",
+            r'<ellipse\s+id="hl-fr"\s+class="vehicle-light"\s+cx="188"\s+cy="57"\s+rx="15"\s+ry="11"\s+fill="url\(#front-headlight-gradient\)"',
+            "front-right headlight glow matches the car artwork",
         ),
         (
-            r'<ellipse\s+id="hl-rl"\s+class="vehicle-light"\s+cx="42"\s+cy="404"\s+rx="17"\s+ry="12"\s+fill="url\(#rear-headlight-gradient\)"',
-            "rear-left light retains its original position",
+            r'<ellipse\s+id="hl-rl"\s+class="vehicle-light"\s+cx="41"\s+cy="386"\s+rx="17"\s+ry="11"\s+fill="url\(#rear-headlight-gradient\)"',
+            "rear-left light glow matches the car artwork",
         ),
         (
-            r'<ellipse\s+id="hl-rr"\s+class="vehicle-light"\s+cx="210"\s+cy="404"\s+rx="17"\s+ry="12"\s+fill="url\(#rear-headlight-gradient\)"',
-            "rear-right light retains its original position",
+            r'<ellipse\s+id="hl-rr"\s+class="vehicle-light"\s+cx="211"\s+cy="386"\s+rx="17"\s+ry="11"\s+fill="url\(#rear-headlight-gradient\)"',
+            "rear-right light glow matches the car artwork",
         ),
     )
     for pattern, description in original_lamps:
