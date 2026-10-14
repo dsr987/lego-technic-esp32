@@ -78,10 +78,12 @@ The motor driver's nominal current figure is not enough to approve compatibility
 - Do not change motor code yet.
 
 ### Step 1 — compile-ready driver scaffold
-- Add a small board-specific motor backend module and the library dependency in the appropriate build/CI install list.
-- Keep the old implementation available until the new code compiles and its call contract is reviewed.
-- Add checks for the channel map, unique initialization, default address, and safe initial motor values.
-- Compile firmware and run the project auditor. This is a software-only gate, not hardware validation.
+- [x] Add the `i2c_motor_backend.h/.cpp` board-specific backend using the Arduino Adafruit Motor Shield V2 library, pinned to version 1.1.4 in CI.
+- [x] Pass the existing I²C `TwoWire` instance to library initialization instead of starting a second bus.
+- [x] Map the logical motor channels A–D to library motor ports M1–M4; preserve signed `-100..100` speed semantics at the adapter boundary.
+- [x] Keep the old implementation available; the application does not initialize or call the experimental backend yet.
+- [x] Extend the project auditor with checks for the backend API, initialization, channel mapping, and no premature integration.
+- [ ] Run ESP32 CI build and project auditor. This is a software-only gate, not hardware validation.
 
 ### Step 2 — controlled backend switch
 - Switch the bodies of `applyMotorA-D`, `stopAll`, and driver readiness handling to the new backend.
