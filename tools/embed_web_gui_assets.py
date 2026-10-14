@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Embed optimized WebP assets into the self-contained Web GUI SVG."""
+"""Embed WebP assets into the self-contained Web GUI SVG."""
 
 import base64
 import binascii
@@ -9,8 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PAGE = ROOT / "lego_technic_esp32" / "web_page.cpp"
 ASSETS = {
-    "car-body": ROOT / "lego_technic_esp32" / "assets" / "classic_chassis.webp.b64",
-    "wheel-art": ROOT / "lego_technic_esp32" / "assets" / "classic_wheel.webp.b64",
+    "car-body": ROOT / "lego_technic_esp32" / "assets" / "original" / "webp" / "Car.webp",
+    "wheel-art": ROOT / "lego_technic_esp32" / "assets" / "original" / "webp" / "Wheel.webp",
     "crawler-body": ROOT / "lego_technic_esp32" / "assets" / "crawler_chassis.webp.b64",
     "t-left-body": ROOT / "lego_technic_esp32" / "assets" / "crawler_track.webp.b64",
     "t-right-body": ROOT / "lego_technic_esp32" / "assets" / "crawler_track.webp.b64",
@@ -18,11 +18,17 @@ ASSETS = {
 
 
 def read_webp(path: Path) -> str:
-    payload = "".join(path.read_text(encoding="ascii").split())
-    try:
-        decoded = base64.b64decode(payload, validate=True)
-    except (ValueError, binascii.Error) as exc:
-        raise SystemExit(f"ERROR: invalid base64 asset: {path.relative_to(ROOT)}: {exc}") from exc
+    if path.suffix.lower() == ".b64":
+        payload = "".join(path.read_text(encoding="ascii").split())
+        try:
+            decoded = base64.b64decode(payload, validate=True)
+        except (ValueError, binascii.Error) as exc:
+            raise SystemExit(
+                f"ERROR: invalid base64 asset: {path.relative_to(ROOT)}: {exc}"
+            ) from exc
+    else:
+        decoded = path.read_bytes()
+        payload = base64.b64encode(decoded).decode("ascii")
 
     if len(decoded) < 12 or decoded[:4] != b"RIFF" or decoded[8:12] != b"WEBP":
         raise SystemExit(f"ERROR: asset is not a WebP image: {path.relative_to(ROOT)}")
@@ -54,7 +60,7 @@ def main() -> int:
 
     if content != original:
         PAGE.write_text(content, encoding="utf-8", newline="\n")
-        print("OK: embedded optimized chassis and wheel WebP assets")
+        print("OK: embedded WebP image assets")
     else:
         print("OK: Web GUI image assets are already up to date")
 
