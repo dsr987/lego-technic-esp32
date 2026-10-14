@@ -140,14 +140,9 @@ int steerMaxAngleDeg = 45;
 
 void applyLeds() {
   /*
-   * Временно пустая функция.
-   *
-   * GPIO32 и GPIO33 используются вторым TB6612FNG:
-   * GPIO32 — TB2_BIN1
-   * GPIO33 — TB2_BIN2
-   *
-   * После выбора отдельных GPIO для фар здесь
-   * будет реализовано управление светом.
+   * Физическое управление фарами не входит в миграцию моторного контроллера.
+   * WebSocket-команды и состояние световых индикаторов сохранены для
+   * совместимости с интерфейсом; GPIO для фар в этой ветке не назначаются.
    */
 }
 
@@ -201,7 +196,7 @@ void setup() {
   steerServo.setPeriodHertz(50);
   steerServo.attach(SERVO_PIN, 1000, 2000);
 
-  // 5. Инициализация OLED-дисплея.
+  // 2. Инициализация OLED-дисплея.
   Wire.begin(OLED_SDA, OLED_SCL);
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
 
@@ -218,7 +213,7 @@ void setup() {
   // Драйверы всё это время остаются выключенными.
   delay(1000);
 
-  // 6. Открытие хранилища и загрузка настроек.
+  // 3. Открытие хранилища и загрузка настроек.
   // prefs.begin() обязательно выполняется до loadPreferences().
   prefs.begin("cfg", false);
   loadPreferences();
@@ -227,10 +222,10 @@ void setup() {
   // для совместимости с веб-командами.
   applyLeds();
 
-  // 7. Запуск точки доступа Wi-Fi.
+  // 4. Запуск точки доступа Wi-Fi.
   WiFi.softAP(AP_SSID, AP_PASSWORD);
 
-  // 8. Настройка WebSocket и HTTP-сервера.
+  // 5. Настройка WebSocket и HTTP-сервера.
   ws.onEvent(onWsEvent);
   server.addHandler(&ws);
 
@@ -264,10 +259,10 @@ void setup() {
    * });
    */
 
-  // 9. Запуск OTA-обновления и HTTP-сервера.
+  // 6. Запуск OTA-обновления и HTTP-сервера.
   ElegantOTA.begin(&server, OTA_USERNAME, OTA_PASSWORD);
 
-  // 10. Приводим моторы и руль в начальное состояние.
+  // 7. Приводим моторы и руль в начальное состояние.
   stopAll();
 
   // Первичное обновление данных мониторинга.
