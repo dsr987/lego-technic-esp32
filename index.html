@@ -773,21 +773,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
         <div style="font-size:10px;line-height:1.45">Меняет акцентные цвета интерфейса. Цвета подсветки движения и поворотников не меняются.</div>
       </div>
     </div>
-    <div class="block">
-      <h3>Диагностика системы</h3>
-      <div class="line"><span>Связь с ESP32</span><span class="grow"></span><b class="diag-value" id="diag-link">Ожидание</b></div>
-      <div class="line"><span>Последние данные</span><span class="grow"></span><b class="diag-value" id="diag-age">Ожидание</b></div>
-      <div class="line"><span>Wi-Fi AP / клиенты</span><span class="grow"></span><b class="diag-value" id="diag-wifi">--</b></div>
-      <div class="line"><span>WebSocket-клиенты</span><span class="grow"></span><b class="diag-value" id="diag-clients">--</b></div>
-      <div class="line"><span>Лучший RSSI клиента</span><span class="grow"></span><b class="diag-value" id="diag-rssi">--</b></div>
-      <div class="line"><span>Батарея</span><span class="grow"></span><b class="diag-value" id="diag-battery">--</b></div>
-      <div class="line"><span>Контроль напряжения</span><span class="grow"></span><b class="diag-value" id="diag-battery-state">--</b></div>
-      <div class="line"><span>Время работы ESP32</span><span class="grow"></span><b class="diag-value" id="diag-uptime">--</b></div>
-      <div class="line"><span>Свободная память</span><span class="grow"></span><b class="diag-value" id="diag-heap">--</b></div>
-      <div class="line"><span>Минимум свободной памяти</span><span class="grow"></span><b class="diag-value" id="diag-minheap">--</b></div>
-      <div class="line"><span>Последняя активность WS</span><span class="grow"></span><b class="diag-value" id="diag-message-age">--</b></div>
-      <div style="font-size:10px;line-height:1.45;color:var(--muted)">Только просмотр. RSSI относится к подключённому клиенту; минимальная память — наименьшее свободное значение с момента запуска. Наличие команды мотора не подтверждает физическое вращение.</div>
-    </div>
+
     <div class="block">
       <h3>Классический режим</h3>
       <div class="line" style="flex-direction:column;align-items:stretch;gap:8px">
@@ -846,6 +832,21 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="line"><span>Канал D</span><span class="grow"></span><button class="rev-btn" data-ch="D" type="button">⇄</button></div>
     </div>
     <div class="block">
+      <h3>Диагностика системы</h3>
+      <div class="line"><span>Связь с ESP32</span><span class="grow"></span><b class="diag-value" id="diag-link">Ожидание</b></div>
+      <div class="line"><span>Последние данные</span><span class="grow"></span><b class="diag-value" id="diag-age">Ожидание</b></div>
+      <div class="line"><span>Wi-Fi AP / клиенты</span><span class="grow"></span><b class="diag-value" id="diag-wifi">--</b></div>
+      <div class="line"><span>WebSocket-клиенты</span><span class="grow"></span><b class="diag-value" id="diag-clients">--</b></div>
+      <div class="line"><span>Лучший RSSI клиента</span><span class="grow"></span><b class="diag-value" id="diag-rssi">--</b></div>
+      <div class="line"><span>Батарея</span><span class="grow"></span><b class="diag-value" id="diag-battery">--</b></div>
+      <div class="line"><span>Контроль напряжения</span><span class="grow"></span><b class="diag-value" id="diag-battery-state">--</b></div>
+      <div class="line"><span>Время работы ESP32</span><span class="grow"></span><b class="diag-value" id="diag-uptime">--</b></div>
+      <div class="line"><span>Свободная память</span><span class="grow"></span><b class="diag-value" id="diag-heap">--</b></div>
+      <div class="line"><span>Минимум свободной памяти</span><span class="grow"></span><b class="diag-value" id="diag-minheap">--</b></div>
+      <div class="line"><span>Последняя активность WS</span><span class="grow"></span><b class="diag-value" id="diag-message-age">--</b></div>
+      <div style="font-size:10px;line-height:1.45;color:var(--muted)">Только просмотр. RSSI относится к подключённому клиенту; минимальная память — наименьшее свободное значение с момента запуска. Наличие команды мотора не подтверждает физическое вращение.</div>
+    </div>
+        <div class="block">
       <h3>Кнопки</h3>
       <div style="font-size:13px;color:var(--text);line-height:1.85">
         <div>💡 <b style="color:#eab308">Свет</b></div>
