@@ -419,6 +419,79 @@ def check_turn_signal_regressions() -> None:
         report("FAIL", "paintLights() must reapply turn-signal state after headlight updates")
 
 
+
+def check_accent_theme_regressions() -> None:
+    """Ensure accent themes only personalize GUI colors and survive reloads."""
+    html = read_text(REPO_ROOT / "index.html")
+    if html is None:
+        report("FAIL", "Cannot read index.html for accent-theme checks")
+        return
+
+    select_match = re.search(
+        r'<select\s+id="accent-select">(.*?)</select>',
+        html,
+        re.DOTALL,
+    )
+    if not select_match:
+        report("FAIL", "Settings must contain the accent-select control")
+        return
+
+    options = re.findall(r'<option\s+value="([^"]+)"', select_match.group(1))
+    expected_options = ("classic-blue", "racing-red", "neon-green")
+    if tuple(options) == expected_options:
+        report("PASS", "Accent selector contains Classic Blue, Racing Red and Neon Green")
+    else:
+        report("FAIL", "Accent selector options are missing or in an unexpected order")
+
+    theme_css = (
+        (r'\[data-accent="racing-red"\]\s*\{[^}]*--blue:#f43f5e;--blue-dk:#e11d48', "Racing Red dark palette"),
+        (r'\[data-theme="light"\]\[data-accent="racing-red"\]\s*\{[^}]*--blue:#e11d48;--blue-dk:#be123c', "Racing Red light palette"),
+        (r'\[data-accent="neon-green"\]\s*\{[^}]*--blue:#22c55e;--blue-dk:#16a34a', "Neon Green dark palette"),
+        (r'\[data-theme="light"\]\[data-accent="neon-green"\]\s*\{[^}]*--blue:#16a34a;--blue-dk:#15803d', "Neon Green light palette"),
+    )
+    for pattern, description in theme_css:
+        if re.search(pattern, html):
+            report("PASS", description)
+        else:
+            report("FAIL", f"Missing accent color rule: {description}")
+
+    accent_function = re.search(
+        r"function\s+setAccent\s*\(\s*value\s*\)\s*\{(.*?)\n\s*\}",
+        html,
+        re.DOTALL,
+    )
+    if accent_function:
+        body = accent_function.group(1)
+        checks = (
+            "classic-blue" in body and "racing-red" in body and "neon-green" in body,
+            re.search(r"setAttribute\(\s*['\"]data-accent['\"]", body) is not None,
+            re.search(r"localStorage\.setItem\(\s*['\"]lcc_accent['\"]", body) is not None,
+        )
+        if all(checks):
+            report("PASS", "Accent selection is validated, applied and saved to localStorage")
+        else:
+            report("FAIL", "setAccent() must validate, apply and save the selected preset")
+    else:
+        report("FAIL", "setAccent() is missing")
+
+    if (
+        re.search(r"setAccent\(localStorage\.getItem\(\s*['\"]lcc_accent['\"]\s*\)", html)
+        and re.search(r"\$\(['\"]accent-select['\"]\)\.onchange\s*=\s*function", html)
+    ):
+        report("PASS", "Saved accent preset is restored and the settings control responds to changes")
+    else:
+        report("FAIL", "Accent preset must load on startup and respond to selector changes")
+
+    if (
+        "localStorage.setItem('lcc_th',t)" in html
+        and "id=\"turn-signal-gradient\"" in html
+        and "id=\"wheel-tint-flood\"" in html
+    ):
+        report("PASS", "Accent presets leave light/dark mode, wheel tint and turn-signal colors intact")
+    else:
+        report("FAIL", "Accent presets must not replace existing theme mode or vehicle signal colors")
+
+
 def main() -> int:
     print("=" * 64)
     print("LEGO TECHNIC ESP32 — PROJECT AUDITOR")
@@ -444,6 +517,8 @@ def main() -> int:
         check_tank_visual_regressions()
         print("\n--- Turn-signal regression checks ---")
         check_turn_signal_regressions()
+        print("\n--- Accent-theme regression checks ---")
+        check_accent_theme_regressions()
 
     print()
     print("=" * 64)
