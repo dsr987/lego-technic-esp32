@@ -1045,31 +1045,34 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 
   function paintTank(L,R){
     var green='#10b981', red='#f43f5e', off='var(--svg-stroke)';
+    // В танковом режиме знак команды визуально противоположен направлению движения модели.
+    var leftForward = L < -8, leftReverse = L > 8;
+    var rightForward = R < -8, rightReverse = R > 8;
     var lf=$('t-left-f'),lr=$('t-left-r'),rf=$('t-right-f'),rr=$('t-right-r');
     if(lf){ 
-      toggleLightState(lf, L>8);
-      toggleLightState(lr, L<-8);
-      lf.setAttribute('fill', L>8 ? green : off); 
-      lr.setAttribute('fill', L<-8 ? red : off); 
+      toggleLightState(lf, leftForward);
+      toggleLightState(lr, leftReverse);
+      lf.setAttribute('fill', leftForward ? green : off); 
+      lr.setAttribute('fill', leftReverse ? red : off); 
     }
     if(rf){ 
-      toggleLightState(rf, R>8);
-      toggleLightState(rr, R<-8);
-      rf.setAttribute('fill', R>8 ? green : off); 
-      rr.setAttribute('fill', R<-8 ? red : off); 
+      toggleLightState(rf, rightForward);
+      toggleLightState(rr, rightReverse);
+      rf.setAttribute('fill', rightForward ? green : off); 
+      rr.setAttribute('fill', rightReverse ? red : off); 
     }
     var lb=$('t-left-body'),rb=$('t-right-body');
     if(lb){
       toggleLightState(lb, Math.abs(L)>8);
-      lb.style.filter = L>8
+      lb.style.filter = leftForward
         ? 'drop-shadow(0 0 7px #10b981) brightness(1.12)'
-        : (L<-8 ? 'drop-shadow(0 0 7px #f43f5e) brightness(1.12)' : '');
+        : (leftReverse ? 'drop-shadow(0 0 7px #f43f5e) brightness(1.12)' : '');
     }
     if(rb){
       toggleLightState(rb, Math.abs(R)>8);
-      rb.style.filter = R>8
+      rb.style.filter = rightForward
         ? 'drop-shadow(0 0 7px #10b981) brightness(1.12)'
-        : (R<-8 ? 'drop-shadow(0 0 7px #f43f5e) brightness(1.12)' : '');
+        : (rightReverse ? 'drop-shadow(0 0 7px #f43f5e) brightness(1.12)' : '');
     }
   }
 
