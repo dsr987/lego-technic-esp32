@@ -650,6 +650,41 @@ def check_diagnostics_regressions() -> None:
 
 
 
+def check_battery_calibration() -> None:
+    """Keep the divider ratio distinct from the field-calibration multiplier."""
+    monitor = read_text(SOURCE_DIR / "battery_monitor.cpp")
+    calculator = read_text(SCRIPT_DIR / "calibrate_battery.py")
+    if monitor is None:
+        report("FAIL", "Cannot read battery_monitor.cpp for calibration checks")
+        return
+    if calculator is None:
+        report("FAIL", "Missing tools/calibrate_battery.py calibration calculator")
+        return
+
+    checks = (
+        ("BATT_DIVIDER_FACTOR 0.2680", "physical battery divider factor is explicit"),
+        ("BATT_CALIBRATION_FACTOR = 1.0000f", "separate default calibration multiplier"),
+        ("(vAdc / BATT_DIVIDER_FACTOR) * BATT_CALIBRATION_FACTOR", "calibration multiplier is applied to measured voltage"),
+        ("tools/calibrate_battery.py", "source comment points to the calibration calculator"),
+    )
+    for token, description in checks:
+        if token in monitor:
+            report("PASS", description)
+        else:
+            report("FAIL", f"Battery calibration is missing: {description}")
+
+    calculator_checks = (
+        ("def calculate_scale_factor(", "calculator derives a scale correction"),
+        ("def calculate_updated_factor(", "calculator supports an existing calibration value"),
+        ('"--pair"', "calculator accepts measurement pairs"),
+    )
+    for token, description in calculator_checks:
+        if token in calculator:
+            report("PASS", description)
+        else:
+            report("FAIL", f"Battery calibration script is missing: {description}")
+
+
 def main() -> int:
     print("=" * 64)
     print("LEGO TECHNIC ESP32 — PROJECT AUDITOR")
@@ -664,6 +699,7 @@ def main() -> int:
         check_local_includes()
         print("\n--- Module checks ---")
         check_module_pairs()
+        check_battery_calibration()
         print("\n--- Application checks ---")
         check_app_entry_points()
         check_motor_safety_anchor()
