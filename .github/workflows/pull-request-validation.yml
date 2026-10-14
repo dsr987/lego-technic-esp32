@@ -1,6 +1,18 @@
 name: Pull Request Validation
 
 on:
+  push:
+    branches:
+      - feature/i2c-motor-wing
+    paths:
+      - 'lego_technic_esp32/**'
+      - 'tools/**'
+      - '.github/workflows/**'
+      - 'platformio.ini'
+      - 'arduino-cli.yaml'
+      - 'CHANGELOG.md'
+      - 'README.md'
+
   pull_request:
     branches:
       - main
