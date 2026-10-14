@@ -739,6 +739,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
           <option value="4">4 мотора — A + B + C + D</option>
         </select>
         <div style="font-size:10px;line-height:1.45">Настройка влияет на классический интерфейс. В тестовом режиме доступны все каналы, танковый режим не меняется.</div>
+        <label for="drive-axle-select" style="font-size:12px;color:var(--text)">Ведущая ось для подсветки</label>
+        <select id="drive-axle-select">
+          <option value="rear">Задняя (RWD)</option>
+          <option value="front">Передняя (FWD)</option>
+        </select>
+        <div style="font-size:10px;line-height:1.45">Меняет только свечение ведущих колёс. Управление моторами не меняется.</div>
       </div>
     </div>
     <div class="block">
@@ -823,6 +829,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   var eng=false, auxMode=false, trim=0;
   var drive=0, auxB=0, auxC=0, auxD=0, steer=0;
   var motorCount = +(localStorage.getItem("lcc_motor_count") || 3);
+  // Это настройка только визуальной подсветки, не маршрутизация команд мотора A.
+  var drivenAxle = localStorage.getItem('lcc_driven_axle') === 'front' ? 'front' : 'rear';
   
   var holdConfig = { A: false, B: false, C: false, D: false };
   var holdActive = { A: false, B: false, C: false, D: false };
@@ -852,6 +860,17 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   var hapticSelect = $('haptic-select');
   if (hapticSelect) {
     hapticSelect.addEventListener('change', function(){ setHapticMode(this.value); });
+  }
+
+  var driveAxleSelect = $('drive-axle-select');
+  if (driveAxleSelect) {
+    driveAxleSelect.value = drivenAxle;
+    driveAxleSelect.addEventListener('change', function(){
+      drivenAxle = this.value === 'front' ? 'front' : 'rear';
+      localStorage.setItem('lcc_driven_axle', drivenAxle);
+      vibrateClick();
+      paintCar();
+    });
   }
 
   function initWS(){
@@ -1069,10 +1088,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     if(lightFRGroup) lightFRGroup.setAttribute('transform', 'translate(228,125) rotate('+ang+') scale(-1,1)');
 
     var activeDrive = Math.abs(A) > 8;
-    // В текущей конфигурации классической машины мотор A приводит заднюю ось,
-    // а передняя ось используется для руления. Здесь указан только визуальный привод;
-    // при появлении настройки типа привода это значение будет браться из неё.
-    var drivenAxle = 'rear';
+    // Выбранная ведущая ось управляет только визуальной подсветкой; команды моторам не меняются.
     var frontAxleGlows = activeDrive && drivenAxle === 'front';
     var rearAxleGlows = activeDrive && drivenAxle === 'rear';
 
