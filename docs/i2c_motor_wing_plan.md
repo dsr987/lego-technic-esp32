@@ -7,7 +7,7 @@ This branch prepares a controlled migration from the four existing GPIO/LEDC mot
 - Branch: `feature/i2c-motor-wing`
 - Base: `feature/web-gui-layered-car`
 - This branch is intentionally independent of `feature/physical-light-control`. Do not merge the experimental GPIO5/GPIO15 light implementation into this branch automatically.
-- First commit(s) should be documentation and architecture only. Do not modify the working motor implementation until the hardware interface and staged tests are agreed.
+- The initial scaffold was kept separate from the existing motor path. The new implementation is active only on this experimental branch; it is not ready for hardware operation or merge until CI results and bench checks are confirmed.
 - No pull request or merge is created by this plan.
 
 ## Expected hardware
@@ -83,13 +83,16 @@ The motor driver's nominal current figure is not enough to approve compatibility
 - [x] Map the logical motor channels A–D to library motor ports M1–M4; preserve signed `-100..100` speed semantics at the adapter boundary.
 - [x] Keep the old implementation available; the application does not initialize or call the experimental backend yet.
 - [x] Extend the project auditor with checks for the backend API, initialization, channel mapping, and no premature integration.
-- [ ] Run ESP32 CI build and project auditor. This is a software-only gate, not hardware validation.
+- [ ] Confirm ESP32 CI build and project auditor results. The push validation workflow is configured, but its push-run result is not yet verified from the available GitHub status response.
 
 ### Step 2 — controlled backend switch
-- Switch the bodies of `applyMotorA-D`, `stopAll`, and driver readiness handling to the new backend.
-- Preserve reverse settings and engine-simulation behavior.
-- Keep changes out of WebSocket parsing and the GUI.
-- Compile, review the diff, and run static checks before any bench connection.
+- [x] Route `applyMotorA-D` and `stopAll` through the Adafruit I2C backend while retaining the public `motor_control.h` API.
+- [x] Preserve per-channel reversal and the existing classic-car engine-simulation calculation, including avoiding a double reverse for simulated motor B.
+- [x] Leave the WebSocket protocol and web GUI unchanged.
+- [x] Remove the old direct motor GPIO/LEDC setup from `app.cpp` and the obsolete pin map from `hardware_config.h`.
+- [x] Keep I2C transactions for a full motor command serialized with a FreeRTOS mutex so a watchdog stop cannot interleave with an in-flight direction/PWM sequence.
+- [x] Show `MOTOR / I2C ERR` on the OLED if the PCA9685 board is not detected during startup (unless the low-battery warning is active).
+- [ ] Confirm ESP32 CI build and static audit before connecting motor power.
 
 ### Step 3 — bench tests, one motor at a time
 1. With motor supply disconnected, boot ESP32 and OLED; verify the PCA9685 is detected on `0x60`.
