@@ -689,6 +689,10 @@ def check_i2c_motor_backend_integration() -> None:
         "RELEASE",
         "constrain(speedPercent, -100, 100)",
         "setSpeed(0)",
+        "xSemaphoreCreateMutex()",
+        "xSemaphoreTake(backendMutex, waitTicks)",
+        "xSemaphoreGive(backendMutex)",
+        "BackendLock lock",
     )
     missing = [token for token in required_backend if token not in backend]
     if missing:
