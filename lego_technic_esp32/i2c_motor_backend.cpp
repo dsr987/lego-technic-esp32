@@ -1,6 +1,8 @@
 #include <Arduino.h>
 #include <Adafruit_MotorShield.h>
 #include <Wire.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 #include "i2c_motor_backend.h"
 
@@ -14,10 +16,48 @@ Adafruit_MotorShield shield(I2C_MOTOR_WING_ADDRESS);
 Adafruit_DCMotor *motors[MOTOR_COUNT] = {nullptr, nullptr, nullptr, nullptr};
 int8_t lastDirection[MOTOR_COUNT] = {0, 0, 0, 0};
 bool backendReady = false;
+SemaphoreHandle_t backendMutex = nullptr;
+
+class BackendLock {
+ public:
+  explicit BackendLock(TickType_t waitTicks = pdMS_TO_TICKS(250))
+      : acquired_(backendMutex != nullptr &&
+                  xSemaphoreTake(backendMutex, waitTicks) == pdTRUE) {}
+
+  ~BackendLock() {
+    if (acquired_) {
+      xSemaphoreGive(backendMutex);
+    }
+  }
+
+  bool acquired() const {
+    return acquired_;
+  }
+
+ private:
+  bool acquired_;
+};
 
 } // namespace
 
 bool i2cMotorBackendBegin(TwoWire &wire) {
+  // Setup runs before WebSocket control starts. Create a mutex now so an
+  // async control callback and the loop watchdog cannot interleave a motor
+  // direction/PWM sequence with a stopAll() sequence.
+  if (backendMutex == nullptr) {
+    backendMutex = xSemaphoreCreateMutex();
+  }
+  if (backendMutex == nullptr) {
+    backendReady = false;
+    return false;
+  }
+
+  BackendLock lock(pdMS_TO_TICKS(1000));
+  if (!lock.acquired()) {
+    backendReady = false;
+    return false;
+  }
+
   backendReady = false;
 
   for (uint8_t i = 0; i < MOTOR_COUNT; ++i) {
@@ -52,6 +92,11 @@ bool i2cMotorBackendIsReady() {
 }
 
 bool i2cMotorBackendSetMotor(I2CMotorChannel channel, int speedPercent) {
+  BackendLock lock;
+  if (!lock.acquired()) {
+    return false;
+  }
+
   const uint8_t index = static_cast<uint8_t>(channel);
   if (!backendReady || index >= MOTOR_COUNT || motors[index] == nullptr) {
     return false;
@@ -87,7 +132,8 @@ bool i2cMotorBackendSetMotor(I2CMotorChannel channel, int speedPercent) {
 }
 
 void i2cMotorBackendStopAll() {
-  if (!backendReady) {
+  BackendLock lock;
+  if (!lock.acquired() || !backendReady) {
     return;
   }
 
