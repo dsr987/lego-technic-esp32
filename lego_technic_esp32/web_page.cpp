@@ -22,6 +22,11 @@ const char PAGE_HTML[] PROGMEM = R"HTML(
   --text:#0f172a; --muted:#64748b;
   --track:#dbe3ee; --svg-fill:#dbe3ee; --svg-stroke:#94a3b8; --svg-deep:#cbd5e1;
 }
+/* Акцентные пресеты меняют только цвета интерфейса, не цвета сигналов модели. */
+[data-accent="racing-red"]{--blue:#f43f5e;--blue-dk:#e11d48}
+[data-theme="light"][data-accent="racing-red"]{--blue:#e11d48;--blue-dk:#be123c}
+[data-accent="neon-green"]{--blue:#22c55e;--blue-dk:#16a34a}
+[data-theme="light"][data-accent="neon-green"]{--blue:#16a34a;--blue-dk:#15803d}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none;touch-action:none;
   background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
@@ -758,6 +763,18 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   </div>
   <div class="sheet-b" id="sheetBody">
     <div class="block">
+      <h3>Внешний вид</h3>
+      <div class="line" style="flex-direction:column;align-items:stretch;gap:8px">
+        <label for="accent-select" style="font-size:12px;color:var(--text)">Акцентная тема</label>
+        <select id="accent-select">
+          <option value="classic-blue">Classic Blue</option>
+          <option value="racing-red">Racing Red</option>
+          <option value="neon-green">Neon Green</option>
+        </select>
+        <div style="font-size:10px;line-height:1.45">Меняет акцентные цвета интерфейса. Цвета подсветки движения и поворотников не меняются.</div>
+      </div>
+    </div>
+    <div class="block">
       <h3>Классический режим</h3>
       <div class="line" style="flex-direction:column;align-items:stretch;gap:8px">
         <label for="motor-count-select" style="font-size:12px;color:var(--text)">Количество моторов</label>
@@ -988,8 +1005,18 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     $('themeBtn').textContent=t==='light'?'☀️':'🌙';
     localStorage.setItem('lcc_th',t);
   }
+  function setAccent(value){
+    var valid=['classic-blue','racing-red','neon-green'];
+    var accent=valid.indexOf(value)>=0?value:'classic-blue';
+    document.documentElement.setAttribute('data-accent',accent);
+    var select=$('accent-select');
+    if(select) select.value=accent;
+    localStorage.setItem('lcc_accent',accent);
+  }
   setTh(th);
+  setAccent(localStorage.getItem('lcc_accent')||'classic-blue');
   $('themeBtn').onclick=function(){ setTh(th==='dark'?'light':'dark'); };
+  $('accent-select').onchange=function(){ setAccent(this.value); };
 
   window.toggleFullscreen=async function(){
     try{
