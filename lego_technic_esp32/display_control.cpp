@@ -14,6 +14,7 @@ extern AsyncWebSocket ws;
 
 // Режим работы объявлен в app.cpp
 extern Mode currentMode;
+extern bool motorBoardReady;
 
 
 // ---------- Иконка режима ----------
@@ -76,6 +77,18 @@ void updateDisplay() {
     display.setCursor(30, 54);
     display.printf("%.2fV", battV);
 
+    display.display();
+    return;
+  }
+
+  // Ошибка моторной платы важнее обычного экрана режима: без PCA9685
+  // команды моторам не выполняются. Предупреждение остаётся видимым до перезапуска.
+  if (!motorBoardReady) {
+    display.setTextSize(2);
+    display.setCursor(0, 10);
+    display.print("MOTOR");
+    display.setCursor(0, 32);
+    display.print("I2C ERR");
     display.display();
     return;
   }
