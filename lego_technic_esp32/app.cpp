@@ -39,7 +39,6 @@
 
 // ---------- Модули проекта ----------
 
-#include "hardware_config.h"
 #include "motor_control.h"
 #include "web_page.h"
 #include "web_control.h"
@@ -47,6 +46,7 @@
 #include "display_control.h"
 #include "steering_control.h"
 #include "preferences_manager.h"
+#include "i2c_motor_backend.h"
 
 // ============================================================
 // НАСТРОЙКИ ДОСТУПА — МЕНЯТЬ ЗДЕСЬ
@@ -109,6 +109,9 @@ int motorBVal = 0;
 int motorCVal = 0;
 int motorDVal = 0;
 int servoVal  = 0;
+
+// False until the PCA9685 motor board is detected on the shared I2C bus.
+bool motorBoardReady = false;
 
 // ---------- Настройки реверса ----------
 
@@ -194,60 +197,16 @@ void setup() {
   // Аппаратная Serial-отладка не используется.
   // Диагностика доступна через Wi-Fi и веб-интерфейс.
 
-  // 1. Безопасное состояние драйверов.
-  // Оба TB6612FNG выключены до завершения настройки.
-  pinMode(TB_STBY, OUTPUT);
-  digitalWrite(TB_STBY, LOW);
-
-  // 2. Настройка входов направления четырёх моторов.
-  pinMode(TB_AIN1, OUTPUT);
-  pinMode(TB_AIN2, OUTPUT);
-
-  pinMode(TB_BIN1, OUTPUT);
-  pinMode(TB_BIN2, OUTPUT);
-
-  pinMode(TB2_AIN1, OUTPUT);
-  pinMode(TB2_AIN2, OUTPUT);
-
-  pinMode(TB2_BIN1, OUTPUT);
-  pinMode(TB2_BIN2, OUTPUT);
-
-  // Устанавливаем безопасное начальное состояние входов.
-  digitalWrite(TB_AIN1, LOW);
-  digitalWrite(TB_AIN2, LOW);
-
-  digitalWrite(TB_BIN1, LOW);
-  digitalWrite(TB_BIN2, LOW);
-
-  digitalWrite(TB2_AIN1, LOW);
-  digitalWrite(TB2_AIN2, LOW);
-
-  digitalWrite(TB2_BIN1, LOW);
-  digitalWrite(TB2_BIN2, LOW);
-
-  // 3. Настройка четырёх PWM-каналов.
-  // Частота 5 кГц, разрешение 8 бит.
-  // LEDC-каналы и GPIO определены в hardware_config.h.
-
-  ledcSetup(LEDC_CH_A, 5000, 8);
-  ledcAttachPin(TB_PWMA, LEDC_CH_A);
-
-  ledcSetup(LEDC_CH_B, 5000, 8);
-  ledcAttachPin(TB_PWMB, LEDC_CH_B);
-
-  ledcSetup(LEDC_CH_C, 5000, 8);
-  ledcAttachPin(TB2_PWMA, LEDC_CH_C);
-
-  ledcSetup(LEDC_CH_D, 5000, 8);
-  ledcAttachPin(TB2_PWMB, LEDC_CH_D);
-
-  // 4. Инициализация рулевого сервопривода.
+  // 1. Инициализация рулевого сервопривода.
   steerServo.setPeriodHertz(50);
   steerServo.attach(SERVO_PIN, 1000, 2000);
 
   // 5. Инициализация OLED-дисплея.
   Wire.begin(OLED_SDA, OLED_SCL);
   display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+
+  // Используем единственную Wire-шину и для OLED, и для моторного контроллера.
+  motorBoardReady = i2cMotorBackendBegin(Wire);
 
   display.clearDisplay();
   display.setTextSize(2);
