@@ -651,6 +651,60 @@ def check_diagnostics_regressions() -> None:
 
 
 
+
+def check_i2c_motor_backend_scaffold() -> None:
+    """Validate the unused Adafruit Motor Shield V2 backend scaffold."""
+    header = read_text(SOURCE_DIR / "i2c_motor_backend.h")
+    backend = read_text(SOURCE_DIR / "i2c_motor_backend.cpp")
+    active_motor = read_text(SOURCE_DIR / "motor_control.cpp")
+    app = read_text(SOURCE_DIR / "app.cpp")
+
+    if any(item is None for item in (header, backend, active_motor, app)):
+        report("FAIL", "Cannot read the I2C motor backend scaffold or current motor path")
+        return
+
+    required_header = (
+        "enum class I2CMotorChannel",
+        "i2cMotorBackendBegin",
+        "i2cMotorBackendIsReady",
+        "i2cMotorBackendSetMotor",
+        "i2cMotorBackendStopAll",
+    )
+    missing = [token for token in required_header if token not in header]
+    if missing:
+        report("FAIL", "I2C motor backend public API missing: " + ", ".join(missing))
+    else:
+        report("PASS", "I2C motor backend exposes begin, readiness, per-motor speed and stop-all APIs")
+
+    required_backend = (
+        "#include <Adafruit_MotorShield.h>",
+        "I2C_MOTOR_WING_ADDRESS = 0x60",
+        "MOTOR_PWM_FREQUENCY_HZ = 1600",
+        "shield.begin(MOTOR_PWM_FREQUENCY_HZ, &wire)",
+        "shield.getMotor(static_cast<uint8_t>(i + 1))",
+        "FORWARD",
+        "BACKWARD",
+        "RELEASE",
+        "constrain(speedPercent, -100, 100)",
+        "setSpeed(0)",
+    )
+    missing = [token for token in required_backend if token not in backend]
+    if missing:
+        report("FAIL", "I2C motor backend implementation missing expected behavior: " + ", ".join(missing))
+    else:
+        report("PASS", "I2C backend checks controller initialization, maps four library motor ports and handles signed speed")
+
+    if "setDCBridge(" in active_motor and "ledcWrite(" in active_motor and "i2cMotorBackend" not in active_motor:
+        report("PASS", "Current GPIO/LEDC motor controller remains active during scaffold stage")
+    else:
+        report("FAIL", "Do not switch the active motor-control path during the scaffold-only stage")
+
+    if "i2cMotorBackendBegin(" not in app:
+        report("PASS", "app.cpp does not initialize the experimental I2C motor backend yet")
+    else:
+        report("FAIL", "Do not integrate I2C motor initialization during the scaffold-only stage")
+
+
 def main() -> int:
     print("=" * 64)
     print("LEGO TECHNIC ESP32 — PROJECT AUDITOR")
@@ -680,6 +734,8 @@ def main() -> int:
         check_accent_theme_regressions()
         print("\n--- Read-only diagnostics regression checks ---")
         check_diagnostics_regressions()
+        print("\n--- I2C motor backend scaffold checks ---")
+        check_i2c_motor_backend_scaffold()
 
     print()
     print("=" * 64)
