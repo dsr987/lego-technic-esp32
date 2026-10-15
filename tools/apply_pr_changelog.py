@@ -110,9 +110,17 @@ def main() -> None:
         if count != 1:
             fail("Could not update development version header")
 
-    changelog = f" * {marker} {pr.get('title', 'Merged pull request').strip()}"
-    if notes:
-        changelog += "\n" + "\n".join(f" *   - {note}" for note in notes)
+    # PR text is untrusted input; keep it safe inside the C-style comment.
+    def safe_comment(value: str) -> str:
+        value = value.replace("*/", "* /")
+        return re.sub(r"[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f]", "", value).strip()
+
+    title = safe_comment(str(pr.get("title", "Merged pull request")).replace("\\n", " "))
+    safe_notes = [safe_comment(note) for note in notes]
+    safe_notes = [note for note in safe_notes if note]
+    changelog = f" * {marker} {title}"
+    if safe_notes:
+        changelog += "\\n" + "\\n".join(f" *   - {note}" for note in safe_notes)
     start_idx = text.find(START)
     end_idx = text.find(END)
     if start_idx < 0 or end_idx < 0 or end_idx < start_idx:
