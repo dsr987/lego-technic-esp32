@@ -97,7 +97,23 @@ body{padding:max(env(safe-area-inset-top,0px),6px) 10px max(env(safe-area-inset-
 .battery-warning-btn{min-height:42px;max-width:100%;padding:10px 22px;border:0;border-radius:12px;
   background:var(--blue-dk);color:#fff;font:inherit;font-weight:800;cursor:pointer}
 .battery-warning-btn:disabled{background:#475569;color:#e2e8f0;cursor:not-allowed}
+
+/* Локальный preview-тестер включается только через ?batteryTest=1; WebSocket не запускается. */
+.battery-warning-test-controls{
+  position:fixed;left:12px;right:12px;bottom:12px;z-index:1100;display:none;flex-direction:column;gap:8px;
+  width:min(720px,calc(100% - 24px));margin:0 auto;padding:12px;background:var(--panel);
+  border:2px solid var(--cyan);border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,.5);
+  color:var(--text);touch-action:pan-y;user-select:auto;-webkit-user-select:auto;
+}
+.battery-warning-test-controls.active{display:flex}
+.battery-warning-test-title{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px;font-weight:800}
+.battery-warning-test-buttons{display:flex;flex-wrap:wrap;gap:6px}
+.battery-warning-test-buttons button{min-height:34px;padding:6px 10px;border:1px solid var(--border);
+  border-radius:9px;background:var(--panel2);color:var(--text);font:inherit;font-size:12px;font-weight:700}
+.battery-warning-test-controls input[type=range]{width:100%;touch-action:pan-x}
+.battery-warning-test-note{font-size:11px;line-height:1.35;color:var(--muted)}
 @media(max-width:420px){.battery-warning-card{padding:22px 16px}.battery-warning-title{font-size:19px}}
+
 
 
 .panel{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
@@ -926,6 +942,22 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   </section>
 </div>
 
+
+<div id="battery-warning-test-controls" class="battery-warning-test-controls" aria-label="Локальная проверка предупреждений батареи">
+  <div class="battery-warning-test-title">
+    <span>ТЕСТ БАННЕРОВ БАТАРЕИ</span>
+    <span id="battery-warning-test-value">100%</span>
+  </div>
+  <div class="battery-warning-test-buttons">
+    <button type="button" data-battery-test-percent="100">100% · норма</button>
+    <button type="button" data-battery-test-percent="10">10% · предупреждение</button>
+    <button type="button" data-battery-test-percent="5">5% · критический</button>
+    <button type="button" data-battery-test-percent="1">1% · блокировка</button>
+  </div>
+  <input id="battery-warning-test-slider" type="range" min="0" max="100" step="1" value="100" aria-label="Тестовый уровень заряда">
+  <div class="battery-warning-test-note">Локальный режим для проверки внешнего вида и порогов. WebSocket к ESP32 отключён, команды моторам не отправляются. Откройте страницу с параметром <code>?batteryTest=1</code>.</div>
+</div>
+
 <script>
 (function(){
   function $(id){ return document.getElementById(id); }
@@ -938,6 +970,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   var diagnosticFailsafeCount = null;
   var batteryWarningLevel = 0;
   var dismissedBatteryWarningLevel = 0;
+  var batteryWarningTestMode = new URLSearchParams(window.location.search).get('batteryTest') === '1';
 
   /* BATTERY_WARNING_STATE_START */
   function nextBatteryWarningLevel(percent, currentLevel){
@@ -1011,6 +1044,29 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     renderBatteryWarning();
   }
   window.dismissBatteryWarning = dismissBatteryWarning;
+
+  function setupBatteryWarningPreview(){
+    var controls = $('battery-warning-test-controls');
+    var slider = $('battery-warning-test-slider');
+    var value = $('battery-warning-test-value');
+    if(!controls || !slider || !value) return;
+    controls.classList.add('active');
+    $('ws-status').textContent = 'ЛОКАЛЬНЫЙ ТЕСТ';
+    $('ws-status').style.color = 'var(--cyan)';
+
+    function setTestPercent(percent){
+      var p = Math.max(0, Math.min(100, Math.round(Number(percent) || 0)));
+      slider.value = String(p);
+      value.textContent = p + '%';
+      updateBatteryWarnings(7.4, p);
+    }
+
+    slider.addEventListener('input', function(){ setTestPercent(slider.value); });
+    controls.querySelectorAll('[data-battery-test-percent]').forEach(function(button){
+      button.addEventListener('click', function(){ setTestPercent(button.getAttribute('data-battery-test-percent')); });
+    });
+    setTestPercent(100);
+  }
 
 
   // Нажатие на кубик переключает шапку между названием устройства и последними TX-данными.
@@ -1851,7 +1907,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     if(e.target.tagName!=='INPUT') e.preventDefault();
   }, {passive:false});
 
-  initWS();
+  if(batteryWarningTestMode){
+    setupBatteryWarningPreview();
+  } else {
+    initWS();
+  }
   updateEngUI(); applyEngGate(); paintLights();
   applyMotorCount(motorCount);
   switchMode(0); fitSliders();
