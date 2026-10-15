@@ -1,0 +1,44 @@
+name: Release Metadata Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+      - edited
+      - labeled
+      - unlabeled
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-metadata-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate release type and changelog
+    runs-on: ubuntu-latest
+    env:
+      PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+      PR_BODY: ${{ github.event.pull_request.body || '' }}
+
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Test release automation rules
+        run: python3 tools/test_release_automation.py
+
+      - name: Validate PR release metadata
+        run: python3 tools/release_automation.py validate-pr
