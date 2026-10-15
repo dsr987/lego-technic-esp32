@@ -8,6 +8,11 @@ on:
     paths:
       - 'lego_technic_esp32/**'
       - 'firmware/bootstrap/**'
+      - 'tools/**'
+      - '.github/workflows/**'
+      - '.github/release-automation/**'
+      - 'platformio.ini'
+      - 'arduino-cli.yaml'
       - 'tools/extract_html.py'
       - 'tools/update_gui_version.py'
       - 'tools/extract_changelog.py'
