@@ -73,6 +73,35 @@ body{padding:max(env(safe-area-inset-top,0px),6px) 10px max(env(safe-area-inset-
 .bat-fill{height:100%;width:70%;background:var(--emerald);border-radius:1px}
 .bat.warn .bat-fill{background:var(--amber)}.bat.crit .bat-fill{background:var(--rose)}
 
+/* Полноэкранные предупреждения батареи. */
+.battery-warning-overlay{
+  position:fixed;inset:0;z-index:1000;display:none;align-items:center;justify-content:center;
+  padding:20px;background:rgba(2,6,15,.78);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  touch-action:none;
+}
+.battery-warning-overlay.active{display:flex}
+.battery-warning-card{
+  display:none;flex-direction:column;align-items:center;text-align:center;gap:10px;
+  width:min(100%,420px);max-height:calc(100% - 24px);overflow:auto;padding:26px 22px;
+  background:var(--panel);border:2px solid var(--border);border-radius:22px;
+  box-shadow:0 24px 72px rgba(0,0,0,.48);color:var(--text);
+}
+.battery-warning-card.active{display:flex}
+.battery-warning-card.level-10{border-color:var(--amber)}
+.battery-warning-card.level-5{border-color:var(--rose)}
+.battery-warning-card.level-1{border-color:#dc2626}
+.battery-warning-icon{font-size:38px;line-height:1.1}
+.battery-warning-percent{font-size:34px;font-weight:900;line-height:1;font-variant-numeric:tabular-nums}
+.battery-warning-card.level-10 .battery-warning-percent{color:var(--amber)}
+.battery-warning-card.level-5 .battery-warning-percent,.battery-warning-card.level-1 .battery-warning-percent{color:var(--rose)}
+.battery-warning-title{font-size:21px;font-weight:800;line-height:1.2}
+.battery-warning-text{font-size:14px;line-height:1.5;color:var(--muted);max-width:34ch}
+.battery-warning-btn{min-height:42px;max-width:100%;padding:10px 22px;border:0;border-radius:12px;
+  background:var(--blue-dk);color:#fff;font:inherit;font-weight:800;cursor:pointer}
+.battery-warning-btn:disabled{background:#475569;color:#e2e8f0;cursor:not-allowed}
+@media(max-width:420px){.battery-warning-card{padding:22px 16px}.battery-warning-title{font-size:19px}}
+
+
 .panel{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;
   background:var(--panel);border:1px solid var(--border);border-radius:18px;padding:10px;overflow:hidden}
 .cluster{display:flex;align-items:center;justify-content:center;gap:clamp(14px,4vw,40px);height:100%;width:100%}
@@ -875,6 +904,30 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   </div>
 </aside>
 
+ 
+<div id="battery-warning-overlay" class="battery-warning-overlay" aria-live="assertive" aria-hidden="true">
+  <section id="battery-warning-10" class="battery-warning-card level-10" role="alert" aria-labelledby="battery-warning-title-10">
+    <div class="battery-warning-icon" aria-hidden="true">🪫</div>
+    <div class="battery-warning-percent" id="battery-warning-percent-10">10%</div>
+    <div class="battery-warning-title" id="battery-warning-title-10">Низкий заряд батареи</div>
+    <div class="battery-warning-text">Рекомендуется остановить модель при первой возможности и зарядить аккумулятор.</div>
+    <button type="button" class="battery-warning-btn" onclick="dismissBatteryWarning(1)">Понятно</button>
+  </section>
+  <section id="battery-warning-5" class="battery-warning-card level-5" role="alert" aria-labelledby="battery-warning-title-5">
+    <div class="battery-warning-icon" aria-hidden="true">⚠️</div>
+    <div class="battery-warning-percent" id="battery-warning-percent-5">5%</div>
+    <div class="battery-warning-title" id="battery-warning-title-5">Критический заряд</div>
+    <div class="battery-warning-text">Зарядите аккумулятор как можно скорее. Следите за температурой и поведением модели.</div>
+    <button type="button" class="battery-warning-btn" onclick="dismissBatteryWarning(2)">Понятно</button>
+  </section>
+  <section id="battery-warning-1" class="battery-warning-card level-1" role="alert" aria-labelledby="battery-warning-title-1">
+    <div class="battery-warning-icon" aria-hidden="true">🔌</div>
+    <div class="battery-warning-title" id="battery-warning-title-1">Управление приостановлено</div>
+    <div class="battery-warning-text">Заряд критически низкий. Команды остановки отправлены, элементы управления заблокированы. Зарядите аккумулятор, прежде чем продолжить.</div>
+    <button type="button" class="battery-warning-btn" disabled>Зарядите батарею для продолжения</button>
+  </section>
+</div>
+
 <script>
 (function(){
   function $(id){ return document.getElementById(id); }
@@ -885,6 +938,82 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   var diagnosticBatteryState = null;
   var diagnosticStationCount = null;
   var diagnosticFailsafeCount = null;
+  var batteryWarningLevel = 0;
+  var dismissedBatteryWarningLevel = 0;
+
+  /* BATTERY_WARNING_STATE_START */
+  function nextBatteryWarningLevel(percent, currentLevel){
+    var p = Number(percent);
+    var previous = Number(currentLevel) || 0;
+    if(!Number.isFinite(p) || p < 0 || p > 100) return 0;
+    if(p <= 1) return 3;
+    if(previous === 3 && p < 3) return 3;
+    if(p <= 5) return 2;
+    if(previous === 2 && p < 7) return 2;
+    if(p <= 10) return 1;
+    if(previous === 1 && p < 13) return 1;
+    return 0;
+  }
+
+  function shouldShowBatteryWarning(level, dismissedLevel){
+    return level === 3 || (level > 0 && level > dismissedLevel);
+  }
+  /* BATTERY_WARNING_STATE_END */
+
+  function renderBatteryWarning(){
+    var overlay = $('battery-warning-overlay');
+    if(!overlay) return;
+    var visible = shouldShowBatteryWarning(batteryWarningLevel, dismissedBatteryWarningLevel);
+    var warningIds = {1:'battery-warning-10', 2:'battery-warning-5', 3:'battery-warning-1'};
+    Object.keys(warningIds).forEach(function(key){
+      var card = $(warningIds[key]);
+      if(card) card.classList.toggle('active', visible && Number(key) === batteryWarningLevel);
+    });
+    overlay.classList.toggle('active', visible);
+    overlay.setAttribute('aria-hidden', visible ? 'false' : 'true');
+  }
+
+  function updateBatteryWarnings(voltage, percent){
+    var v = Number(voltage);
+    var p = Number(percent);
+    var validVoltage = voltage !== null && typeof voltage !== 'undefined' &&
+      Number.isFinite(v) && v > 0.5;
+    var validPercent = percent !== null && typeof percent !== 'undefined' &&
+      !(typeof percent === 'string' && percent.trim() === '') &&
+      Number.isFinite(p) && p >= 0 && p <= 100;
+    var previousLevel = batteryWarningLevel;
+
+    // USB / no reading is not an empty battery. Do not show a false warning.
+    if(!validVoltage || !validPercent){
+      batteryWarningLevel = 0;
+      dismissedBatteryWarningLevel = 0;
+      renderBatteryWarning();
+      return;
+    }
+
+    batteryWarningLevel = nextBatteryWarningLevel(p, batteryWarningLevel);
+    if(batteryWarningLevel === 0 || batteryWarningLevel === 3){
+      dismissedBatteryWarningLevel = 0;
+    }
+
+    // On first entry to the 1% lock, immediately request zero for all channels.
+    // Firmware timeout remains the fallback if the WebSocket stop cannot be delivered.
+    if(batteryWarningLevel === 3 && previousLevel !== 3){
+      zeroAll();
+      addDiagnosticEvent('Критически низкий заряд: отправлена команда остановки', 'error');
+    }
+    $('battery-warning-percent-10').textContent = Math.round(p) + '%';
+    $('battery-warning-percent-5').textContent = Math.round(p) + '%';
+    renderBatteryWarning();
+  }
+
+  function dismissBatteryWarning(level){
+    if((level !== 1 && level !== 2) || batteryWarningLevel !== level) return;
+    dismissedBatteryWarningLevel = level;
+    renderBatteryWarning();
+  }
+  window.dismissBatteryWarning = dismissBatteryWarning;
+
 
   // Нажатие на кубик переключает шапку между названием устройства и последними TX-данными.
   var brandToggle = $('brand-toggle');
@@ -995,6 +1124,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       try{
         var d = JSON.parse(e.data);
         if(d.st){
+          updateBatteryWarnings(d.v, d.p);
           updateDiagnostics(d);
           $('batt-txt').textContent = d.p + '% · ' + d.v.toFixed(1) + 'V';
           $('bat-fill').style.width = d.p + '%';
