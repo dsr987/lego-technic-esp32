@@ -4,7 +4,7 @@ The release metadata process uses pull request labels and one changelog summary 
 
 ## Required PR label
 
-Every pull request targeting main must have exactly one of these labels. The first merged automation PR creates any missing labels. For that one-time bootstrap only, use the line Release type: release:none in the PR body; after label provisioning, the workflow rejects PRs without a release label.
+Every pull request targeting main should have exactly one of these labels. The PR that first installs the automation cannot run its own pull_request_target close workflow because that workflow was not present in main when the close event was emitted. A push-triggered bootstrap job therefore creates the labels when release-versioning.yml first lands on main. That bootstrap job does not change the firmware version. For this one-time installation PR, use the line Release type: release:none in the PR body. Until the first later merged PR records labels_initialized=true in state.json, the validator retains this explicit fallback; afterwards, a real release label is required.
 
 | Label | Result while the project is in beta |
 | --- | --- |
@@ -14,7 +14,7 @@ Every pull request targeting main must have exactly one of these labels. The fir
 | release:major | After 1.0.0, increment the major version and reset minor and patch |
 | release:none | No firmware-version bump for documentation or automation-only changes |
 
-Do not use release:major to leave beta. Use release:stable for the first stable release. The validation workflow checks that exactly one recognized release label is present once setup is complete. The temporary body fallback is disabled after the first successful run.
+Do not use release:major to leave beta. Use release:stable for the first stable release. The validation workflow checks that exactly one recognized release label is present once setup is complete. The temporary body fallback is disabled after a post-installation PR has been processed and the state is committed.
 
 ## Changelog summary
 
@@ -28,7 +28,7 @@ Example:
 
 ## What happens after merge
 
-1. The trusted pull_request_target workflow ensures the five release labels exist, then reads the merged PR's label and changelog section. It checks out main, never the untrusted PR head.
+1. On the initial merge that adds release-versioning.yml, the push-triggered bootstrap job creates any missing labels. It deliberately does not attempt a version bump for that infrastructure-only merge. For subsequent merged PRs, the trusted pull_request_target workflow ensures the labels exist, then reads the merged PR's label and changelog section. It checks out main, never the untrusted PR head.
 2. It calculates the next version, replaces the current CHANGELOG block in app.cpp, updates the version header, and records the PR number in .github/release-automation/state.json so retries cannot apply the same release twice.
 3. The workflow explicitly dispatches ci-build-deploy.yml. This is necessary because pushes made with GITHUB_TOKEN do not automatically start ordinary push workflows.
 4. The existing workflow generates CHANGELOG.md, synchronizes the GUI version in index.html, updates README.md, compiles firmware as needed, and deploys the site.
