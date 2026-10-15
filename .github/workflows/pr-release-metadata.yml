@@ -1,0 +1,33 @@
+name: PR Release Metadata
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened, labeled, unlabeled]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  validate-release-metadata:
+    name: Validate release label and changelog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout base branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.ref || 'main' }}
+
+      - name: Validate PR metadata and show proposed version
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+          PR_LABELS_JSON: ${{ toJson(github.event.pull_request.labels.*.name) }}
+        run: python3 tools/validate_pr_release.py
+
+      - name: Explain manual run
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: echo "This workflow validates pull request metadata when triggered by a pull request event."
