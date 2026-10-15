@@ -4,7 +4,7 @@ The release metadata process uses pull request labels and one changelog summary 
 
 ## Required PR label
 
-Every pull request targeting main should have exactly one of these labels. The automation listens to trusted pushes to main, then asks GitHub which merged PR is associated with that exact commit. This handles the first PR that installs the workflow, because the workflow does not depend on a pull_request_target close event. The first installation PR creates missing labels. It does not change the firmware version. For this one-time PR, use the line Release type: release:none in its body. Until the first merged PR is recorded in state.json, the validator retains this explicit fallback; afterwards, a real release label is required.
+Every pull request targeting main should have exactly one of these labels. After the existing Build, Extract and Deploy workflow completes successfully for a main push, release automation asks GitHub which merged PR is associated with that exact commit. This handles the first PR that installs the workflow and avoids the privileged pull_request_target event. The first installation PR creates missing labels. It does not change the firmware version. For this one-time PR, use the line Release type: release:none in its body. Until the first merged PR is recorded in state.json, the validator retains this explicit fallback; afterwards, a real release label is required.
 
 | Label | Result while the project is in beta |
 | --- | --- |
@@ -28,9 +28,9 @@ Example:
 
 ## What happens after merge
 
-1. On every push to main, the workflow asks GitHub for pull requests associated with the exact pushed commit. If the push is not associated with a merged PR targeting main, release processing is skipped. The workflow checks out main and never checks out a PR head branch.
+1. After the successful Build, Extract and Deploy run for a main push, the release workflow asks GitHub for pull requests associated with that run's exact commit. If no merged PR targeting main is associated with it, release processing is skipped. The workflow checks out trusted main and never checks out a PR head branch.
 2. It ensures the release labels exist, calculates the next version, replaces the current CHANGELOG block in app.cpp, updates the version header, and records processed PR numbers in .github/release-automation/state.json so retries cannot bump the version twice.
-3. The release workflow and the existing build/deploy workflow share a concurrency group, preventing their commits to main from racing each other.
+3. By running only after the existing CI/deploy run completes, the versioning commit cannot race that run's generated-file commit. The CI path filters include tools and workflow files so automation-only PRs also enter this sequence.
 4. For an actual version bump, the workflow explicitly dispatches ci-build-deploy.yml. This is necessary because pushes made with GITHUB_TOKEN do not automatically start ordinary push workflows. The existing workflow generates CHANGELOG.md, synchronizes the GUI version in index.html, updates README.md, compiles firmware, and deploys the site.
 
 The version is advanced only after merge, so parallel feature branches do not independently hard-code competing versions. Physical hardware validation remains separate from automated compilation and tests.
