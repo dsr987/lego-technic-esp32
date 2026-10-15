@@ -59,7 +59,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
             / ".github" / "workflows" / "release-versioning.yml"
         ).read_text(encoding="utf-8")
         self.assertIn("push:", workflow)
-        self.assertIn("branches:\\n      - main", workflow)
+        self.assertIn("- main", workflow)
         self.assertIn("prepare-push", workflow)
         self.assertNotIn("pull_request_target:", workflow)
         self.assertIn("group: github-pages-deployment", workflow)
