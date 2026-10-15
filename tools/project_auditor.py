@@ -650,6 +650,39 @@ def check_diagnostics_regressions() -> None:
 
 
 
+
+def check_battery_warning_regressions() -> None:
+    web_page = read_text(SOURCE_DIR / "web_page.cpp")
+    if web_page is None:
+        report("FAIL", "Cannot read web_page.cpp for battery warning checks")
+        return
+
+    required_tokens = (
+        'id="battery-warning-10"',
+        'id="battery-warning-5"',
+        'id="battery-warning-1"',
+        "function nextBatteryWarningLevel(",
+        "function shouldShowBatteryWarning(",
+        "updateBatteryWarnings(d.v, d.p);",
+        "if(batteryWarningLevel === 3 && previousLevel !== 3)",
+        "zeroAll();",
+        "dismissBatteryWarning(1)",
+        "dismissBatteryWarning(2)",
+        "BATTERY_WARNING_STATE_START",
+        "BATTERY_WARNING_STATE_END",
+    )
+    missing = [token for token in required_tokens if token not in web_page]
+    if missing:
+        report("FAIL", "Battery warning regression check missing: " + ", ".join(missing))
+    else:
+        report("PASS", "GUI retains 10%, 5%, and 1% battery warnings and critical-stop behavior")
+
+    if 'overlay.setAttribute(\'aria-hidden\', visible ? \'false\' : \'true\')' in web_page:
+        report("PASS", "Battery warning overlay updates accessibility visibility state")
+    else:
+        report("FAIL", "Battery warning overlay must update its accessibility visibility state")
+
+
 def main() -> int:
     print("=" * 64)
     print("LEGO TECHNIC ESP32 — PROJECT AUDITOR")
@@ -679,6 +712,7 @@ def main() -> int:
         check_accent_theme_regressions()
         print("\n--- Read-only diagnostics regression checks ---")
         check_diagnostics_regressions()
+        check_battery_warning_regressions()
 
     print()
     print("=" * 64)
