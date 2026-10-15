@@ -1,6 +1,13 @@
 name: Release Version Automation
 
 on:
+  # The workflow cannot handle the close event for the PR that first adds it
+  # to main. Bootstrap the labels on that initial push instead.
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/release-versioning.yml'
   pull_request_target:
     types:
       - closed
@@ -12,6 +19,33 @@ permissions:
   pull-requests: read
 
 jobs:
+  bootstrap-release-labels:
+    name: Bootstrap release labels on first installation
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create standard release labels if missing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ensure_label() {
+            local name="$1" color="$2" description="$3"
+            if ! gh api --paginate "repos/${GITHUB_REPOSITORY}/labels?per_page=100" --jq '.[].name' | grep -Fx "${name}" >/dev/null; then
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
+                -f "name=${name}" -f "color=${color}" -f "description=${description}" >/dev/null
+              echo "Created label: ${name}"
+            else
+              echo "Label already exists: ${name}"
+            fi
+          }
+          ensure_label "release:patch" "0E8A16" "Patch release: backward-compatible fixes"
+          ensure_label "release:minor" "1D76DB" "Minor release: new backward-compatible functionality"
+          ensure_label "release:major" "B60205" "Major release: breaking changes after v1.0.0"
+          ensure_label "release:stable" "5319E7" "Promote beta 0.x to stable v1.0.0"
+          ensure_label "release:none" "C5DEF5" "No firmware release; documentation or automation only"
+
   release-metadata:
     name: Update canonical version and changelog
     if: >-
