@@ -670,6 +670,15 @@ def check_battery_warning_regressions() -> None:
         "dismissBatteryWarning(2)",
         "BATTERY_WARNING_STATE_START",
         "BATTERY_WARNING_STATE_END",
+        'id="battery-warning-test-controls"',
+        'data-battery-test-percent="10"',
+        'data-battery-test-percent="5"',
+        'data-battery-test-percent="1"',
+        "function setupBatteryWarningPreview()",
+        "batteryWarningTestMode = new URLSearchParams(window.location.search).get('batteryTest') === '1'",
+        "if(batteryWarningTestMode){",
+        "setupBatteryWarningPreview();",
+
     )
     missing = [token for token in required_tokens if token not in web_page]
     if missing:
