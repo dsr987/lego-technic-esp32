@@ -58,11 +58,19 @@ class FirstRunBootstrapTests(unittest.TestCase):
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "release-versioning.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("push:", workflow)
-        self.assertIn("- main", workflow)
+        self.assertIn("workflow_run:", workflow)
+        self.assertIn("Build, Extract and Deploy", workflow)
+        self.assertIn("PUSH_SHA", workflow)
         self.assertIn("prepare-push", workflow)
         self.assertNotIn("pull_request_target:", workflow)
-        self.assertIn("group: github-pages-deployment", workflow)
+        self.assertIn("group: release-versioning-main", workflow)
+
+        build_workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github" / "workflows" / "ci-build-deploy.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("'tools/**'", build_workflow)
+        self.assertIn("'.github/workflows/**'", build_workflow)
 
     def test_prepare_push_exports_metadata_for_initial_install_pr(self):
         with tempfile.TemporaryDirectory() as directory:
