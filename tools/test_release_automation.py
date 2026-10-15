@@ -41,20 +41,72 @@ class FirstRunBootstrapTests(unittest.TestCase):
             self.assertEqual(result, 0)
             updated_state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertTrue(updated_state["labels_initialized"])
-            self.assertEqual(updated_state["processed_prs"], [])
+            self.assertEqual(updated_state["processed_prs"], [8])
             self.assertEqual(app_path.read_text(encoding="utf-8"), before)
             self.assertIn("release=false", output_path.read_text(encoding="utf-8"))
 
-    def test_release_workflow_bootstraps_labels_on_first_main_push(self):
+            # A retry after the state commit must not require the one-time body fallback.
+            with patch.object(release, "APP_CPP", app_path), \
+                 patch.object(release, "STATE_PATH", state_path), \
+                 patch.dict(os.environ, env, clear=False):
+                retry_result = release.apply_release()
+            self.assertEqual(retry_result, 0)
+            self.assertEqual(app_path.read_text(encoding="utf-8"), before)
+
+    def test_release_workflow_processes_main_push_without_pull_request_target(self):
         workflow = (
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "release-versioning.yml"
         ).read_text(encoding="utf-8")
-        self.assertIn("bootstrap-release-labels:", workflow)
-        self.assertIn("github.event_name == 'push'", workflow)
-        self.assertIn("refs/heads/main", workflow)
-        self.assertIn(".github/workflows/release-versioning.yml", workflow)
-        self.assertIn("pull_request_target:", workflow)
+        self.assertIn("push:", workflow)
+        self.assertIn("branches:\\n      - main", workflow)
+        self.assertIn("prepare-push", workflow)
+        self.assertNotIn("pull_request_target:", workflow)
+        self.assertIn("group: github-pages-deployment", workflow)
+
+    def test_prepare_push_exports_metadata_for_initial_install_pr(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            event_path = root / "associated-prs.json"
+            state_path = root / "state.json"
+            env_path = root / "github-env"
+            output_path = root / "github-output"
+            state_path.write_text(
+                json.dumps({"schema_version": 1, "labels_initialized": False, "processed_prs": []}),
+                encoding="utf-8",
+            )
+            event_path.write_text(json.dumps([{
+                "number": 8,
+                "merged_at": "2026-10-15T10:00:00Z",
+                "base": {"ref": "main"},
+                "labels": [],
+                "body": "Release type: release:none",
+            }]), encoding="utf-8")
+            env = {
+                "GITHUB_ENV": str(env_path),
+                "GITHUB_OUTPUT": str(output_path),
+                "GITHUB_STEP_SUMMARY": "",
+            }
+            with patch.object(release, "STATE_PATH", state_path), patch.dict(os.environ, env, clear=False):
+                result = release.prepare_push(str(event_path))
+            self.assertEqual(result, 0)
+            exported = env_path.read_text(encoding="utf-8")
+            self.assertIn("PR_NUMBER<<", exported)
+            self.assertIn("PR_NUMBER", exported)
+            self.assertIn("PR_BODY", exported)
+            self.assertIn("Release type: release:none", exported)
+            self.assertIn("process=true", output_path.read_text(encoding="utf-8"))
+
+    def test_prepare_push_skips_main_push_without_merged_pr(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            event_path = root / "associated-prs.json"
+            output_path = root / "github-output"
+            event_path.write_text("[]", encoding="utf-8")
+            with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output_path), "GITHUB_STEP_SUMMARY": ""}, clear=False):
+                result = release.prepare_push(str(event_path))
+            self.assertEqual(result, 0)
+            self.assertIn("process=false", output_path.read_text(encoding="utf-8"))
 
 
 class ReleaseTypeTests(unittest.TestCase):
