@@ -1,12 +1,60 @@
 #!/usr/bin/env python3
 """Host-only unit tests for release versioning and PR changelog parsing."""
 
+import json
+import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import release_automation as release  # noqa: E402
+
+
+class FirstRunBootstrapTests(unittest.TestCase):
+    def test_release_none_first_run_initializes_state_without_bumping_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app_path = root / "app.cpp"
+            state_path = root / "state.json"
+            output_path = root / "github-output"
+            app_path.write_text(AppUpdateTests.SAMPLE_APP, encoding="utf-8")
+            state_path.write_text(
+                json.dumps({"schema_version": 1, "labels_initialized": False, "processed_prs": []}),
+                encoding="utf-8",
+            )
+            before = app_path.read_text(encoding="utf-8")
+            env = {
+                "PR_LABELS": "",
+                "PR_BODY": "Release type: release:none",
+                "PR_NUMBER": "8",
+                "GITHUB_OUTPUT": str(output_path),
+                "GITHUB_STEP_SUMMARY": "",
+            }
+            with patch.object(release, "APP_CPP", app_path), \
+                 patch.object(release, "STATE_PATH", state_path), \
+                 patch.dict(os.environ, env, clear=False):
+                result = release.apply_release()
+
+            self.assertEqual(result, 0)
+            updated_state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertTrue(updated_state["labels_initialized"])
+            self.assertEqual(updated_state["processed_prs"], [])
+            self.assertEqual(app_path.read_text(encoding="utf-8"), before)
+            self.assertIn("release=false", output_path.read_text(encoding="utf-8"))
+
+    def test_release_workflow_bootstraps_labels_on_first_main_push(self):
+        workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github" / "workflows" / "release-versioning.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("bootstrap-release-labels:", workflow)
+        self.assertIn("github.event_name == 'push'", workflow)
+        self.assertIn("refs/heads/main", workflow)
+        self.assertIn(".github/workflows/release-versioning.yml", workflow)
+        self.assertIn("pull_request_target:", workflow)
 
 
 class ReleaseTypeTests(unittest.TestCase):
