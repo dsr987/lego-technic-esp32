@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sys
+import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -151,13 +152,17 @@ def write_step_output(**values: str) -> None:
 
 def load_state() -> dict:
     if not STATE_PATH.exists():
-        return {"schema_version": 1, "processed_prs": []}
+        return {"schema_version": 1, "labels_initialized": False, "processed_prs": [], "release_prs": []}
     try:
         state = json.loads(STATE_PATH.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as error:
         raise ReleaseMetadataError(f"Cannot read release automation state: {error}") from error
     if state.get("schema_version") != 1 or not isinstance(state.get("processed_prs"), list):
         raise ReleaseMetadataError("Release automation state has an unsupported format")
+    state.setdefault("labels_initialized", False)
+    state.setdefault("release_prs", [])
+    if not isinstance(state["release_prs"], list):
+        raise ReleaseMetadataError("Release automation state has an unsupported release_prs field")
     return state
 
 
@@ -251,9 +256,101 @@ def update_app_text(
     return app_text[: changelog_match.start()] + replacement + app_text[changelog_match.end() :]
 
 
+def write_env_value(name: str, value: str) -> None:
+    """Write a value to GITHUB_ENV without interpreting multiline PR text."""
+    env_path = os.environ.get("GITHUB_ENV")
+    if not env_path:
+        raise ReleaseMetadataError("GITHUB_ENV is required for push-event metadata")
+    delimiter = f"EOF_{uuid.uuid4().hex}"
+    with open(env_path, "a", encoding="utf-8") as env:
+        env.write(f"{name}<<{delimiter}\n{value}\n{delimiter}\n")
+
+
+def prepare_push(event_path: str) -> int:
+    """Resolve the merged PR associated with a main push and export its metadata."""
+    try:
+        try:
+            pulls = json.loads(Path(event_path).read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise ReleaseMetadataError(f"Cannot read associated pull requests: {error}") from error
+        if not isinstance(pulls, list):
+            raise ReleaseMetadataError("GitHub's associated pull-request response must be a list")
+
+        candidates = [
+            pr for pr in pulls
+            if isinstance(pr, dict)
+            and pr.get("number")
+            and pr.get("merged_at")
+            and (pr.get("base") or {}).get("ref") == "main"
+        ]
+        if not candidates:
+            print("No merged PR for main is associated with this push; release processing skipped.")
+            write_step_output(process="false")
+            return 0
+        if len(candidates) != 1:
+            raise ReleaseMetadataError(
+                f"Expected one merged PR associated with commit, found {len(candidates)}; refusing to guess."
+            )
+
+        pr = candidates[0]
+        number = pr.get("number")
+        if not isinstance(number, int) or number < 1:
+            raise ReleaseMetadataError("Associated pull request has no valid number")
+        labels = ",".join(
+            str(label.get("name", ""))
+            for label in pr.get("labels", [])
+            if isinstance(label, dict) and label.get("name")
+        )
+        body = str(pr.get("body") or "")
+
+        state = load_state()
+        processed = {int(value) for value in state["processed_prs"]}
+        if number not in processed:
+            release_type = parse_release_type(
+                labels,
+                body,
+                allow_bootstrap_fallback=not state.get("labels_initialized", False),
+            )
+            if release_type != "none":
+                validate_summary(extract_changelog_bullets(body))
+        else:
+            release_type = "already-processed"
+
+        write_env_value("PR_NUMBER", str(number))
+        write_env_value("PR_LABELS", labels)
+        write_env_value("PR_BODY", body)
+        write_step_output(process="true", release_type=release_type)
+        print(f"Resolved merged PR #{number} for commit metadata processing.")
+        return 0
+    except (OSError, ReleaseMetadataError, ValueError) as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        append_step_summary(["## Release metadata preparation", "", f"**Failed:** {error}"])
+        return 1
+
+
 def apply_release() -> int:
     try:
         state = load_state()
+        raw_pr_number = os.environ.get("PR_NUMBER", "")
+        if not raw_pr_number.isdigit() or int(raw_pr_number) < 1:
+            raise ReleaseMetadataError("PR_NUMBER must be a positive integer")
+        pr_number = int(raw_pr_number)
+
+        processed = {int(value) for value in state["processed_prs"]}
+        release_processed = {int(value) for value in state.get("release_prs", [])}
+        if pr_number in processed:
+            if pr_number in release_processed:
+                print(f"Release PR #{pr_number} was already processed; allow build/deploy retry.")
+                write_step_output(
+                    release="true",
+                    changed="false",
+                    version=str(state.get("last_version", "")),
+                )
+            else:
+                print(f"Non-release PR #{pr_number} was already processed; no version bump needed.")
+                write_step_output(release="false", changed="false", version="")
+            return 0
+
         body = os.environ.get("PR_BODY", "")
         release_type = parse_release_type(
             os.environ.get("PR_LABELS", ""),
@@ -261,25 +358,17 @@ def apply_release() -> int:
             allow_bootstrap_fallback=not state.get("labels_initialized", False),
         )
 
-        # The first merged run provisions the standard release labels. Record
-        # that transition so all later PRs must carry a real repository label.
-        if not state.get("labels_initialized", False):
-            state["labels_initialized"] = True
-            write_state(state)
+        # Mark label enforcement as initialized only when a PR is successfully processed.
+        state["labels_initialized"] = True
 
         if release_type == "none":
+            state["processed_prs"] = sorted(processed | {pr_number})
+            state["release_prs"] = sorted(release_processed)
+            state["last_processed_pr"] = pr_number
+            state["last_release_type"] = "none"
+            write_state(state)
             print("Release type is none; no firmware-version or changelog update is needed.")
-            write_step_output(release="false", changed="false", version="")
-            return 0
-
-        raw_pr_number = os.environ.get("PR_NUMBER", "")
-        if not raw_pr_number.isdigit() or int(raw_pr_number) < 1:
-            raise ReleaseMetadataError("PR_NUMBER must be a positive integer")
-        pr_number = int(raw_pr_number)
-        processed = {int(value) for value in state["processed_prs"]}
-        if pr_number in processed:
-            print(f"PR #{pr_number} was already processed; keeping the existing version.")
-            write_step_output(release="true", changed="false", version="")
+            write_step_output(release="false", changed="true", version="")
             return 0
 
         bullets = extract_changelog_bullets(body)
@@ -289,8 +378,7 @@ def apply_release() -> int:
         old_version_tuple = current_version(app_text)
         new_version_tuple = bump_version(old_version_tuple, release_type)
         if new_version_tuple is None:
-            write_step_output(release="false", changed="false", version="")
-            return 0
+            raise ReleaseMetadataError(f"Unsupported release type: {release_type}")
         old_version = format_version(old_version_tuple)
         new_version = format_version(new_version_tuple)
 
@@ -298,7 +386,9 @@ def apply_release() -> int:
         APP_CPP.write_text(new_app_text, encoding="utf-8", newline="\n")
 
         state["processed_prs"] = sorted(processed | {pr_number})
+        state["release_prs"] = sorted(release_processed | {pr_number})
         state["last_processed_pr"] = pr_number
+        state["last_release_type"] = release_type
         state["last_version"] = new_version
         write_state(state)
 
@@ -323,10 +413,17 @@ def apply_release() -> int:
 
 
 def main() -> int:
-    if len(sys.argv) != 2 or sys.argv[1] not in {"validate-pr", "apply"}:
-        print("Usage: release_automation.py {validate-pr|apply}", file=sys.stderr)
+    if len(sys.argv) not in {2, 3}:
+        print("Usage: release_automation.py {validate-pr|apply|prepare-push [associated-prs.json]}", file=sys.stderr)
         return 2
-    return validate_pr() if sys.argv[1] == "validate-pr" else apply_release()
+    if sys.argv[1] == "validate-pr" and len(sys.argv) == 2:
+        return validate_pr()
+    if sys.argv[1] == "apply" and len(sys.argv) == 2:
+        return apply_release()
+    if sys.argv[1] == "prepare-push" and len(sys.argv) == 3:
+        return prepare_push(sys.argv[2])
+    print("Usage: release_automation.py {validate-pr|apply|prepare-push [associated-prs.json]}", file=sys.stderr)
+    return 2
 
 
 if __name__ == "__main__":
