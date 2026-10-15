@@ -1,0 +1,110 @@
+name: Release Version Automation
+
+on:
+  pull_request_target:
+    types:
+      - closed
+
+permissions:
+  contents: write
+  actions: write
+  issues: write
+  pull-requests: read
+
+jobs:
+  release-metadata:
+    name: Update canonical version and changelog
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      PR_TITLE: ${{ github.event.pull_request.title }}
+      PR_BODY: ${{ github.event.pull_request.body || '' }}
+      PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+
+    steps:
+      # pull_request_target is privileged: only check out trusted main, never the PR head.
+      - name: Checkout trusted main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Create standard release labels if missing
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ensure_label() {
+            local name="$1" color="$2" description="$3"
+            if ! gh api --paginate "repos/${GITHUB_REPOSITORY}/labels?per_page=100" --jq '.[].name' | grep -Fx "${name}" >/dev/null; then
+              gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
+                -f "name=${name}" -f "color=${color}" -f "description=${description}" >/dev/null
+              echo "Created label: ${name}"
+            else
+              echo "Label already exists: ${name}"
+            fi
+          }
+          ensure_label "release:patch" "0E8A16" "Patch release: backward-compatible fixes"
+          ensure_label "release:minor" "1D76DB" "Minor release: new backward-compatible functionality"
+          ensure_label "release:major" "B60205" "Major release: breaking changes after v1.0.0"
+          ensure_label "release:stable" "5319E7" "Promote beta 0.x to stable v1.0.0"
+          ensure_label "release:none" "C5DEF5" "No firmware release; documentation or automation only"
+
+      - name: Apply version and changelog metadata
+        id: update
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          action_output="$GITHUB_OUTPUT"
+          temporary_output="$RUNNER_TEMP/release-update-output"
+          export GITHUB_OUTPUT="$temporary_output"
+          pushed=false
+          for attempt in 1 2 3 4 5; do
+            echo "Release metadata push attempt ${attempt}/5"
+            : > "$temporary_output"
+            git fetch origin main
+            git reset --hard origin/main
+            git clean -fd
+
+            python3 tools/release_automation.py apply
+            git add lego_technic_esp32/app.cpp .github/release-automation/state.json
+
+            if git diff --cached --quiet; then
+              echo "No source changes needed on attempt ${attempt}."
+              pushed=true
+              break
+            fi
+
+            git commit -m "chore: update release metadata for PR #${PR_NUMBER}"
+            if git push origin HEAD:main; then
+              pushed=true
+              break
+            fi
+
+            echo "::warning::main advanced during the push; retrying against the latest main."
+          done
+
+          if [[ "${pushed}" != "true" ]]; then
+            echo "::error::Could not update release metadata after 5 attempts."
+            exit 1
+          fi
+          cat "$temporary_output" >> "$action_output"
+
+      - name: Regenerate changelog, README and GUI; rebuild and deploy
+        if: ${{ steps.update.outputs.release == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run ci-build-deploy.yml --ref main
