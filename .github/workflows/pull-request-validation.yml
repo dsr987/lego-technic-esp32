@@ -43,6 +43,9 @@ jobs:
           python3 tools/embed_web_gui_assets.py
           git diff --exit-code -- lego_technic_esp32/web_page.cpp
 
+      - name: Test battery warning state machine
+        run: node tools/test_battery_warnings.js
+
       - name: Install esptool Python dependencies
         run: python3 -m pip install --upgrade pyserial
 
