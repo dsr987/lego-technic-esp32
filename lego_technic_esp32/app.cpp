@@ -97,6 +97,11 @@ AsyncWebSocket ws("/ws");
 unsigned long lastCmdMillis = 0;
 const unsigned long CMD_TIMEOUT_MS = 500; // safety: стоп, если нет команд
 
+// Диагностика защитного тайм-аута хранится только в RAM и сбрасывается при перезапуске.
+unsigned long safetyTimeoutCount = 0;
+unsigned long lastSafetyTimeoutMillis = 0;
+bool safetyTimeoutLatched = false;
+
 // ---------- Текущие значения каналов ----------
 
 int motorAVal = 0;
@@ -145,14 +150,16 @@ void applyLeds() {
 
 // ---------- Формирование статуса для веб-интерфейса ----------
 
-// Статус для веб-страницы: v — вольты (живой), p — % заряда (только в покое), r — RSSI,
-// m — режим, c — WS-клиенты, ra/rb — реверс каналов A/B, lf/lr — состояние LED, es — имитация оборотов
+// Статус GUI: батарея, Wi-Fi, режим, количество WS-клиентов, конфигурация
+// и read-only диагностика ресурсов/активности ESP32.
 void buildStatus(char *buf, size_t n) {
   snprintf(
     buf,
     n,
     "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,"
-    "\"m\":%d,\"c\":%d,"
+    "\"m\":%d,\"c\":%d,\"sta\":%d,"
+    "\"up\":%lu,\"heap\":%lu,\"minh\":%lu,\"age\":%lu,\"lb\":%d,"
+    "\"fsc\":%lu,\"fsa\":%lu,"
     "\"ra\":%d,\"rb\":%d,\"rc\":%d,\"rd\":%d,"
     "\"lf\":%d,\"lr\":%d,\"es\":%d,"
     "\"tr\":%d,\"md\":%d}",
@@ -161,6 +168,14 @@ void buildStatus(char *buf, size_t n) {
     wifiRssi,
     (int)currentMode,
     (int)ws.count(),
+    (int)WiFi.softAPgetStationNum(),
+    (unsigned long)(millis() / 1000UL),
+    (unsigned long)ESP.getFreeHeap(),
+    (unsigned long)ESP.getMinFreeHeap(),
+    (unsigned long)(millis() - lastCmdMillis),
+    lowBattCount,
+    (unsigned long)safetyTimeoutCount,
+    (unsigned long)(safetyTimeoutCount > 0 ? (millis() - lastSafetyTimeoutMillis) / 1000UL : 0),
     reverseA ? 1 : 0,
     reverseB ? 1 : 0,
     reverseC ? 1 : 0,
@@ -303,6 +318,15 @@ void setup() {
   lastCmdMillis = millis();
 }
 
+// Записывает одно срабатывание защиты на текущем цикле потери команд.
+void recordSafetyTimeout() {
+  if (!safetyTimeoutLatched) {
+    safetyTimeoutCount++;
+    lastSafetyTimeoutMillis = millis();
+    safetyTimeoutLatched = true;
+  }
+}
+
 // ---------- Основной цикл ----------
 
 void loop() {
@@ -316,8 +340,12 @@ void loop() {
         motorDVal != 0 ||
         servoVal != 0 ||
         engineSimOn) {
+      recordSafetyTimeout();
       stopAll();
     }
+  } else {
+    // Новая валидная активность снова разрешает учитывать следующий timeout.
+    safetyTimeoutLatched = false;
   }
 
   // Периодическое обновление мониторинга и OLED.
@@ -329,7 +357,7 @@ void loop() {
 
     // Отправляем актуальный статус подключённым клиентам.
     if (ws.count() > 0) {
-      char buf[160];
+      char buf[256];
       buildStatus(buf, sizeof(buf));
       ws.textAll(buf);
     }

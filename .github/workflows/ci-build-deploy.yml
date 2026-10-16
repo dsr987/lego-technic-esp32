@@ -9,6 +9,7 @@ on:
       - 'lego_technic_esp32/**'
       - 'firmware/bootstrap/**'
       - 'tools/extract_html.py'
+      - 'tools/embed_web_gui_assets.py'
       - 'tools/update_gui_version.py'
       - 'tools/extract_changelog.py'
       - 'tools/update_readme_version.py'
@@ -95,7 +96,9 @@ jobs:
                 case "$file" in
                   lego_technic_esp32/app.cpp|\
                   lego_technic_esp32/web_page.cpp|\
+                  lego_technic_esp32/assets/*|\
                   tools/extract_html.py|\
+                  tools/embed_web_gui_assets.py|\
                   tools/update_gui_version.py|\
                   tools/extract_changelog.py|\
                   tools/update_readme_version.py)
@@ -128,6 +131,10 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Embed Web GUI image assets
+        if: ${{ steps.changes.outputs.generated == 'true' }}
+        run: python3 tools/embed_web_gui_assets.py
 
       - name: Select HTML source
         id: html_source
@@ -459,7 +466,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html CHANGELOG.md README.md
+          git add lego_technic_esp32/web_page.cpp index.html CHANGELOG.md README.md
 
           if git diff --cached --quiet; then
             echo "Generated files have no changes."

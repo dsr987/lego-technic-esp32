@@ -260,6 +260,438 @@ def check_firmware_heartbeat_and_watchdog() -> None:
         report("FAIL", "Firmware must stop all outputs when the 500 ms command timeout expires")
 
 
+
+def check_tank_visual_regressions() -> None:
+    """Protect the reviewed tank GUI from arrow, tint, layering and sync regressions."""
+    html = read_text(REPO_ROOT / "index.html")
+    page = read_text(SOURCE_DIR / "web_page.cpp")
+    if html is None:
+        report("FAIL", "Cannot read index.html for tank visual regression checks")
+        return
+    if page is None:
+        report("FAIL", "Cannot read web_page.cpp for tank visual regression checks")
+        return
+
+    embedded_start = page.find("<!DOCTYPE html>")
+    embedded_end = page.find(')HTML";', embedded_start)
+    if embedded_start < 0 or embedded_end < 0:
+        report("FAIL", "Cannot locate embedded PAGE_HTML boundaries in web_page.cpp")
+    else:
+        embedded_html = page[embedded_start:embedded_end]
+        if embedded_html == html.lstrip():
+            report("PASS", "index.html exactly matches embedded PAGE_HTML")
+        else:
+            report("FAIL", "index.html differs from embedded PAGE_HTML")
+
+    arrow_pattern = re.compile(
+        r'track-direction-markers|id=["\']t-(?:left|right)-(?:f|r)["\']'
+    )
+    if not arrow_pattern.search(html):
+        report("PASS", "Tank direction arrows remain removed")
+    else:
+        report("FAIL", "Tank direction-arrow markup has returned")
+
+    required_tank_tokens = (
+        'id="t-left-glow"',
+        'id="t-right-glow"',
+        'id="tank-left-tint-filter"',
+        'id="tank-right-tint-filter"',
+        'id="tank-left-tint-flood"',
+        'id="tank-right-tint-flood"',
+        'overflow:visible}',
+    )
+    for token in required_tank_tokens:
+        if token in html:
+            report("PASS", f"Tank visual layer present: {token}")
+        else:
+            report("FAIL", f"Tank visual layer missing: {token}")
+
+    paint_match = re.search(
+        r"function\s+paintTank\s*\(\s*L\s*,\s*R\s*\)\s*\{(.*?)"
+        r"\n\s*\}\s*\n\s*function\s+paintCar\s*\(",
+        html,
+        re.DOTALL,
+    )
+    if not paint_match:
+        report("FAIL", "Cannot locate paintTank() for visual direction checks")
+        return
+
+    paint = paint_match.group(1)
+    direction_patterns = (
+        (r"leftForward\s*=\s*L\s*>\s*8", "left forward threshold"),
+        (r"leftReverse\s*=\s*L\s*<\s*-8", "left reverse threshold"),
+        (r"rightForward\s*=\s*R\s*>\s*8", "right forward threshold"),
+        (r"rightReverse\s*=\s*R\s*<\s*-8", "right reverse threshold"),
+        (
+            r"leftFlood\.setAttribute\(\s*['\"]flood-color['\"]\s*,\s*leftReverse\s*\?\s*red\s*:\s*green\s*\)",
+            "left track uses green forward and red reverse",
+        ),
+        (
+            r"rightFlood\.setAttribute\(\s*['\"]flood-color['\"]\s*,\s*rightReverse\s*\?\s*red\s*:\s*green\s*\)",
+            "right track uses green forward and red reverse",
+        ),
+        (
+            r"leftGlow\.setAttribute\(\s*['\"]opacity['\"]\s*,\s*\(leftForward\s*\|\|\s*leftReverse\)\s*\?\s*['\"]0\.58['\"]\s*:\s*['\"]0['\"]\s*\)",
+            "left track tint is translucent and off at rest",
+        ),
+        (
+            r"rightGlow\.setAttribute\(\s*['\"]opacity['\"]\s*,\s*\(rightForward\s*\|\|\s*rightReverse\)\s*\?\s*['\"]0\.58['\"]\s*:\s*['\"]0['\"]\s*\)",
+            "right track tint is translucent and off at rest",
+        ),
+    )
+    for pattern, description in direction_patterns:
+        if re.search(pattern, paint):
+            report("PASS", description)
+        else:
+            report("FAIL", f"Tank lighting regression: {description}")
+
+    if "drop-shadow" not in paint and "style.filter" not in paint:
+        report("PASS", "Tank lighting uses translucent fills instead of contour-only shadows")
+    else:
+        report("FAIL", "Tank lighting reverted to contour-only shadow effects")
+
+    left_track = html.find('<g id="t-left-group">')
+    right_track = html.find('<g id="t-right-group">')
+    chassis = html.find('<image id="crawler-body"')
+    if 0 <= left_track < right_track < chassis:
+        report("PASS", "Both tank tracks are rendered beneath the crawler body")
+    else:
+        report("FAIL", "Tank layer order must be left track, right track, then crawler body")
+
+
+
+def check_turn_signal_regressions() -> None:
+    """Keep front/rear turn signals attached to the four original light positions."""
+    html = read_text(REPO_ROOT / "index.html")
+    if html is None:
+        report("FAIL", "Cannot read index.html for turn-signal regression checks")
+        return
+
+    original_lamps = (
+        (
+            r'<ellipse\s+id="hl-fl"\s+class="vehicle-light"\s+cx="71"\s+cy="57"\s+rx="15"\s+ry="11"\s+fill="url\(#front-headlight-gradient\)"',
+            "front-left headlight glow matches the car artwork",
+        ),
+        (
+            r'<ellipse\s+id="hl-fr"\s+class="vehicle-light"\s+cx="188"\s+cy="57"\s+rx="15"\s+ry="11"\s+fill="url\(#front-headlight-gradient\)"',
+            "front-right headlight glow matches the car artwork",
+        ),
+        (
+            r'<ellipse\s+id="hl-rl"\s+class="vehicle-light"\s+cx="41"\s+cy="386"\s+rx="17"\s+ry="11"\s+fill="url\(#rear-headlight-gradient\)"',
+            "rear-left light glow matches the car artwork",
+        ),
+        (
+            r'<ellipse\s+id="hl-rr"\s+class="vehicle-light"\s+cx="211"\s+cy="386"\s+rx="17"\s+ry="11"\s+fill="url\(#rear-headlight-gradient\)"',
+            "rear-right light glow matches the car artwork",
+        ),
+    )
+    for pattern, description in original_lamps:
+        if re.search(pattern, html):
+            report("PASS", description)
+        else:
+            report("FAIL", f"Turn-signal regression: {description}")
+
+    if not re.search(r'id="turn-signal-(?:left|right)"', html):
+        report("PASS", "Turn signals reuse original headlight SVG elements")
+    else:
+        report("FAIL", "Extra turn-signal overlays may misalign with the original lights")
+
+    required_calls = (
+        (r"paintSignalLamp\(\$\(['\"]hl-fl['\"]\),\s*turningLeft", "left front indicator follows left turn"),
+        (r"paintSignalLamp\(\$\(['\"]hl-rl['\"]\),\s*turningLeft", "left rear indicator follows left turn"),
+        (r"paintSignalLamp\(\$\(['\"]hl-fr['\"]\),\s*turningRight", "right front indicator follows right turn"),
+        (r"paintSignalLamp\(\$\(['\"]hl-rr['\"]\),\s*turningRight", "right rear indicator follows right turn"),
+    )
+    for pattern, description in required_calls:
+        if re.search(pattern, html):
+            report("PASS", description)
+        else:
+            report("FAIL", f"Turn-signal regression: {description}")
+
+    if re.search(r"@keyframes\s+turnSignalBlink\s*\{0%,44%\s*\{\s*opacity:1\s*\}\s*45%,100%\s*\{\s*opacity:0\s*\}\}", html):
+        report("PASS", "Turn-signal blink timing remains unchanged")
+    else:
+        report("FAIL", "Turn-signal blink animation or timing has changed")
+
+    if re.search(r"function\s+paintLights\s*\(\s*\).*?paintTurnSignals\(\)\s*;", html, re.DOTALL):
+        report("PASS", "Light-button updates preserve turn-signal state")
+    else:
+        report("FAIL", "paintLights() must reapply turn-signal state after headlight updates")
+
+
+
+def check_accent_theme_regressions() -> None:
+    """Ensure accent themes only personalize GUI colors and survive reloads."""
+    html = read_text(REPO_ROOT / "index.html")
+    if html is None:
+        report("FAIL", "Cannot read index.html for accent-theme checks")
+        return
+
+    select_match = re.search(
+        r'<select\s+id="accent-select">(.*?)</select>',
+        html,
+        re.DOTALL,
+    )
+    if not select_match:
+        report("FAIL", "Settings must contain the accent-select control")
+        return
+
+    options = re.findall(r'<option\s+value="([^"]+)"', select_match.group(1))
+    expected_options = ("classic-blue", "racing-red", "neon-green")
+    if tuple(options) == expected_options:
+        report("PASS", "Accent selector contains Classic Blue, Racing Red and Neon Green")
+    else:
+        report("FAIL", "Accent selector options are missing or in an unexpected order")
+
+    theme_css = (
+        (r'\[data-accent="racing-red"\]\s*\{[^}]*--blue:#f43f5e;--blue-dk:#e11d48;--accent-rgb:244,63,94', "Racing Red dark palette"),
+        (r'\[data-theme="light"\]\[data-accent="racing-red"\]\s*\{[^}]*--blue:#e11d48;--blue-dk:#be123c;--accent-rgb:225,29,72', "Racing Red light palette"),
+        (r'\[data-accent="neon-green"\]\s*\{[^}]*--blue:#22c55e;--blue-dk:#16a34a;--accent-rgb:34,197,94', "Neon Green dark palette"),
+        (r'\[data-theme="light"\]\[data-accent="neon-green"\]\s*\{[^}]*--blue:#16a34a;--blue-dk:#15803d;--accent-rgb:22,163,74', "Neon Green light palette"),
+    )
+    for pattern, description in theme_css:
+        if re.search(pattern, html):
+            report("PASS", description)
+        else:
+            report("FAIL", f"Missing accent color rule: {description}")
+
+    accent_function = re.search(
+        r"function\s+setAccent\s*\(\s*value\s*\)\s*\{(.*?)\n\s*\}",
+        html,
+        re.DOTALL,
+    )
+    if accent_function:
+        body = accent_function.group(1)
+        checks = (
+            "classic-blue" in body and "racing-red" in body and "neon-green" in body,
+            re.search(r"setAttribute\(\s*['\"]data-accent['\"]", body) is not None,
+            re.search(r"localStorage\.setItem\(\s*['\"]lcc_accent['\"]", body) is not None,
+        )
+        if all(checks):
+            report("PASS", "Accent selection is validated, applied and saved to localStorage")
+        else:
+            report("FAIL", "setAccent() must validate, apply and save the selected preset")
+    else:
+        report("FAIL", "setAccent() is missing")
+
+    if (
+        re.search(r"setAccent\(localStorage\.getItem\(\s*['\"]lcc_accent['\"]\s*\)", html)
+        and re.search(r"\$\(['\"]accent-select['\"]\)\.onchange\s*=\s*function", html)
+    ):
+        report("PASS", "Saved accent preset is restored and the settings control responds to changes")
+    else:
+        report("FAIL", "Accent preset must load on startup and respond to selector changes")
+
+
+    if "rgba(var(--accent-rgb)," in html and "rgba(59,130,246," not in html:
+        report("PASS", "Accent-dependent interface glows use the selected palette")
+    else:
+        report("FAIL", "Accent-dependent interface glows must use --accent-rgb")
+
+    if (
+        "localStorage.setItem('lcc_th',t)" in html
+        and "id=\"turn-signal-gradient\"" in html
+        and "id=\"wheel-tint-flood\"" in html
+    ):
+        report("PASS", "Accent presets leave light/dark mode, wheel tint and turn-signal colors intact")
+    else:
+        report("FAIL", "Accent presets must not replace existing theme mode or vehicle signal colors")
+
+
+
+def check_diagnostics_regressions() -> None:
+    """Validate read-only diagnostic telemetry and its GUI without control commands."""
+    app = read_text(SOURCE_DIR / "app.cpp")
+    control = read_text(SOURCE_DIR / "web_control.cpp")
+    html = read_text(REPO_ROOT / "index.html")
+    if app is None or control is None or html is None:
+        report("FAIL", "Cannot read app.cpp, web_control.cpp or index.html for diagnostics checks")
+        return
+
+    status_fields = ("sta", "up", "heap", "minh", "age", "lb", "fsc", "fsa")
+    status_function = re.search(
+        r"void\s+buildStatus\s*\(\s*char\s*\*\s*buf\s*,\s*size_t\s+n\s*\)\s*\{(.*?)"
+        r"\n\s*\}\s*\n",
+        app,
+        re.DOTALL,
+    )
+    if status_function:
+        body = status_function.group(1)
+        required_sources = (
+            ("sta", "WiFi.softAPgetStationNum()"),
+            ("up", "millis() / 1000UL"),
+            ("heap", "ESP.getFreeHeap()"),
+            ("minh", "ESP.getMinFreeHeap()"),
+            ("age", "millis() - lastCmdMillis"),
+            ("lb", "lowBattCount"),
+            ("fsc", "safetyTimeoutCount"),
+            ("fsa", "lastSafetyTimeoutMillis"),
+        )
+        for field, source in required_sources:
+            if re.search(rf'\\"{field}\\"\s*:', body) and source in body:
+                report("PASS", f"Diagnostic field {field} uses {source}")
+            else:
+                report("FAIL", f"Diagnostic status field {field} missing or has an unexpected source")
+
+        if "char buf[256];" in app and "char buf[256];" in control:
+            report("PASS", "Status buffers fit the extended diagnostic JSON")
+        else:
+            report("FAIL", "Extended diagnostic JSON requires 256-byte status buffers")
+    else:
+        report("FAIL", "Could not locate buildStatus() for diagnostic telemetry checks")
+
+    timeout_loop = re.search(
+        r"void\s+loop\s*\(\s*\)\s*\{(.*?)//\s*Обслуживание OTA",
+        app,
+        re.DOTALL,
+    )
+    timeout_body = timeout_loop.group(1) if timeout_loop else ""
+    counter_function_start = app.find("void recordSafetyTimeout()")
+    counter_function_end = app.find("// ---------- Основной цикл ----------", counter_function_start)
+    counter_body = (
+        app[counter_function_start:counter_function_end]
+        if counter_function_start >= 0 and counter_function_end > counter_function_start
+        else ""
+    )
+    timeout_diagnostics_ok = (
+        "unsigned long safetyTimeoutCount = 0;" in app
+        and "unsigned long lastSafetyTimeoutMillis = 0;" in app
+        and "bool safetyTimeoutLatched = false;" in app
+        and "recordSafetyTimeout();" in timeout_body
+        and re.search(
+            r"if\s*\(\s*!safetyTimeoutLatched\s*\)\s*\{.*?"
+            r"safetyTimeoutCount\+\+;.*?lastSafetyTimeoutMillis\s*=\s*millis\(\);.*?"
+            r"safetyTimeoutLatched\s*=\s*true;",
+            counter_body,
+            re.DOTALL,
+        )
+        and "safetyTimeoutLatched = false;" in timeout_body
+        and "stopAll();" in timeout_body
+    )
+    if timeout_diagnostics_ok:
+        report("PASS", "Safety timeout activations are counted once without changing the stop action")
+    else:
+        report("FAIL", "Safety timeout diagnostics must count the protected stop once and retain stopAll()")
+
+    diag_heading = html.find("<h3>Диагностика системы</h3>")
+    buttons_heading = html.find("<h3>Кнопки</h3>")
+    diag_block_start = html.rfind('<div class="block">', 0, diag_heading)
+    buttons_block_start = html.rfind('<div class="block">', 0, buttons_heading)
+    if (
+        diag_heading >= 0
+        and buttons_heading > diag_heading
+        and diag_block_start >= 0
+        and buttons_block_start > diag_block_start
+        and len(re.findall(r'<div class="block">', html[diag_block_start:buttons_block_start])) == 1
+        and html[diag_block_start:buttons_block_start].rstrip().endswith("</div>")
+    ):
+        report("PASS", "Diagnostics block is last in settings, immediately before the Buttons guide")
+    else:
+        report("FAIL", "Diagnostics must be placed at the end of settings immediately before the Buttons guide")
+
+    diag_ids = (
+        "diag-link", "diag-age", "diag-wifi", "diag-clients", "diag-rssi",
+        "diag-battery", "diag-battery-state", "diag-uptime", "diag-heap",
+        "diag-minheap", "diag-message-age", "diag-failsafe-count",
+        "diag-failsafe-last",
+    )
+    for element_id in diag_ids:
+        if re.search(rf"""id=["']{re.escape(element_id)}["']""", html):
+            report("PASS", f"Diagnostics display contains {element_id}")
+        else:
+            report("FAIL", f"Diagnostics display is missing {element_id}")
+
+    update_match = re.search(
+        r"function\s+updateDiagnostics\s*\(\s*d\s*\)\s*\{(.*?)"
+        r"\n\s*\}\s*\n\s*function\s+renderDiagnosticFreshness",
+        html,
+        re.DOTALL,
+    )
+    if update_match:
+        body = update_match.group(1)
+        if all(token in body for token in ("d.sta", "d.c", "d.r", "d.v", "d.p", "d.lb", "d.up", "d.heap", "d.minh", "d.age", "d.fsc", "d.fsa")):
+            report("PASS", "GUI renders all transmitted read-only diagnostic values")
+        else:
+            report("FAIL", "GUI parser is missing one or more diagnostic telemetry fields")
+        if not re.search(r"\btxWS\s*\(", body):
+            report("PASS", "Diagnostic rendering does not send control commands")
+        else:
+            report("FAIL", "Diagnostic rendering must not send WebSocket control commands")
+    else:
+        report("FAIL", "updateDiagnostics() is missing")
+
+    if (
+        "updateDiagnostics(d);" in html
+        and "setInterval(renderDiagnosticFreshness, 1000)" in html
+        and "now - lastTelemetryAt > 3000" in html
+    ):
+        report("PASS", "Diagnostic connection freshness updates and detects stale telemetry")
+    else:
+        report("FAIL", "Diagnostic screen must update freshness and flag stale telemetry")
+    event_log_checks = (
+        ('id="diag-log"', "event log container"),
+        ('id="diag-log-clear"', "clear-log button"),
+        ("if(diagnosticEvents.length > 20) diagnosticEvents.length = 20", "bounded 20-event history"),
+        ("Соединение с ESP32 потеряно", "disconnect event"),
+        ("Телеметрия не обновляется более 3 секунд", "stale telemetry event"),
+        ("Получение телеметрии восстановлено", "telemetry recovery event"),
+        ("Состояние батареи: ", "battery state change event"),
+        ("Сработала защита по тайм-ауту на ESP32", "firmware safety-timeout event"),
+        ("event.code", "WebSocket close code"),
+        ("event.wasClean", "WebSocket clean-close flag"),
+        ("event.reason", "WebSocket close reason"),
+        ("message.textContent = event.message", "safe text rendering"),
+    )
+    for token, description in event_log_checks:
+        if token in html:
+            report("PASS", f"Diagnostic event log includes {description}")
+        else:
+            report("FAIL", f"Diagnostic event log is missing {description}")
+
+
+
+
+def check_battery_warning_regressions() -> None:
+    web_page = read_text(SOURCE_DIR / "web_page.cpp")
+    if web_page is None:
+        report("FAIL", "Cannot read web_page.cpp for battery warning checks")
+        return
+
+    required_tokens = (
+        'id="battery-warning-10"',
+        'id="battery-warning-5"',
+        'id="battery-warning-1"',
+        "function nextBatteryWarningLevel(",
+        "function shouldShowBatteryWarning(",
+        "updateBatteryWarnings(d.v, d.p);",
+        "if(batteryWarningLevel === 3 && previousLevel !== 3)",
+        "zeroAll();",
+        "dismissBatteryWarning(1)",
+        "dismissBatteryWarning(2)",
+        "BATTERY_WARNING_STATE_START",
+        "BATTERY_WARNING_STATE_END",
+        'id="battery-warning-test-controls"',
+        'data-battery-test-percent="10"',
+        'data-battery-test-percent="5"',
+        'data-battery-test-percent="1"',
+        "function setupBatteryWarningPreview()",
+        "batteryWarningTestMode = new URLSearchParams(window.location.search).get('batteryTest') === '1'",
+        "if(batteryWarningTestMode){",
+        "setupBatteryWarningPreview();",
+
+    )
+    missing = [token for token in required_tokens if token not in web_page]
+    if missing:
+        report("FAIL", "Battery warning regression check missing: " + ", ".join(missing))
+    else:
+        report("PASS", "GUI retains 10%, 5%, and 1% battery warnings and critical-stop behavior")
+
+    if 'overlay.setAttribute(\'aria-hidden\', visible ? \'false\' : \'true\')' in web_page:
+        report("PASS", "Battery warning overlay updates accessibility visibility state")
+    else:
+        report("FAIL", "Battery warning overlay must update its accessibility visibility state")
+
+
 def main() -> int:
     print("=" * 64)
     print("LEGO TECHNIC ESP32 — PROJECT AUDITOR")
@@ -281,6 +713,15 @@ def main() -> int:
         check_gui_heartbeat_safety()
         check_gui_engine_guards()
         check_firmware_heartbeat_and_watchdog()
+        print("\n--- GUI visual regression checks ---")
+        check_tank_visual_regressions()
+        print("\n--- Turn-signal regression checks ---")
+        check_turn_signal_regressions()
+        print("\n--- Accent-theme regression checks ---")
+        check_accent_theme_regressions()
+        print("\n--- Read-only diagnostics regression checks ---")
+        check_diagnostics_regressions()
+        check_battery_warning_regressions()
 
     print()
     print("=" * 64)
