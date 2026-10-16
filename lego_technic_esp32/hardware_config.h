@@ -4,6 +4,3 @@
 // OLED и Motor Shield используют общую I2C-шину ESP32.
 #define I2C_SDA_PIN 21
 #define I2C_SCL_PIN 22
-
-// Рулевой сервопривод остаётся непосредственно на ESP32.
-#define SERVO_PIN 27

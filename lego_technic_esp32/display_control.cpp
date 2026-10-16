@@ -14,6 +14,7 @@
 extern Adafruit_SSD1306 display;
 extern AsyncWebSocket ws;
 extern bool oledAvailable;
+extern bool motorBoardReady;
 
 // Режим работы объявлен в app.cpp.
 extern Mode currentMode;
