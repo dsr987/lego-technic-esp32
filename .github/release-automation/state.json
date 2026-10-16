@@ -2,9 +2,10 @@
   "schema_version": 1,
   "labels_initialized": true,
   "processed_prs": [
-    8
+    8,
+    9
   ],
   "release_prs": [],
-  "last_processed_pr": 8,
+  "last_processed_pr": 9,
   "last_release_type": "none"
 }
