@@ -140,3 +140,6 @@ jobs:
 
       - name: Run project auditor
         run: python3 tools/project_auditor.py
+
+      - name: Test release versioning automation
+        run: python3 tools/test_release_automation.py
