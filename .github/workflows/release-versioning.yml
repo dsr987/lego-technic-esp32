@@ -97,5 +97,15 @@ jobs:
             git push origin HEAD:main
           fi
 
-      # Updating app.cpp pushes to main and automatically triggers ci-build-deploy.yml.
-      # Do not dispatch a second build here; it would duplicate deployment.
+      # GITHUB_TOKEN pushes do not trigger push workflows. Dispatch explicitly only for a
+      # real version bump; release:none merely updates idempotency state and needs no rebuild.
+      # The downstream workflow_run guard accepts only event == push, so this workflow_dispatch
+      # build publishes the new firmware without recursively processing release metadata again.
+      - name: Dispatch build and deployment for a new firmware version
+        if: ${{ steps.resolve.outputs.process == 'true' && steps.update.outputs.release == 'true' && steps.update.outputs.changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh workflow run ci-build-deploy.yml --ref main
+          echo "Dispatched build/deploy for the new firmware version."
