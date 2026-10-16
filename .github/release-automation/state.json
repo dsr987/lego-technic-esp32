@@ -5,13 +5,14 @@
     8,
     9,
     10,
-    11
+    11,
+    13
   ],
   "release_prs": [
     10,
     11
   ],
-  "last_processed_pr": 11,
-  "last_release_type": "patch",
+  "last_processed_pr": 13,
+  "last_release_type": "none",
   "last_version": "0.9.1"
 }
