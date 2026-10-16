@@ -70,6 +70,13 @@ class FirstRunBootstrapTests(unittest.TestCase):
         self.assertIn("github.event.workflow_run.event == 'push'", workflow)
         self.assertIn("workflow_dispatch", workflow)
 
+        publish_workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github" / "workflows" / "publish-release.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("github.event.workflow_run.event == 'workflow_dispatch'", publish_workflow)
+        self.assertIn("github.event.workflow_run.actor.login == 'github-actions[bot]'", publish_workflow)
+
         build_workflow = (
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "ci-build-deploy.yml"
