@@ -1,5 +1,9 @@
 # История версий
 
+## 0.5.29 — 2026-10-16
+### Изменено
+- Add a separate battery-voltage calibration factor and a tested helper for deriving it from multimeter readings. ([PR #11](https://github.com/dsr987/lego-technic-esp32/pull/11))
+
 ## 0.5.28 — 2026-10-16
 ### Изменено
 - Update the OLED startup sequence and dashboard with bitmap mode icons, battery telemetry, and a non-blocking initialization animation. ([PR #10](https://github.com/dsr987/lego-technic-esp32/pull/10))
