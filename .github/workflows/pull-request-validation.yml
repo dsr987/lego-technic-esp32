@@ -141,5 +141,11 @@ jobs:
       - name: Run project auditor
         run: python3 tools/project_auditor.py
 
+      - name: Check battery calibration tools syntax
+        run: python3 -m py_compile tools/calibrate_battery.py tools/test_calibrate_battery.py
+
+      - name: Test battery calibration calculator
+        run: python3 tools/test_calibrate_battery.py
+
       - name: Test release versioning automation
         run: python3 tools/test_release_automation.py
