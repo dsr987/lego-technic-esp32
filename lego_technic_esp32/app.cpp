@@ -82,6 +82,7 @@ Preferences prefs;
 
 // OLED-дисплей
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
+bool oledAvailable = false;
 
 // Рулевой сервопривод
 Servo steerServo;
@@ -96,6 +97,7 @@ AsyncWebSocket ws("/ws");
 // указанного времени, моторы должны быть остановлены.
 unsigned long lastCmdMillis = 0;
 const unsigned long CMD_TIMEOUT_MS = 500; // safety: стоп, если нет команд
+unsigned long lastDisplayStatusMillis = 0;
 
 // Диагностика защитного тайм-аута хранится только в RAM и сбрасывается при перезапуске.
 unsigned long safetyTimeoutCount = 0;
@@ -247,17 +249,16 @@ void setup() {
 
   // 5. Инициализация OLED-дисплея.
   Wire.begin(OLED_SDA, OLED_SCL);
-  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  oledAvailable = display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
 
-  display.clearDisplay();
-  display.setTextSize(2);
-  display.setCursor(20, 20);
-  display.print("INIT...");
-  display.display();
+  if (oledAvailable) {
+    // Фирменная заставка появляется только после успешного определения OLED.
+    showBootLogo();
+    delay(1000);
 
-  // Короткая пауза для отображения сообщения запуска.
-  // Драйверы всё это время остаются выключенными.
-  delay(1000);
+    // Оставляем экран запуска на время инициализации периферии и сети.
+    showInitialisingScreen();
+  }
 
   // 6. Открытие хранилища и загрузка настроек.
   // prefs.begin() обязательно выполняется до loadPreferences().
@@ -314,8 +315,10 @@ void setup() {
   // Первичное обновление данных мониторинга.
   updateStatus();
 
-  // Запускаем отсчёт тайм-аута управления.
+  // Запускаем отсчёт тайм-аутов после завершения инициализации.
   lastCmdMillis = millis();
+  lastDisplayStatusMillis = millis();
+  startDisplayStartupAnimation();
 }
 
 // Записывает одно срабатывание защиты на текущем цикле потери команд.
@@ -330,7 +333,6 @@ void recordSafetyTimeout() {
 // ---------- Основной цикл ----------
 
 void loop() {
-  static unsigned long lastStatus = 0;
 
   // Аварийная остановка при отсутствии команд управления.
   if (millis() - lastCmdMillis > CMD_TIMEOUT_MS) {
@@ -348,12 +350,17 @@ void loop() {
     safetyTimeoutLatched = false;
   }
 
+  // Анимация запуска обновляется без блокировки WebSocket, OTA и watchdog.
+  const bool startupAnimating = updateDisplayStartup();
+
   // Периодическое обновление мониторинга и OLED.
-  if (millis() - lastStatus > 1000) {
-    lastStatus = millis();
+  if (millis() - lastDisplayStatusMillis > 1000) {
+    lastDisplayStatusMillis = millis();
 
     updateStatus();
-    updateDisplay();
+    if (!startupAnimating) {
+      updateDisplay();
+    }
 
     // Отправляем актуальный статус подключённым клиентам.
     if (ws.count() > 0) {
