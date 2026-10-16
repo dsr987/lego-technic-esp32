@@ -288,6 +288,7 @@ jobs:
             "ArduinoJson" \
             "Adafruit SSD1306" \
             "Adafruit GFX Library" \
+            "Adafruit Motor Shield V2 Library@1.1.4" \
             "Adafruit BusIO" \
             "ESP32Servo" \
             "ElegantOTA@3.1.0"

@@ -1,9 +1,9 @@
 
 #include <Arduino.h>
 
-#include "hardware_config.h"
 #include "motor_control.h"
-#include "steering_control.h" 
+#include "i2c_motor_backend.h"
+#include "steering_control.h"
 
 // Состояние объявлено и определяется в app.cpp
 extern Mode currentMode;
@@ -12,7 +12,6 @@ extern int motorAVal;
 extern int motorBVal;
 extern int motorCVal;
 extern int motorDVal;
-extern int servoVal;
 
 extern bool reverseA;
 extern bool reverseB;
@@ -21,36 +20,13 @@ extern bool reverseD;
 extern bool engineSimOn;
 
 
-// ---------- Базовое управление мостом TB6612FNG ----------
-
-static void setDCBridge(int in1, int in2, int pwmChannel, int val) {
-  val = constrain(val, -100, 100);
-  int duty = map(abs(val), 0, 100, 0, 255);
-
-  if (val > 0) {
-    digitalWrite(in1, HIGH);
-    digitalWrite(in2, LOW);
-  } else if (val < 0) {
-    digitalWrite(in1, LOW);
-    digitalWrite(in2, HIGH);
-  } else {
-    digitalWrite(in1, LOW);
-    digitalWrite(in2, LOW);
-  }
-
-  ledcWrite(pwmChannel, duty);
-}
-
-
 // ---------- Мотор A ----------
 
 void applyMotorA(int val) {
   motorAVal = constrain(val, -100, 100);
 
-  setDCBridge(
-    TB_AIN1,
-    TB_AIN2,
-    LEDC_CH_A,
+  i2cMotorBackendSetMotor(
+    I2CMotorChannel::A,
     reverseA ? -motorAVal : motorAVal
   );
 
@@ -62,12 +38,7 @@ void applyMotorA(int val) {
     int actualB = reverseB ? -aux : aux;
     motorBVal = actualB;
 
-    setDCBridge(
-      TB_BIN1,
-      TB_BIN2,
-      LEDC_CH_B,
-      actualB
-    );
+    i2cMotorBackendSetMotor(I2CMotorChannel::B, actualB);
   }
 }
 
@@ -77,10 +48,8 @@ void applyMotorA(int val) {
 void applyMotorB(int val) {
   motorBVal = constrain(val, -100, 100);
 
-  setDCBridge(
-    TB_BIN1,
-    TB_BIN2,
-    LEDC_CH_B,
+  i2cMotorBackendSetMotor(
+    I2CMotorChannel::B,
     reverseB ? -motorBVal : motorBVal
   );
 }
@@ -91,10 +60,8 @@ void applyMotorB(int val) {
 void applyMotorC(int val) {
   motorCVal = constrain(val, -100, 100);
 
-  setDCBridge(
-    TB2_AIN1,
-    TB2_AIN2,
-    LEDC_CH_C,
+  i2cMotorBackendSetMotor(
+    I2CMotorChannel::C,
     reverseC ? -motorCVal : motorCVal
   );
 }
@@ -105,10 +72,8 @@ void applyMotorC(int val) {
 void applyMotorD(int val) {
   motorDVal = constrain(val, -100, 100);
 
-  setDCBridge(
-    TB2_BIN1,
-    TB2_BIN2,
-    LEDC_CH_D,
+  i2cMotorBackendSetMotor(
+    I2CMotorChannel::D,
     reverseD ? -motorDVal : motorDVal
   );
 }
@@ -117,23 +82,16 @@ void applyMotorD(int val) {
 // ---------- Общее включение драйверов ----------
 
 void updateDriverStandby() {
-  bool active =
-    motorAVal != 0 ||
-    motorBVal != 0 ||
-    motorCVal != 0 ||
-    motorDVal != 0 ||
-    servoVal != 0 ||
-    engineSimOn;
-
-  // Оба TB6612FNG используют общий STBY.
-  digitalWrite(TB_STBY, active ? HIGH : LOW);
+  // На PCA9685 Motor Wing нет отдельной линии STBY от ESP32.
+  // Каждый канал останавливается через RELEASE, а stopAll() отправляет
+  // команды всем четырём каналам.
 }
 
 
 // ---------- Аварийная остановка ----------
 
 void stopAll() {
-  // Отключаем имитацию двигателя.
+  // Отключаем имитацию двигателя и сбрасываем логические команды.
   engineSimOn = false;
 
   motorAVal = 0;
@@ -141,11 +99,7 @@ void stopAll() {
   motorCVal = 0;
   motorDVal = 0;
 
-  setDCBridge(TB_AIN1, TB_AIN2, LEDC_CH_A, 0);
-  setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_B, 0);
-  setDCBridge(TB2_AIN1, TB2_AIN2, LEDC_CH_C, 0);
-  setDCBridge(TB2_BIN1, TB2_BIN2, LEDC_CH_D, 0);
-
+  i2cMotorBackendStopAll();
   applySteer(0);
   updateDriverStandby();
 }

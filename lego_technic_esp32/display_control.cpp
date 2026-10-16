@@ -14,6 +14,7 @@
 extern Adafruit_SSD1306 display;
 extern AsyncWebSocket ws;
 extern bool oledAvailable;
+extern bool motorBoardReady;
 
 // Режим работы объявлен в app.cpp.
 extern Mode currentMode;
@@ -248,6 +249,17 @@ void updateDisplay() {
   // При подтверждённом низком заряде заменяем панель состояния предупреждением.
   if (lowBattCount >= 3) {
     drawLowBatteryScreen();
+    display.display();
+    return;
+  }
+
+  // Приоритет остаётся у предупреждения низкого заряда.
+  if (!motorBoardReady) {
+    display.setTextSize(2);
+    display.setCursor(0, 10);
+    display.print("MOTOR");
+    display.setCursor(0, 32);
+    display.print("I2C ERR");
     display.display();
     return;
   }
