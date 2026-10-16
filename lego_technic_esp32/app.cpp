@@ -1,8 +1,9 @@
 /*
  * LEGO Technic ESP32
- * Версия разработки: 0.5.29 GUI Update 3.0
+ * Версия разработки: 0.9.1
  *
- * Обновление веб-интерфейса GUI Update 3.0.
+ * Текущий выпуск: калибровка измерения напряжения батареи.
+ * В проекте также доступны обновлённый Web GUI и OLED Update 2.0.
  *
  * Совместимость:
  * - ESP32 Arduino Core 2.0.9
@@ -14,9 +15,16 @@
  * - Preferences
  * - ElegantOTA
  *
- * CHANGELOG_VERSION: 0.5.29
+ * История предыдущего выпуска:
+ * 0.9.0 — OLED Update 2.0 ([PR #10](https://github.com/dsr987/lego-technic-esp32/pull/10))
+ * - Добавлены растровые пиктограммы режимов и заставка проекта на OLED.
+ * - Добавлена короткая неблокирующая анимация запуска «Initialising…».
+ * - Рабочая панель OLED показывает режим, процент заряда и напряжение батареи, количество подключённых клиентов Wi-Fi и предупреждение о низком заряде.
+ * - Если инициализация OLED не удалась, прошивка продолжает запуск без попыток выводить данные на недоступный дисплей.
+ *
+ * CHANGELOG_VERSION: 0.9.1
  * CHANGELOG_START
- * - Add a separate battery-voltage calibration factor and a tested helper for deriving it from multimeter readings. ([PR #11](https://github.com/dsr987/lego-technic-esp32/pull/11))
+ * - Добавлен отдельный коэффициент калибровки напряжения батареи и скрипт расчёта поправки по показаниям мультиметра. ([PR #11](https://github.com/dsr987/lego-technic-esp32/pull/11))
  * CHANGELOG_END
  *
  */
