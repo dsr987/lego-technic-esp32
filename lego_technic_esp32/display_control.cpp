@@ -252,6 +252,17 @@ void updateDisplay() {
     return;
   }
 
+  // Приоритет остаётся у предупреждения низкого заряда.
+  if (!motorBoardReady) {
+    display.setTextSize(2);
+    display.setCursor(0, 10);
+    display.print("MOTOR");
+    display.setCursor(0, 32);
+    display.print("I2C ERR");
+    display.display();
+    return;
+  }
+
   drawModeIcon();
 
   // Вертикально отделяем иконку режима от телеметрии.
