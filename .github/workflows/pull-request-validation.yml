@@ -4,14 +4,6 @@ on:
   pull_request:
     branches:
       - main
-    paths:
-      - 'lego_technic_esp32/**'
-      - 'tools/**'
-      - '.github/workflows/**'
-      - 'platformio.ini'
-      - 'arduino-cli.yaml'
-      - 'CHANGELOG.md'
-      - 'README.md'
 
   workflow_dispatch:
 
