@@ -1,6 +1,6 @@
 /*
  * LEGO Technic ESP32
- * Версия разработки: 0.5.27 GUI Update 3.0
+ * Версия разработки: 0.5.28 GUI Update 3.0
  *
  * Обновление веб-интерфейса GUI Update 3.0.
  *
@@ -14,15 +14,9 @@
  * - Preferences
  * - ElegantOTA
  *
- * CHANGELOG_VERSION: 0.5.27
+ * CHANGELOG_VERSION: 0.5.28
  * CHANGELOG_START
- * - PWM мотора D перенесён на GPIO2; обновлены распиновка и техническая схема.
- * - Настройки Wi-Fi (имя сети и пароль) и учётные данные ElegantOTA вынесены в отдельный блок в начале app.cpp с поясняющими комментариями.
- * - Настроена единая логика включения асинхронного режима ElegantOTA при компиляции основной и стартовой прошивок OTA Bootstrap.
- * - Исправлена сборка OTA Bootstrap: добавлен необходимый параметр компиляции для работы ElegantOTA с AsyncWebServer.
- * - Уточнена конфигурация GitHub Actions для сборки основной прошивки и OTA Bootstrap.
- * - Удалены отдельные workflows Project Auditor и Check motor channels; статический аудит проекта сохранён в Pull Request Validation.
- * - Обновлена схема автоматизации CI/CD в соответствии с текущей структурой GitHub Actions.
+ * - Update the OLED startup sequence and dashboard with bitmap mode icons, battery telemetry, and a non-blocking initialization animation. ([PR #10](https://github.com/dsr987/lego-technic-esp32/pull/10))
  * CHANGELOG_END
  *
  */
