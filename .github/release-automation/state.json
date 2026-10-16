@@ -4,12 +4,14 @@
   "processed_prs": [
     8,
     9,
-    10
+    10,
+    11
   ],
   "release_prs": [
-    10
+    10,
+    11
   ],
-  "last_processed_pr": 10,
+  "last_processed_pr": 11,
   "last_release_type": "patch",
-  "last_version": "0.5.28"
+  "last_version": "0.5.29"
 }

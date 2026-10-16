@@ -1,6 +1,6 @@
 /*
  * LEGO Technic ESP32
- * Версия разработки: 0.5.28 GUI Update 3.0
+ * Версия разработки: 0.5.29 GUI Update 3.0
  *
  * Обновление веб-интерфейса GUI Update 3.0.
  *
@@ -14,9 +14,9 @@
  * - Preferences
  * - ElegantOTA
  *
- * CHANGELOG_VERSION: 0.5.28
+ * CHANGELOG_VERSION: 0.5.29
  * CHANGELOG_START
- * - Update the OLED startup sequence and dashboard with bitmap mode icons, battery telemetry, and a non-blocking initialization animation. ([PR #10](https://github.com/dsr987/lego-technic-esp32/pull/10))
+ * - Add a separate battery-voltage calibration factor and a tested helper for deriving it from multimeter readings. ([PR #11](https://github.com/dsr987/lego-technic-esp32/pull/11))
  * CHANGELOG_END
  *
  */
