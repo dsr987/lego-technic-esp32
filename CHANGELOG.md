@@ -1,5 +1,9 @@
 # История версий
 
+## 0.5.28 — 2026-10-16
+### Изменено
+- Update the OLED startup sequence and dashboard with bitmap mode icons, battery telemetry, and a non-blocking initialization animation. ([PR #10](https://github.com/dsr987/lego-technic-esp32/pull/10))
+
 ## 0.5.27 — 2026-10-13
 ### Изменено
 - PWM мотора D перенесён на GPIO2; обновлены распиновка и техническая схема.
