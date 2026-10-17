@@ -193,18 +193,25 @@ jobs:
           wait_for_run() {
             local workflow_file="$1"
             local run_id=""
+            local runs_json="[]"
+
+            # A PR label update can start a second run and cancel the first.
+            # Select a successful completed run for this exact branch+commit instead
+            # of blindly taking the first result, which may be the cancelled attempt.
             for attempt in $(seq 1 60); do
-              run_id="$(gh run list --workflow "$workflow_file" --branch "$BOT_BRANCH" --commit "$BOT_PR_SHA" --event pull_request --limit 1 --json databaseId --jq '.[0].databaseId // empty' || true)"
+              runs_json="$(gh run list --workflow "$workflow_file" --branch "$BOT_BRANCH" --commit "$BOT_PR_SHA" --event pull_request --limit 20 --json databaseId,status,conclusion || printf '[]')"
+              run_id="$(jq -r '[.[] | select(.status == "completed" and .conclusion == "success")] | first | .databaseId // empty' <<< "$runs_json")"
               if [[ -n "$run_id" ]]; then
                 break
               fi
               sleep 5
             done
             if [[ -z "$run_id" ]]; then
-              echo "::error::Timed out waiting for pull_request validation run: $workflow_file"
+              echo "::error::Timed out waiting for a successful pull_request validation run: $workflow_file"
+              printf '%s\n' "$runs_json"
               return 1
             fi
-            echo "Watching $workflow_file run $run_id for commit $BOT_PR_SHA."
+            echo "Verified successful $workflow_file run $run_id for commit $BOT_PR_SHA."
             gh run watch "$run_id" --exit-status
           }
 
