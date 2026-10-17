@@ -76,36 +76,34 @@ def update_changelog(md_file, version, entries):
         else "# История версий\n\n"
     )
 
-    version_pattern = re.compile(
-        r"^##\s+" + re.escape(version) + r"\s*[—-]",
-        re.MULTILINE,
-    )
-
-    if version_pattern.search(content):
-        print(f"OK: Version {version} already exists; no changes.")
-        return
-
     section = (
         f"## {version} — {date.today().isoformat()}\n"
         f"### Изменено\n"
         f"{entries}\n\n"
     )
 
-    heading = re.search(r"^# .+$", content, re.MULTILINE)
-
-    if heading:
-        position = heading.end()
-        content = (
-            content[:position]
-            + "\n\n"
-            + section
-            + content[position:].lstrip("\n")
-        )
+    version_section = re.compile(
+        r"(?ms)^##\\s+" + re.escape(version) + r"\\s*[—-].*?(?=^##\\s+|\\Z)"
+    )
+    match = version_section.search(content)
+    if match:
+        content = content[:match.start()] + section + content[match.end():]
+        print(f"OK: Updated CHANGELOG version {version}")
     else:
-        content = "# История версий\n\n" + section + content
+        heading = re.search(r"^# .+$", content, re.MULTILINE)
+        if heading:
+            position = heading.end()
+            content = (
+                content[:position]
+                + "\n\n"
+                + section
+                + content[position:].lstrip("\n")
+            )
+        else:
+            content = "# История версий\n\n" + section
+        print(f"OK: Added CHANGELOG version {version}")
 
-    path.write_text(content, encoding="utf-8", newline="\n")
-    print(f"OK: Added CHANGELOG version {version}")
+    path.write_text(content, encoding="utf-8", newline="\\n")
 
 
 if __name__ == "__main__":
