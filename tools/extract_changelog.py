@@ -90,6 +90,11 @@ def update_changelog(md_file, version, entries, refresh_existing=False):
     if match and not refresh_existing:
         print(f"OK: Version {version} already exists; no changes.")
         return
+    if match and refresh_existing:
+        all_sections = list(re.finditer(r"^##\\s+.+$", content, re.MULTILINE))
+        if all_sections and all_sections[0].start() != match.start():
+            print(f"OK: Version {version} is historical; leaving its older entry unchanged.")
+            return
     if match:
         existing_section = match.group(0)
         change_heading = re.search(r"(?m)^### Изменено\s*$", existing_section)
