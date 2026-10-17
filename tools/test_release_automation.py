@@ -90,6 +90,8 @@ class FirstRunBootstrapTests(unittest.TestCase):
             / ".github" / "workflows" / "release-metadata-validation.yml"
         ).read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", metadata_validation)
+        self.assertIn("      - labeled", metadata_validation)
+        self.assertIn("      - edited", metadata_validation)
         self.assertIn("PR_NUMBER_INPUT", metadata_validation)
         self.assertIn("PR_HEAD_SHA_EVENT", metadata_validation)
         self.assertIn('gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}"', metadata_validation)
