@@ -483,7 +483,7 @@ class PreReleaseLifecycleTests(unittest.TestCase):
                 for number, label, bullet, expected_version, expected_active in changes:
                     env = {
                         "PR_LABELS": label,
-                        "PR_BODY": f"Release type: {label}\\n\\n## Changelog\\n- {bullet}",
+                        "PR_BODY": f"Release type: {label}\n\n## Changelog\n- {bullet}",
                         "PR_NUMBER": str(number),
                         "GITHUB_OUTPUT": str(output_path),
                         "GITHUB_STEP_SUMMARY": "",
@@ -512,7 +512,7 @@ class GeneratedFileVersionTests(unittest.TestCase):
             path = Path(directory) / "CHANGELOG.md"
             extract_changelog.update_changelog(path, "0.10.0", "- First fix.")
             before = path.read_text(encoding="utf-8")
-            extract_changelog.update_changelog(path, "0.10.0", "- First fix.\\n- Second fix.")
+            extract_changelog.update_changelog(path, "0.10.0", "- First fix.\n- Second fix.")
             after = path.read_text(encoding="utf-8")
             self.assertEqual(after.count("## 0.10.0"), 1)
             self.assertIn("First fix.", after)
@@ -523,8 +523,8 @@ class GeneratedFileVersionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "CHANGELOG.md"
             path.write_text(
-                "# История версий\\n\\n## 0.10.0 — 2026-10-17\\n### Изменено\\n- Current.\\n\\n"
-                "## 0.9.1 — 2026-10-16\\n### Изменено\\n- Older.\\n\\n",
+                "# История версий\n\n## 0.10.0 — 2026-10-17\n### Изменено\n- Current.\n\n"
+                "## 0.9.1 — 2026-10-16\n### Изменено\n- Older.\n\n",
                 encoding="utf-8",
             )
             extract_changelog.update_changelog(path, "0.9.1", "- Stale output.")
