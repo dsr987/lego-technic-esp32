@@ -92,12 +92,12 @@ def update_changelog(md_file, version, entries, refresh_existing=False):
         return
     if match:
         existing_section = match.group(0)
-        change_heading = re.search(r"(?m)^### Изменено\\s*$", existing_section)
+        change_heading = re.search(r"(?m)^### Изменено\s*$", existing_section)
         new_entries = [line for line in entries.splitlines() if line.strip()]
 
         if change_heading:
             body_start = change_heading.end()
-            next_subsection = re.search(r"(?m)^###\\s+", existing_section[body_start:])
+            next_subsection = re.search(r"(?m)^###\s+", existing_section[body_start:])
             body_end = (
                 body_start + next_subsection.start()
                 if next_subsection
@@ -108,18 +108,18 @@ def update_changelog(md_file, version, entries, refresh_existing=False):
             existing_entry_lines = {line.strip() for line in existing_lines if line.strip().startswith("- ")}
             missing_entries = [line for line in new_entries if line.strip() not in existing_entry_lines]
             if missing_entries:
-                updated_body = existing_body.rstrip() + "\\n" + "\\n".join(missing_entries) + "\\n"
+                updated_body = existing_body.rstrip() + "\n" + "\n".join(missing_entries) + "\n"
                 existing_section = (
                     existing_section[:body_start]
                     + updated_body
                     + existing_section[body_end:]
                 )
         else:
-            heading_end = existing_section.find("\\n") + 1
-            inserted = "### Изменено\\n" + "\\n".join(new_entries) + "\\n\\n"
+            heading_end = existing_section.find("\n") + 1
+            inserted = "### Изменено\n" + "\n".join(new_entries) + "\n\n"
             existing_section = (
                 existing_section[:heading_end]
-                + "\\n"
+                + "\n"
                 + inserted
                 + existing_section[heading_end:]
             )
