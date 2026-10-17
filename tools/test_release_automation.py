@@ -461,6 +461,22 @@ class GeneratedChangelogTests(unittest.TestCase):
             self.assertEqual(result.count("- First pre-release fix."), 1)
 
 
+    def test_stale_build_does_not_rewrite_older_changelog_entry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "CHANGELOG.md"
+            path.write_text(
+                "# История версий\n\n"
+                "## 0.10.0 — 2026-10-17\n### Изменено\n- Current.\n\n"
+                "## 0.9.1 — 2026-10-16\n### Изменено\n- Older.\n\n",
+                encoding="utf-8",
+            )
+            changelog.update_changelog(
+                path, "0.9.1", "- Stale output.", refresh_existing=True
+            )
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("- Older.", content)
+            self.assertNotIn("- Stale output.", content)
+
     def test_refresh_preserves_other_subsections_and_deduplicates_entries(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "CHANGELOG.md"
