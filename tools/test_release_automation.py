@@ -363,6 +363,11 @@ class PreReleaseVersionTests(unittest.TestCase):
         with self.assertRaisesRegex(release.ReleaseMetadataError, "version mismatch"):
             release.plan_version((0, 10, 1), "pre-release", state)
 
+    def test_stable_promotion_rejects_mismatched_active_version(self):
+        state = {"pre_release_active": True, "pre_release_version": "0.10.0"}
+        with self.assertRaisesRegex(release.ReleaseMetadataError, "version mismatch"):
+            release.plan_version((0, 10, 1), "stable", state)
+
 
 class ChangelogParsingTests(unittest.TestCase):
     def test_extracts_only_changelog_section_bullets(self):
