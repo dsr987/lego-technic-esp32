@@ -200,7 +200,14 @@ def write_step_output(**values: str) -> None:
 
 def load_state() -> dict:
     if not STATE_PATH.exists():
-        return {"schema_version": 1, "labels_initialized": False, "processed_prs": [], "release_prs": []}
+        return {
+            "schema_version": 1,
+            "labels_initialized": False,
+            "processed_prs": [],
+            "release_prs": [],
+            "pre_release_active": False,
+            "pre_release_version": None,
+        }
     try:
         state = json.loads(STATE_PATH.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as error:
