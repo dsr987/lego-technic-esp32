@@ -85,7 +85,7 @@ jobs:
 
       - name: Detect active pre-release mode
         id: release_mode
-        if: if: ${{ steps.compiled.outputs.publish == 'true' }}
+        if: ${{ steps.compiled.outputs.publish == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -139,7 +139,7 @@ jobs:
           echo "Firmware version: $version"
 
       - name: Publish firmware as a GitHub Release
-        if: ${{ steps.compiled.outputs.publish == 'true' && steps.latest_source.outputs.current == 'true' }}
+        if: ${{ steps.compiled.outputs.publish == 'true' && steps.release_mode.outputs.publish == 'true' && steps.latest_source.outputs.current == 'true' }}
         uses: softprops/action-gh-release@v3
         with:
           tag_name: firmware-build-${{ github.event.workflow_run.id }}
