@@ -11,6 +11,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import release_automation as release  # noqa: E402
+import extract_changelog as changelog  # noqa: E402
 
 
 class FirstRunBootstrapTests(unittest.TestCase):
@@ -106,6 +107,9 @@ class FirstRunBootstrapTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("github.event.workflow_run.event == 'workflow_dispatch'", publish_workflow)
         self.assertIn("github.event.workflow_run.actor.login == 'github-actions[bot]'", publish_workflow)
+        self.assertIn("pre_release_active", publish_workflow)
+        self.assertIn("steps.prerelease.outputs.active != 'true'", publish_workflow)
+        self.assertIn('ensure_label "release:pre-release"', workflow)
 
         build_workflow = (
             Path(__file__).resolve().parents[1]
@@ -301,6 +305,7 @@ class ReleaseTypeTests(unittest.TestCase):
             "release:minor": "minor",
             "release:major": "major",
             "release:stable": "stable",
+            "release:pre-release": "pre-release",
             "release:none": "none",
         }
         for label, expected in cases.items():
@@ -331,6 +336,32 @@ class VersionBumpTests(unittest.TestCase):
 
     def test_release_none_does_not_bump(self):
         self.assertIsNone(release.bump_version((0, 5, 27), "none"))
+
+
+class PreReleaseVersionTests(unittest.TestCase):
+    def test_first_pre_release_increments_minor_and_resets_patch(self):
+        self.assertEqual(
+            release.plan_version((0, 9, 1), "pre-release", {"pre_release_active": False}),
+            (0, 10, 0),
+        )
+
+    def test_follow_up_pre_release_keeps_version_fixed(self):
+        state = {"pre_release_active": True, "pre_release_version": "0.10.0"}
+        self.assertEqual(release.plan_version((0, 10, 0), "pre-release", state), (0, 10, 0))
+
+    def test_active_pre_release_rejects_normal_version_bumps(self):
+        state = {"pre_release_active": True, "pre_release_version": "0.10.0"}
+        with self.assertRaisesRegex(release.ReleaseMetadataError, "pre-release cycle is active"):
+            release.plan_version((0, 10, 0), "patch", state)
+
+    def test_stable_release_promotes_active_pre_release(self):
+        state = {"pre_release_active": True, "pre_release_version": "0.10.0"}
+        self.assertEqual(release.plan_version((0, 10, 0), "stable", state), (1, 0, 0))
+
+    def test_active_pre_release_version_must_match_state(self):
+        state = {"pre_release_active": True, "pre_release_version": "0.10.0"}
+        with self.assertRaisesRegex(release.ReleaseMetadataError, "version mismatch"):
+            release.plan_version((0, 10, 1), "pre-release", state)
 
 
 class ChangelogParsingTests(unittest.TestCase):
@@ -390,9 +421,39 @@ class AppUpdateTests(unittest.TestCase):
         self.assertIn("Handles * / safely", result)
         self.assertNotIn("Handles */ safely", result)
 
+    def test_pre_release_update_appends_to_existing_changelog(self):
+        first = release.update_app_text(self.SAMPLE_APP, "0.6.0", ["First pre-release fix."], 8)
+        second = release.update_app_text(
+            first,
+            "0.6.0",
+            ["Second pre-release fix."],
+            9,
+            preserve_existing=True,
+        )
+        self.assertIn("First pre-release fix.", second)
+        self.assertIn("Second pre-release fix.", second)
+        self.assertEqual(second.count("CHANGELOG_VERSION: 0.6.0"), 1)
+
     def test_requires_changelog_markers_and_version_header(self):
         with self.assertRaises(release.ReleaseMetadataError):
             release.update_app_text("CHANGELOG_VERSION: 0.5.27", "0.5.28", ["Note"], 7)
+
+
+class GeneratedChangelogTests(unittest.TestCase):
+    def test_existing_version_section_is_refreshed_without_losing_older_versions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "CHANGELOG.md"
+            path.write_text(
+                "# История версий\n\n"
+                "## 0.10.0 — 2026-10-17\n### Изменено\n- First pre-release fix.\n\n"
+                "## 0.9.0 — 2026-10-16\n### Изменено\n- Older release.\n",
+                encoding="utf-8",
+            )
+            changelog.update_changelog(path, "0.10.0", "- First pre-release fix.\n- Second pre-release fix.")
+            result = path.read_text(encoding="utf-8")
+            self.assertIn("- Second pre-release fix.", result)
+            self.assertIn("## 0.9.0 — 2026-10-16", result)
+            self.assertNotIn("OK: Version 0.10.0 already exists", result)
 
 
 if __name__ == "__main__":
