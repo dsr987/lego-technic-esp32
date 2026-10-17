@@ -24,6 +24,12 @@ on:
       - 'docs/**'
       - '.github/workflows/ci-build-deploy.yml'
   workflow_dispatch:
+    inputs:
+      build_bootstrap:
+        description: "Compile and verify the OTA bootstrap image (only needed for bootstrap changes)"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -52,6 +58,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_BEFORE: ${{ github.event.before }}
+          BUILD_BOOTSTRAP_INPUT: ${{ inputs.build_bootstrap }}
         run: |
           set -euo pipefail
 
@@ -61,13 +68,16 @@ jobs:
           workflow_changed=false
           bootstrap_changed=false
 
-          # Manual runs intentionally rebuild and regenerate everything.
+          # Manual runs rebuild the main firmware and regenerate site files.
+          # The separate bootstrap image is opt-in because main is protected.
           if [[ "$EVENT_NAME" != "push" ]]; then
             firmware=true
             generated=true
             site=true
             workflow_changed=true
-            bootstrap_changed=true
+            if [[ "$BUILD_BOOTSTRAP_INPUT" == "true" ]]; then
+              bootstrap_changed=true
+            fi
           else
             before="$EVENT_BEFORE"
             if [[ -z "$before" || "$before" =~ ^0+$ ]]; then
@@ -207,6 +217,7 @@ jobs:
           BOOTSTRAP_CHANGED: ${{ steps.changes.outputs.bootstrap_changed }}
           WORKFLOW_CHANGED: ${{ steps.changes.outputs.workflow_changed }}
           EVENT_NAME: ${{ github.event_name }}
+          BUILD_BOOTSTRAP_INPUT: ${{ inputs.build_bootstrap }}
           REF: ${{ github.ref }}
           EXISTING_FIRMWARE: ${{ steps.existing_firmware.outputs.exists }}
         run: |
@@ -221,11 +232,10 @@ jobs:
             app_build=false
           fi
 
-          # Refresh the bootstrap binary on bootstrap source changes and whenever
-          # the main app is built, so the repository's prebuilt image stays fresh.
+          # Refresh the bootstrap image only when its own source changed or when
+          # explicitly requested. Never couple it to unrelated main firmware builds.
           if [[ "$BOOTSTRAP_CHANGED" == "true" || \
-                "$app_build" == "true" || \
-                "$EVENT_NAME" == "workflow_dispatch" ]]; then
+                ( "$EVENT_NAME" == "workflow_dispatch" && "$BUILD_BOOTSTRAP_INPUT" == "true" ) ]]; then
             bootstrap_build=true
           else
             bootstrap_build=false
@@ -439,6 +449,9 @@ jobs:
 
           if git diff --cached --quiet; then
             echo "Prebuilt bootstrap binary is unchanged."
+          elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
+            echo "::error::The generated OTA bootstrap binary differs from the committed prebuilt image. Update firmware/bootstrap/prebuilt/esp32_ota_bootstrap.bin in a source PR; this workflow must not push directly to protected main."
+            exit 1
           else
             git commit -m "Update prebuilt ESP32 OTA bootstrap firmware"
             git push origin "HEAD:${GITHUB_REF_NAME}"
@@ -475,6 +488,9 @@ jobs:
 
           if git diff --cached --quiet; then
             echo "Generated files have no changes."
+          elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
+            echo "::error::Generated files are out of sync with the source. Regenerate and commit web_page.cpp, index.html, CHANGELOG.md and README.md in the source PR; this workflow must not push directly to protected main."
+            exit 1
           else
             git commit -m "Auto-update GUI and project metadata"
             git push origin "HEAD:${GITHUB_REF_NAME}"

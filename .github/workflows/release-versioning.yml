@@ -1,9 +1,8 @@
 name: Release Version Automation
 
 on:
-  # Run only after the existing main-branch pipeline has completed successfully.
-  # This avoids racing its generated-file commits and does not require
-  # pull_request_target permissions.
+  # Only process the merged source PR after the main build pipeline completes.
+  # Metadata writes are made on an automation branch and merged through a checked PR.
   workflow_run:
     workflows:
       - Build, Extract and Deploy
@@ -16,7 +15,7 @@ permissions:
   contents: write
   actions: write
   issues: write
-  pull-requests: read
+  pull-requests: write
 
 concurrency:
   group: release-versioning-main
@@ -77,35 +76,160 @@ jobs:
           ensure_label "release:stable" "5319E7" "Promote beta 0.x to stable v1.0.0"
           ensure_label "release:none" "C5DEF5" "No firmware release; documentation or automation only"
 
+      - name: Create release metadata branch
+        id: branch
+        if: ${{ steps.resolve.outputs.process == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="automation/release-metadata-pr-${PR_NUMBER}"
+          git fetch --no-tags origin main
+          git checkout -B "$branch" origin/main
+          echo "name=$branch" >> "$GITHUB_OUTPUT"
+          echo "Created working branch: $branch"
+
       - name: Apply release metadata
         id: update
         if: ${{ steps.resolve.outputs.process == 'true' }}
         run: python3 tools/release_automation.py apply
 
-      - name: Commit version and release state
-        if: ${{ steps.resolve.outputs.process == 'true' }}
+      - name: Regenerate derived project files
+        if: ${{ steps.resolve.outputs.process == 'true' && steps.update.outputs.changed == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/embed_web_gui_assets.py
+          python3 tools/update_gui_version.py
+          if grep -q 'PAGE_HTML' lego_technic_esp32/web_page.cpp; then
+            html_source="lego_technic_esp32/web_page.cpp"
+          elif grep -q 'PAGE_HTML' lego_technic_esp32/app.cpp; then
+            html_source="lego_technic_esp32/app.cpp"
+          else
+            echo "::error::PAGE_HTML not found in web_page.cpp or app.cpp"
+            exit 1
+          fi
+          python3 tools/extract_html.py "$html_source" index.html
+          python3 tools/extract_changelog.py lego_technic_esp32/app.cpp CHANGELOG.md
+          python3 tools/update_readme_version.py
+
+      - name: Create or update checked metadata PR
+        id: metadata_pr
+        if: ${{ steps.resolve.outputs.process == 'true' && steps.update.outputs.changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_SOURCE_PR: ${{ env.PR_NUMBER }}
+          RELEASE_VERSION_CHANGED: ${{ steps.update.outputs.release }}
+          BOT_BRANCH: ${{ steps.branch.outputs.name }}
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lego_technic_esp32/app.cpp .github/release-automation/state.json
+          git add lego_technic_esp32/app.cpp lego_technic_esp32/web_page.cpp index.html CHANGELOG.md README.md .github/release-automation/state.json
+
           if git diff --cached --quiet; then
-            echo "Release metadata is already committed."
-          else
-            git commit -m "chore: update release metadata for PR #${PR_NUMBER}"
-            git push origin HEAD:main
+            echo "No metadata changes to commit."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-      # GITHUB_TOKEN pushes do not trigger push workflows. Dispatch explicitly only for a
-      # real version bump; release:none merely updates idempotency state and needs no rebuild.
-      # The downstream workflow_run guard accepts only event == push, so this workflow_dispatch
-      # build publishes the new firmware without recursively processing release metadata again.
-      - name: Dispatch build and deployment for a new firmware version
-        if: ${{ steps.resolve.outputs.process == 'true' && steps.update.outputs.release == 'true' && steps.update.outputs.changed == 'true' }}
+          git diff --cached --check
+          git commit -m "chore: prepare release metadata for PR #${RELEASE_SOURCE_PR}"
+          git push --force origin "HEAD:${BOT_BRANCH}"
+          head_sha="$(git rev-parse HEAD)"
+
+          bot_pr="$(gh pr list --state open --base main --head "${BOT_BRANCH}" --json number --jq '.[0].number // empty')"
+          if [[ -z "$bot_pr" ]]; then
+            body="$(cat <<EOF
+          Release type: release:none
+
+          ## Summary
+          - Apply release metadata for merged source PR #${RELEASE_SOURCE_PR}.
+          - Synchronize generated GUI, README and changelog files before merging.
+
+          ## Changelog
+          - Synchronize version metadata and generated project files for source PR #${RELEASE_SOURCE_PR}.
+
+          ## Validation
+          - Firmware build, static audit and release metadata validation are dispatched against this PR before merge.
+          EOF
+          )"
+            gh pr create \
+              --base main \
+              --head "${BOT_BRANCH}" \
+              --title "chore: update release metadata after PR #${RELEASE_SOURCE_PR}" \
+              --body "$body" >/dev/null
+            bot_pr="$(gh pr list --state open --base main --head "${BOT_BRANCH}" --json number --jq '.[0].number // empty')"
+          fi
+
+          if [[ -z "$bot_pr" ]]; then
+            echo "::error::Could not resolve the release metadata PR number."
+            exit 1
+          fi
+
+          gh pr edit "$bot_pr" --add-label release:none
+          echo "number=$bot_pr" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          echo "Created or updated metadata PR #$bot_pr for source PR #${RELEASE_SOURCE_PR}."
+
+      - name: Run required checks and merge metadata PR
+        if: ${{ steps.metadata_pr.outputs.changed == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BOT_PR_NUMBER: ${{ steps.metadata_pr.outputs.number }}
+          BOT_PR_SHA: ${{ steps.metadata_pr.outputs.head_sha }}
+          BOT_BRANCH: ${{ steps.branch.outputs.name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          wait_for_run() {
+            local workflow_file="$1"
+            local run_id=""
+            for attempt in $(seq 1 60); do
+              run_id="$(gh run list --workflow "$workflow_file" --branch "$BOT_BRANCH" --commit "$BOT_PR_SHA" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId // empty' || true)"
+              if [[ -n "$run_id" ]]; then
+                break
+              fi
+              sleep 5
+            done
+            if [[ -z "$run_id" ]]; then
+              echo "::error::Timed out waiting for workflow_dispatch run: $workflow_file"
+              return 1
+            fi
+            echo "Watching $workflow_file run $run_id for commit $BOT_PR_SHA."
+            gh run watch "$run_id" --exit-status
+          }
+
+          current_sha="$(gh pr view "$BOT_PR_NUMBER" --json headRefOid --jq '.headRefOid')"
+          if [[ "$current_sha" != "$BOT_PR_SHA" ]]; then
+            echo "::error::The metadata PR head changed after creation; refusing to merge stale checks."
+            exit 1
+          fi
+
+          gh workflow run pull-request-validation.yml --ref "$BOT_BRANCH"
+          gh workflow run release-metadata-validation.yml --ref "$BOT_BRANCH" --field pr_number="$BOT_PR_NUMBER"
+
+          wait_for_run "pull-request-validation.yml"
+          wait_for_run "release-metadata-validation.yml"
+
+          current_sha="$(gh pr view "$BOT_PR_NUMBER" --json headRefOid --jq '.headRefOid')"
+          if [[ "$current_sha" != "$BOT_PR_SHA" ]]; then
+            echo "::error::The metadata PR head changed while checks were running; refusing to merge."
+            exit 1
+          fi
+
+          gh pr merge "$BOT_PR_NUMBER" --squash --delete-branch
+          echo "Merged checked release metadata PR #$BOT_PR_NUMBER."
+
+      # The metadata PR is already merged before any new firmware is compiled.
+      # For release:none, only idempotency state changed and no rebuild is needed.
+      - name: Dispatch firmware build and deployment for a real release
+        if: ${{ steps.resolve.outputs.process == 'true' && steps.update.outputs.release == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh workflow run ci-build-deploy.yml --ref main
-          echo "Dispatched build/deploy for the new firmware version."
+          gh workflow run ci-build-deploy.yml --ref main --field build_bootstrap=false
+          echo "Dispatched the protected-main build for firmware version ${{ steps.update.outputs.version }}."
