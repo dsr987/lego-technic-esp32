@@ -16,8 +16,8 @@ permissions:
 jobs:
   publish:
     name: Publish freshly compiled ESP32 firmware
-    # Only the release-versioning workflow's bot-dispatched build may publish.
-    # Ordinary push builds validate/deploy, but must not bypass release-label processing.
+    # Only the release-versioning workflow's bot-dispatched stable build may publish.
+    # Pre-release builds remain available as Actions artifacts and never become GitHub Releases.
     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'workflow_dispatch' && github.event.workflow_run.actor.login == 'github-actions[bot]' }}
     runs-on: ubuntu-latest
 
@@ -83,6 +83,18 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
+      - name: Check whether this build belongs to an active pre-release
+        if: ${{ steps.compiled.outputs.publish == 'true' }}
+        id: prerelease
+        shell: bash
+        run: |
+          set -euo pipefail
+          active="$(python3 -c 'import json; print(str(bool(json.load(open(".github/release-automation/state.json", encoding="utf-8")).get("pre_release_active", False))).lower())')"
+          echo "active=$active" >> "$GITHUB_OUTPUT"
+          if [[ "$active" == "true" ]]; then
+            echo "::notice::Pre-release build detected; it will remain an Actions artifact and will not be published as a GitHub Release."
+          fi
+
       - name: Ensure this is the newest firmware source on main
         if: ${{ steps.compiled.outputs.publish == 'true' }}
         id: latest_source
@@ -124,7 +136,7 @@ jobs:
           echo "Firmware version: $version"
 
       - name: Publish firmware as a GitHub Release
-        if: ${{ steps.compiled.outputs.publish == 'true' && steps.latest_source.outputs.current == 'true' }}
+        if: ${{ steps.compiled.outputs.publish == 'true' && steps.latest_source.outputs.current == 'true' && steps.prerelease.outputs.active != 'true' }}
         uses: softprops/action-gh-release@v3
         with:
           tag_name: firmware-build-${{ github.event.workflow_run.id }}
