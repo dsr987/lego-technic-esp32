@@ -456,6 +456,57 @@ class GeneratedChangelogTests(unittest.TestCase):
             self.assertEqual(result.count("- First pre-release fix."), 1)
 
 
+    def test_refresh_preserves_other_subsections_and_deduplicates_entries(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "CHANGELOG.md"
+            path.write_text(
+                "# История версий\\n\\n"
+                "## 0.10.0 — 2026-10-17\\n"
+                "### Изменено\\n"
+                "- First pre-release fix.\\n\\n"
+                "### Исправлено\\n"
+                "- Preserve this fix subsection.\\n\\n"
+                "### Примечания\\n"
+                "Keep this note.\\n",
+                encoding="utf-8",
+            )
+
+            changelog.update_changelog(
+                path,
+                "0.10.0",
+                "- First pre-release fix.\\n- Second pre-release fix.",
+                refresh_existing=True,
+            )
+            result = path.read_text(encoding="utf-8")
+
+            self.assertEqual(result.count("- First pre-release fix."), 1)
+            self.assertEqual(result.count("- Second pre-release fix."), 1)
+            self.assertIn("### Исправлено\\n- Preserve this fix subsection.", result)
+            self.assertIn("### Примечания\\nKeep this note.", result)
+
+    def test_refresh_creates_missing_changed_subsection_without_losing_other_content(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "CHANGELOG.md"
+            path.write_text(
+                "# История версий\\n\\n"
+                "## 0.10.0 — 2026-10-17\\n"
+                "### Исправлено\\n"
+                "- Preserve this fix subsection.\\n",
+                encoding="utf-8",
+            )
+
+            changelog.update_changelog(
+                path,
+                "0.10.0",
+                "- Add pre-release note.",
+                refresh_existing=True,
+            )
+            result = path.read_text(encoding="utf-8")
+
+            self.assertIn("### Изменено\\n- Add pre-release note.", result)
+            self.assertIn("### Исправлено\\n- Preserve this fix subsection.", result)
+
+
 class PreReleaseApplyTests(unittest.TestCase):
     def test_pre_release_keeps_version_and_accumulates_changelog_until_stable(self):
         with tempfile.TemporaryDirectory() as directory:
