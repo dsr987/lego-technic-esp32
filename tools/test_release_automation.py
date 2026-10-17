@@ -69,6 +69,26 @@ class FirstRunBootstrapTests(unittest.TestCase):
         self.assertIn("steps.update.outputs.changed == 'true'", workflow)
         self.assertIn("github.event.workflow_run.event == 'push'", workflow)
         self.assertIn("workflow_dispatch", workflow)
+        self.assertIn("gh pr create", workflow)
+        self.assertIn("gh pr merge", workflow)
+        self.assertIn("gh workflow run pull-request-validation.yml", workflow)
+        self.assertIn("gh workflow run release-metadata-validation.yml", workflow)
+        self.assertNotIn("git push origin HEAD:main", workflow)
+
+        metadata_validation = (
+            Path(__file__).resolve().parents[1]
+            / ".github" / "workflows" / "release-metadata-validation.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("workflow_dispatch:", metadata_validation)
+        self.assertIn("PR_NUMBER_INPUT", metadata_validation)
+        self.assertIn("pr_head_sha", metadata_validation)
+
+        pr_validation = (
+            Path(__file__).resolve().parents[1]
+            / ".github" / "workflows" / "pull-request-validation.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("Verify generated GUI and release files are current", pr_validation)
+        self.assertIn("Compile OTA bootstrap and verify committed prebuilt image", pr_validation)
 
         publish_workflow = (
             Path(__file__).resolve().parents[1]
@@ -83,6 +103,8 @@ class FirstRunBootstrapTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("'tools/**'", build_workflow)
         self.assertIn("'.github/workflows/**'", build_workflow)
+        self.assertIn("build_bootstrap:", build_workflow)
+        self.assertIn("this workflow must not push directly to protected main", build_workflow)
 
     def test_prepare_push_exports_metadata_for_initial_install_pr(self):
         with tempfile.TemporaryDirectory() as directory:
