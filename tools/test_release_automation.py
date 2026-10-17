@@ -28,7 +28,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
             before = app_path.read_text(encoding="utf-8")
             env = {
                 "PR_LABELS": "",
-                "PR_BODY": "Release type: release:none\\n\\n## Changelog\\n- Initialize release metadata tracking.",
+                "PR_BODY": "Release type: release:none\n\n## Changelog\n- Initialize release metadata tracking.",
                 "PR_NUMBER": "8",
                 "GITHUB_OUTPUT": str(output_path),
                 "GITHUB_STEP_SUMMARY": "",
@@ -131,7 +131,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
                 "merged_at": "2026-10-15T10:00:00Z",
                 "base": {"ref": "main"},
                 "labels": [],
-                "body": "Release type: release:none\\n\\n## Changelog\\n- Initialize release metadata tracking.",
+                "body": "Release type: release:none\n\n## Changelog\n- Initialize release metadata tracking.",
             }]), encoding="utf-8")
             env = {
                 "GITHUB_ENV": str(env_path),
@@ -168,10 +168,10 @@ class FirstRunBootstrapTests(unittest.TestCase):
                 "PR_BODY": "No changelog section.",
                 "GITHUB_STEP_SUMMARY": "",
             }
-            with patch.object(release, "APP_CPP", app_path), \\
-                 patch.object(release, "STATE_PATH", state_path), \\
-                 patch.dict(os.environ, env, clear=False):
-                result = release.validate_pr()
+            with patch.object(release, "APP_CPP", app_path):
+                with patch.object(release, "STATE_PATH", state_path):
+                    with patch.dict(os.environ, env, clear=False):
+                        result = release.validate_pr()
             self.assertEqual(result, 1)
 
     def test_apply_release_rejects_release_none_without_changelog(self):
@@ -198,10 +198,10 @@ class FirstRunBootstrapTests(unittest.TestCase):
                 "GITHUB_OUTPUT": str(output_path),
                 "GITHUB_STEP_SUMMARY": "",
             }
-            with patch.object(release, "APP_CPP", app_path), \\
-                 patch.object(release, "STATE_PATH", state_path), \\
-                 patch.dict(os.environ, env, clear=False):
-                result = release.apply_release()
+            with patch.object(release, "APP_CPP", app_path):
+                with patch.object(release, "STATE_PATH", state_path):
+                    with patch.dict(os.environ, env, clear=False):
+                        result = release.apply_release()
             self.assertEqual(result, 1)
             state = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertFalse(state["labels_initialized"])
@@ -236,9 +236,9 @@ class FirstRunBootstrapTests(unittest.TestCase):
                 "GITHUB_OUTPUT": str(output_path),
                 "GITHUB_STEP_SUMMARY": "",
             }
-            with patch.object(release, "STATE_PATH", state_path), \\
-                 patch.dict(os.environ, env, clear=False):
-                result = release.prepare_push(str(event_path))
+            with patch.object(release, "STATE_PATH", state_path):
+                with patch.dict(os.environ, env, clear=False):
+                    result = release.prepare_push(str(event_path))
             self.assertEqual(result, 1)
             self.assertFalse(output_path.exists())
 
