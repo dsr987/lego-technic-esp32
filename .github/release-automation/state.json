@@ -19,13 +19,14 @@
     27,
     29,
     31,
-    33
+    33,
+    39
   ],
   "release_prs": [
     10,
     11
   ],
-  "last_processed_pr": 33,
+  "last_processed_pr": 39,
   "last_release_type": "none",
   "last_version": "0.9.1"
 }
