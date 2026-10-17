@@ -145,7 +145,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
                 "GITHUB_OUTPUT": str(output_path),
                 "GITHUB_STEP_SUMMARY": "",
             }
-                 patch.object(release, "STATE_PATH", state_path), \
+            with patch.object(release, "STATE_PATH", state_path), patch.dict(os.environ, env, clear=False):
                 result = release.prepare_push(str(event_path))
             self.assertEqual(result, 0)
             exported = env_path.read_text(encoding="utf-8")
