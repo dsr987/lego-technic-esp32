@@ -28,7 +28,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
             before = app_path.read_text(encoding="utf-8")
             env = {
                 "PR_LABELS": "",
-                "PR_BODY": "Release type: release:none",
+                "PR_BODY": "Release type: release:none\n\n## Changelog\n- Initialize release metadata tracking.",
                 "PR_NUMBER": "8",
                 "GITHUB_OUTPUT": str(output_path),
                 "GITHUB_STEP_SUMMARY": "",
@@ -131,7 +131,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
                 "merged_at": "2026-10-15T10:00:00Z",
                 "base": {"ref": "main"},
                 "labels": [],
-                "body": "Release type: release:none",
+                "body": "Release type: release:none\n\n## Changelog\n- Initialize release metadata tracking.",
             }]), encoding="utf-8")
             env = {
                 "GITHUB_ENV": str(env_path),
@@ -147,6 +147,100 @@ class FirstRunBootstrapTests(unittest.TestCase):
             self.assertIn("PR_BODY", exported)
             self.assertIn("Release type: release:none", exported)
             self.assertIn("process=true", output_path.read_text(encoding="utf-8"))
+
+    def test_validate_pr_requires_changelog_for_release_none(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app_path = root / "app.cpp"
+            state_path = root / "state.json"
+            app_path.write_text(AppUpdateTests.SAMPLE_APP, encoding="utf-8")
+            state_path.write_text(
+                json.dumps({
+                    "schema_version": 1,
+                    "labels_initialized": True,
+                    "processed_prs": [],
+                    "release_prs": [],
+                }),
+                encoding="utf-8",
+            )
+            env = {
+                "PR_LABELS": "release:none",
+                "PR_BODY": "No changelog section.",
+                "GITHUB_STEP_SUMMARY": "",
+            }
+            with patch.object(release, "APP_CPP", app_path):
+                with patch.object(release, "STATE_PATH", state_path):
+                    with patch.dict(os.environ, env, clear=False):
+                        result = release.validate_pr()
+            self.assertEqual(result, 1)
+
+    def test_apply_release_rejects_release_none_without_changelog(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app_path = root / "app.cpp"
+            state_path = root / "state.json"
+            output_path = root / "github-output"
+            app_path.write_text(AppUpdateTests.SAMPLE_APP, encoding="utf-8")
+            state_path.write_text(
+                json.dumps({
+                    "schema_version": 1,
+                    "labels_initialized": False,
+                    "processed_prs": [],
+                    "release_prs": [],
+                }),
+                encoding="utf-8",
+            )
+            before = app_path.read_text(encoding="utf-8")
+            env = {
+                "PR_LABELS": "release:none",
+                "PR_BODY": "Release type: release:none",
+                "PR_NUMBER": "29",
+                "GITHUB_OUTPUT": str(output_path),
+                "GITHUB_STEP_SUMMARY": "",
+            }
+            with patch.object(release, "APP_CPP", app_path):
+                with patch.object(release, "STATE_PATH", state_path):
+                    with patch.dict(os.environ, env, clear=False):
+                        result = release.apply_release()
+            self.assertEqual(result, 1)
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertFalse(state["labels_initialized"])
+            self.assertEqual(state["processed_prs"], [])
+            self.assertEqual(app_path.read_text(encoding="utf-8"), before)
+
+    def test_prepare_push_rejects_release_none_without_changelog(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            event_path = root / "associated-prs.json"
+            state_path = root / "state.json"
+            output_path = root / "github-output"
+            event_path.write_text(json.dumps([{
+                "number": 29,
+                "merged_at": "2026-10-17T10:00:00Z",
+                "base": {"ref": "main"},
+                "head": {"ref": "fix/example"},
+                "labels": [{"name": "release:none"}],
+                "body": "No changelog section.",
+            }]), encoding="utf-8")
+            state_path.write_text(
+                json.dumps({
+                    "schema_version": 1,
+                    "labels_initialized": True,
+                    "processed_prs": [],
+                    "release_prs": [],
+                }),
+                encoding="utf-8",
+            )
+            env = {
+                "GITHUB_ENV": str(root / "github-env"),
+                "GITHUB_OUTPUT": str(output_path),
+                "GITHUB_STEP_SUMMARY": "",
+            }
+            with patch.object(release, "STATE_PATH", state_path):
+                with patch.dict(os.environ, env, clear=False):
+                    result = release.prepare_push(str(event_path))
+            self.assertEqual(result, 1)
+            self.assertFalse(output_path.exists())
 
     def test_prepare_push_skips_main_push_without_merged_pr(self):
         with tempfile.TemporaryDirectory() as directory:
