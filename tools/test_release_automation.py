@@ -88,7 +88,10 @@ class FirstRunBootstrapTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", metadata_validation)
         self.assertIn("PR_NUMBER_INPUT", metadata_validation)
-        self.assertIn("pr_head_sha", metadata_validation)
+        self.assertIn("PR_HEAD_SHA_EVENT", metadata_validation)
+        self.assertIn('gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}"', metadata_validation)
+        self.assertIn("current PR metadata rather than trusting the event snapshot", metadata_validation)
+        self.assertNotIn("cancel-in-progress: true", metadata_validation)
 
         pr_validation = (
             Path(__file__).resolve().parents[1]
