@@ -53,7 +53,7 @@ def parse_release_type(raw_labels: str, body: str = "", allow_bootstrap_fallback
     # until the first successful run provisions them. Once initialized, labels
     # are mandatory and the body fallback is no longer accepted.
     if allow_bootstrap_fallback:
-        matches = re.findall(r"(?im)^Release type:[ \t]*(release:[a-z]+)[ \t]*$", body)
+        matches = re.findall(r"(?im)^Release type:[ \t]*(release:[a-z-]+)[ \t]*$", body)
         if len(matches) == 1 and matches[0] in RELEASE_TYPES:
             return RELEASE_TYPES[matches[0]]
     raise ReleaseMetadataError(
