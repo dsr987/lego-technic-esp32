@@ -68,7 +68,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
         self.assertIn("steps.update.outputs.release == 'true'", workflow)
         self.assertIn("steps.update.outputs.changed == 'true'", workflow)
         self.assertIn("github.event.workflow_run.event == 'push'", workflow)
-        self.assertIn("workflow_dispatch", workflow)
+        self.assertIn("gh workflow run ci-build-deploy.yml --ref main --field build_bootstrap=false", workflow)
         self.assertIn("gh pr create", workflow)
         self.assertIn("gh pr merge", workflow)
         self.assertIn("secrets.RELEASE_AUTOMATION_TOKEN", workflow)
