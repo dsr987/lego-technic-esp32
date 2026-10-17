@@ -118,7 +118,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          version="$(sed -n 's/^[[:space:]]*\\*[[:space:]]*Версия разработки:[[:space:]]*//p' lego_technic_esp32/app.cpp | head -n 1 | tr -d '\\r')"
+          version="$(sed -n 's/^[[:space:]]*\*[[:space:]]*Версия разработки:[[:space:]]*//p' lego_technic_esp32/app.cpp | head -n 1 | tr -d '\r')"
           if [[ -z "$version" ]]; then
             echo "::error::Could not read firmware version from app.cpp."
             exit 1
@@ -127,7 +127,7 @@ jobs:
           publish=true
           if [[ "$WORKFLOW_EVENT" == "push" ]]; then
             previous_app="$(git show "${SOURCE_SHA}^:lego_technic_esp32/app.cpp")"
-            previous_version="$(printf '%s\\n' "$previous_app" | sed -n 's/^[[:space:]]*\\*[[:space:]]*Версия разработки:[[:space:]]*//p' | head -n 1 | tr -d '\\r')"
+            previous_version="$(printf '%s\n' "$previous_app" | sed -n 's/^[[:space:]]*\*[[:space:]]*Версия разработки:[[:space:]]*//p' | head -n 1 | tr -d '\r')"
             if [[ -z "$previous_version" ]]; then
               echo "::error::Could not read the previous firmware version from the parent commit."
               exit 1
