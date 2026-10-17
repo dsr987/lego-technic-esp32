@@ -71,8 +71,11 @@ class FirstRunBootstrapTests(unittest.TestCase):
         self.assertIn("workflow_dispatch", workflow)
         self.assertIn("gh pr create", workflow)
         self.assertIn("gh pr merge", workflow)
-        self.assertIn("gh workflow run pull-request-validation.yml", workflow)
-        self.assertIn("gh workflow run release-metadata-validation.yml", workflow)
+        self.assertIn("secrets.RELEASE_AUTOMATION_TOKEN", workflow)
+        self.assertIn("event pull_request", workflow)
+        self.assertIn("x-access-token:%s", workflow)
+        self.assertNotIn("gh workflow run pull-request-validation.yml", workflow)
+        self.assertNotIn("gh workflow run release-metadata-validation.yml", workflow)
         self.assertNotIn("git push origin HEAD:main", workflow)
 
         metadata_validation = (
