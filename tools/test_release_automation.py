@@ -153,6 +153,24 @@ class FirstRunBootstrapTests(unittest.TestCase):
             self.assertEqual(result, 0)
             self.assertIn("process=false", output_path.read_text(encoding="utf-8"))
 
+    def test_prepare_push_skips_automation_metadata_pr(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            event_path = root / "associated-prs.json"
+            output_path = root / "github-output"
+            event_path.write_text(json.dumps([{
+                "number": 21,
+                "merged_at": "2026-10-17T05:12:00Z",
+                "base": {"ref": "main"},
+                "head": {"ref": "automation/release-metadata-pr-20"},
+                "labels": [{"name": "release:none"}],
+                "body": "Release type: release:none",
+            }]), encoding="utf-8")
+            with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output_path), "GITHUB_STEP_SUMMARY": ""}, clear=False):
+                result = release.prepare_push(str(event_path))
+            self.assertEqual(result, 0)
+            self.assertIn("process=false", output_path.read_text(encoding="utf-8"))
+
 
 class ReleaseTypeTests(unittest.TestCase):
     def test_requires_exactly_one_release_label(self):
