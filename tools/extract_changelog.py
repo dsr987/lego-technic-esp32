@@ -91,13 +91,40 @@ def update_changelog(md_file, version, entries, refresh_existing=False):
         print(f"OK: Version {version} already exists; no changes.")
         return
     if match:
-        existing_heading = match.group(0).splitlines()[0]
-        refreshed_section = (
-            f"{existing_heading}\n"
-            f"### Изменено\n"
-            f"{entries}\n\n"
-        )
-        content = content[:match.start()] + refreshed_section + content[match.end():]
+        existing_section = match.group(0)
+        change_heading = re.search(r"(?m)^### Изменено\\s*$", existing_section)
+        new_entries = [line for line in entries.splitlines() if line.strip()]
+
+        if change_heading:
+            body_start = change_heading.end()
+            next_subsection = re.search(r"(?m)^###\\s+", existing_section[body_start:])
+            body_end = (
+                body_start + next_subsection.start()
+                if next_subsection
+                else len(existing_section)
+            )
+            existing_body = existing_section[body_start:body_end]
+            existing_lines = existing_body.splitlines()
+            existing_entry_lines = {line.strip() for line in existing_lines if line.strip().startswith("- ")}
+            missing_entries = [line for line in new_entries if line.strip() not in existing_entry_lines]
+            if missing_entries:
+                updated_body = existing_body.rstrip() + "\\n" + "\\n".join(missing_entries) + "\\n"
+                existing_section = (
+                    existing_section[:body_start]
+                    + updated_body
+                    + existing_section[body_end:]
+                )
+        else:
+            heading_end = existing_section.find("\\n") + 1
+            inserted = "### Изменено\\n" + "\\n".join(new_entries) + "\\n\\n"
+            existing_section = (
+                existing_section[:heading_end]
+                + "\\n"
+                + inserted
+                + existing_section[heading_end:]
+            )
+
+        content = content[:match.start()] + existing_section + content[match.end():]
         print(f"OK: Updated CHANGELOG version {version}")
     else:
         heading = re.search(r"^# .+$", content, re.MULTILINE)
