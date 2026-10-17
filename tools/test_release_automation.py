@@ -12,6 +12,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import release_automation as release  # noqa: E402
 import extract_changelog as changelog  # noqa: E402
+import update_gui_version  # noqa: E402
 
 
 class FirstRunBootstrapTests(unittest.TestCase):
@@ -442,6 +443,38 @@ class AppUpdateTests(unittest.TestCase):
     def test_requires_changelog_markers_and_version_header(self):
         with self.assertRaises(release.ReleaseMetadataError):
             release.update_app_text("CHANGELOG_VERSION: 0.5.27", "0.5.28", ["Note"], 7)
+
+
+class GuiVersionTests(unittest.TestCase):
+    def test_beta_badge_is_kept_for_prerelease_and_removed_for_stable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_dir = root / "lego_technic_esp32"
+            source_dir.mkdir()
+            app = source_dir / "app.cpp"
+            web_page = source_dir / "web_page.cpp"
+            index = root / "index.html"
+
+            app.write_text("* CHANGELOG_VERSION: 0.10.0\n", encoding="utf-8")
+            web_page.write_text('<div class="brand-ver">0.9.1 · beta</div>', encoding="utf-8")
+            index.write_text('<div class="brand-ver">0.9.1 · beta</div>', encoding="utf-8")
+
+            with patch.object(update_gui_version, "ROOT", root), \
+                 patch.object(update_gui_version, "APP_CPP", app), \
+                 patch.object(update_gui_version, "WEB_PAGE_CPP", web_page), \
+                 patch.object(update_gui_version, "INDEX_HTML", index):
+                self.assertEqual(update_gui_version.main(), 0)
+            self.assertIn("0.10.0 · beta", web_page.read_text(encoding="utf-8"))
+            self.assertIn("0.10.0 · beta", index.read_text(encoding="utf-8"))
+
+            app.write_text("* CHANGELOG_VERSION: 1.0.0\n", encoding="utf-8")
+            with patch.object(update_gui_version, "ROOT", root), \
+                 patch.object(update_gui_version, "APP_CPP", app), \
+                 patch.object(update_gui_version, "WEB_PAGE_CPP", web_page), \
+                 patch.object(update_gui_version, "INDEX_HTML", index):
+                self.assertEqual(update_gui_version.main(), 0)
+            self.assertIn('<div class="brand-ver">1.0.0</div>', web_page.read_text(encoding="utf-8"))
+            self.assertIn('<div class="brand-ver">1.0.0</div>', index.read_text(encoding="utf-8"))
 
 
 class GeneratedChangelogTests(unittest.TestCase):
