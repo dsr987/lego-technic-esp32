@@ -11,6 +11,19 @@ WEB_PAGE_CPP = ROOT / "lego_technic_esp32" / "web_page.cpp"
 INDEX_HTML = ROOT / "index.html"
 
 
+def replace_brand_version(text: str, version: str) -> tuple[str, int]:
+    """Keep the beta suffix for 0.x firmware and remove it from stable 1.x+."""
+    major = int(version.split(".", 1)[0])
+    suffix = " · beta" if major == 0 else ""
+    pattern = re.compile(
+        r'(<div class="brand-ver">)\d+\.\d+\.\d+(\s*·\s*beta)?(</div>)'
+    )
+    return pattern.subn(
+        lambda match: f"{match.group(1)}{version}{suffix}{match.group(3)}",
+        text,
+    )
+
+
 def main() -> int:
     app = APP_CPP.read_text(encoding="utf-8-sig")
     version_match = re.search(
@@ -23,7 +36,6 @@ def main() -> int:
         return 1
 
     version = version_match.group(1)
-    pattern = re.compile(r'(<div class="brand-ver">)\d+\.\d+\.\d+(\s*·\s*beta</div>)')
 
     updated = 0
     for path in (WEB_PAGE_CPP, INDEX_HTML):
@@ -36,7 +48,7 @@ def main() -> int:
             return 1
 
         text = path.read_text(encoding="utf-8-sig")
-        text, count = pattern.subn(rf"\g<1>{version}\g<2>", text)
+        text, count = replace_brand_version(text, version)
         if count != 1:
             print(
                 f"ERROR: Expected exactly one GUI version label in {path}, found {count}",
