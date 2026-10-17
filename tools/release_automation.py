@@ -112,13 +112,15 @@ def plan_version(
     pre_release_active = bool(state.get("pre_release_active", False))
     current = format_version(version)
 
+    if pre_release_active:
+        expected = state.get("pre_release_version")
+        if expected != current:
+            raise ReleaseMetadataError(
+                f"Active pre-release version mismatch: state says {expected}, app.cpp says {current}"
+            )
+
     if release_type == "pre-release":
         if pre_release_active:
-            expected = state.get("pre_release_version")
-            if expected != current:
-                raise ReleaseMetadataError(
-                    f"Active pre-release version mismatch: state says {expected}, app.cpp says {current}"
-                )
             return version
         if version[0] != 0:
             raise ReleaseMetadataError("release:pre-release can only start from a 0.x.y version")
