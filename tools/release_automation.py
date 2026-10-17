@@ -137,8 +137,12 @@ def resolve_release_transition(
         return bump_version(version, "minor"), False, True
 
     if release_type == "stable":
+        if not active:
+            raise ReleaseMetadataError(
+                "Start the fixed-version pre-release with release:pre-release and complete its checks before release:stable."
+            )
         # Keep accumulated pre-release notes when promoting that same codebase to 1.0.0.
-        return bump_version(version, "stable"), active, False
+        return bump_version(version, "stable"), True, False
 
     return bump_version(version, release_type), False, active
 
