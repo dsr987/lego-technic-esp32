@@ -17,6 +17,7 @@ MODULES = (
     "display_control",
     "steering_control",
     "preferences_manager",
+    "i2c_motor_backend",
 )
 
 REQUIRED_FILES = (
@@ -728,6 +729,103 @@ def check_battery_calibration() -> None:
             report("FAIL", f"Battery calibration script is missing: {description}")
 
 
+
+def check_i2c_motor_backend_integration() -> None:
+    """Validate the PCA9685 motor backend is integrated without legacy GPIO drive code."""
+    header = read_text(SOURCE_DIR / "i2c_motor_backend.h")
+    backend = read_text(SOURCE_DIR / "i2c_motor_backend.cpp")
+    motor = read_text(SOURCE_DIR / "motor_control.cpp")
+    app = read_text(SOURCE_DIR / "app.cpp")
+    hardware = read_text(SOURCE_DIR / "hardware_config.h")
+    display = read_text(SOURCE_DIR / "display_control.cpp")
+
+    if any(item is None for item in (header, backend, motor, app, hardware, display)):
+        report("FAIL", "Cannot read all files required for I2C motor backend integration checks")
+        return
+
+    required_header = (
+        "enum class I2CMotorChannel",
+        "i2cMotorBackendBegin",
+        "i2cMotorBackendIsReady",
+        "i2cMotorBackendSetMotor",
+        "i2cMotorBackendStopAll",
+    )
+    missing = [token for token in required_header if token not in header]
+    if missing:
+        report("FAIL", "I2C backend public API missing: " + ", ".join(missing))
+    else:
+        report("PASS", "I2C backend exposes initialization, readiness, per-motor and stop-all APIs")
+
+    required_backend = (
+        "#include <Adafruit_MotorShield.h>",
+        "I2C_MOTOR_WING_ADDRESS = 0x60",
+        "MOTOR_PWM_FREQUENCY_HZ = 1600",
+        "shield.begin(MOTOR_PWM_FREQUENCY_HZ, &wire)",
+        "shield.getMotor(static_cast<uint8_t>(i + 1))",
+        "FORWARD",
+        "BACKWARD",
+        "RELEASE",
+        "constrain(speedPercent, -100, 100)",
+        "setSpeed(0)",
+        "xSemaphoreCreateMutex()",
+        "xSemaphoreTake(backendMutex, waitTicks)",
+        "xSemaphoreGive(backendMutex)",
+        "BackendLock lock",
+    )
+    missing = [token for token in required_backend if token not in backend]
+    if missing:
+        report("FAIL", "I2C backend implementation missing expected behavior: " + ", ".join(missing))
+    else:
+        report("PASS", "Backend initializes PCA9685, maps M1-M4 and applies signed speed/release behavior")
+
+    channel_calls = {
+        "A": r"i2cMotorBackendSetMotor\(\s*I2CMotorChannel::A",
+        "B": r"i2cMotorBackendSetMotor\(\s*I2CMotorChannel::B",
+        "C": r"i2cMotorBackendSetMotor\(\s*I2CMotorChannel::C",
+        "D": r"i2cMotorBackendSetMotor\(\s*I2CMotorChannel::D",
+    }
+    for channel, pattern in channel_calls.items():
+        if re.search(pattern, motor):
+            report("PASS", f"Logical motor {channel} routes through the I2C backend")
+        else:
+            report("FAIL", f"Logical motor {channel} is not routed through the I2C backend")
+
+    if "setDCBridge(" not in motor and "ledcWrite(" not in motor and "digitalWrite(" not in motor:
+        report("PASS", "Active motor control no longer drives the legacy TB6612 GPIO/LEDC pins")
+    else:
+        report("FAIL", "Legacy GPIO/LEDC motor control remains in motor_control.cpp")
+
+    if "i2cMotorBackendStopAll();" in motor and "i2cMotorBackendSetMotor" in motor:
+        report("PASS", "stopAll() and per-motor commands use the I2C backend")
+    else:
+        report("FAIL", "Motor stop/command paths are not fully connected to the I2C backend")
+
+    init_pattern = (
+        r"Wire\.begin\(I2C_SDA_PIN, I2C_SCL_PIN\);.*?"
+        r"motorBoardReady\s*=\s*i2cMotorBackendBegin\(Wire\);"
+    )
+    if re.search(init_pattern, app, re.DOTALL):
+        report("PASS", "Motor board initializes on the existing Wire bus after Wire.begin()")
+    else:
+        report("FAIL", "Motor board must initialize on the existing Wire bus after Wire.begin()")
+
+    if (
+        "pinMode(TB_" not in app
+        and "ledcSetup(LEDC_CH_" not in app
+        and "ledcAttachPin(TB_" not in app
+        and "TB_STBY" not in hardware
+        and "TB_AIN1" not in hardware
+    ):
+        report("PASS", "Obsolete direct motor GPIO configuration is removed from this branch")
+    else:
+        report("FAIL", "Obsolete direct motor GPIO setup or pin map remains active")
+
+    if "if (!motorBoardReady)" in display and 'display.print("I2C ERR")' in display:
+        report("PASS", "OLED displays a warning when the PCA9685 motor board is not detected")
+    else:
+        report("FAIL", "OLED must report an unavailable I2C motor board")
+
+
 def main() -> int:
     print("=" * 64)
     print("LEGO TECHNIC ESP32 — PROJECT AUDITOR")
@@ -746,6 +844,8 @@ def main() -> int:
         print("\n--- Application checks ---")
         check_app_entry_points()
         check_motor_safety_anchor()
+        print("\n--- I2C motor backend integration checks ---")
+        check_i2c_motor_backend_integration()
         print("\n--- Control-safety regression checks ---")
         check_gui_heartbeat_safety()
         check_gui_engine_guards()
