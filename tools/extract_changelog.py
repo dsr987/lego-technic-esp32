@@ -100,6 +100,9 @@ def update_changelog(md_file, version, entries, refresh_existing=False):
         content = content[:match.start()] + refreshed_section + content[match.end():]
         print(f"OK: Updated CHANGELOG version {version}")
     else:
+        heading = re.search(r"^# .+$", content, re.MULTILINE)
+        if heading:
+            position = heading.end()
             content = (
                 content[:position]
                 + "\n\n"
