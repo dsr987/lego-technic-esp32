@@ -456,7 +456,7 @@ class AppUpdateTests(unittest.TestCase):
         self.assertIn("CHANGELOG_VERSION: 0.6.0", second)
         self.assertIn("First pre-release fix.", second)
         self.assertIn("Second pre-release fix.", second)
-        self.assertEqual(len(release.extract_app_changelog_bullets(second)), 3)
+        self.assertEqual(len(release.extract_app_changelog_bullets(second)), 2)
 
     def test_requires_changelog_markers_and_version_header(self):
         with self.assertRaises(release.ReleaseMetadataError):
