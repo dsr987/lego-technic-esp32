@@ -194,7 +194,9 @@ jobs:
         if: ${{ github.ref == 'refs/heads/main' && steps.changes.outputs.firmware != 'true' && steps.changes.outputs.workflow_changed != 'true' && github.event_name == 'push' }}
         shell: bash
         env:
-          FIRMWARE_URL: https://dsr987.github.io/lego-technic-esp32/downloads/build_firmware_for_esp32.bin
+          # Reuse the canonical binary asset from the latest firmware release.
+          # The Pages copy may be absent or delayed while Pages is being deployed.
+          FIRMWARE_URL: https://github.com/dsr987/lego-technic-esp32/releases/latest/download/lego_technic_esp32.ino.bin
         run: |
           set -uo pipefail
           if curl --fail --silent --show-error --location --max-time 30 \

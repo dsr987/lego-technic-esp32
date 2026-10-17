@@ -110,6 +110,8 @@ class FirstRunBootstrapTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
         self.assertIn("'tools/**'", build_workflow)
         self.assertIn("'.github/workflows/**'", build_workflow)
+        self.assertIn("https://github.com/dsr987/lego-technic-esp32/releases/latest/download/lego_technic_esp32.ino.bin", build_workflow)
+        self.assertNotIn("https://dsr987.github.io/lego-technic-esp32/downloads/build_firmware_for_esp32.bin", build_workflow)
         self.assertIn("build_bootstrap:", build_workflow)
         self.assertIn("this workflow must not push directly to protected main", build_workflow)
 
