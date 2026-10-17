@@ -101,14 +101,19 @@ class FirstRunBootstrapTests(unittest.TestCase):
             / ".github" / "workflows" / "pull-request-validation.yml"
         ).read_text(encoding="utf-8")
         self.assertIn("Verify generated GUI and release files are current", pr_validation)
-        self.assertIn("Compile OTA bootstrap and verify committed prebuilt image", pr_validation)
+        self.assertNotIn("Compile OTA bootstrap and verify committed prebuilt image", pr_validation)
 
         publish_workflow = (
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "publish-release.yml"
         ).read_text(encoding="utf-8")
+        self.assertIn("github.event.workflow_run.event == 'push'", publish_workflow)
         self.assertIn("github.event.workflow_run.event == 'workflow_dispatch'", publish_workflow)
         self.assertIn("github.event.workflow_run.actor.login == 'github-actions[bot]'", publish_workflow)
+        self.assertIn("fetch-depth: 0", publish_workflow)
+        self.assertIn("previous_version", publish_workflow)
+        self.assertIn("Firmware version is unchanged", publish_workflow)
+        self.assertIn("steps.version.outputs.publish == 'true'", publish_workflow)
 
         build_workflow = (
             Path(__file__).resolve().parents[1]
