@@ -178,14 +178,24 @@ def validate_pr() -> int:
         version = current_version(app_text)
         current = format_version(version)
 
+        bullets = extract_changelog_bullets(os.environ.get("PR_BODY", ""))
+        validate_summary(bullets)
+
         if release_type == "none":
             message = "Release type is none. This PR will not bump firmware version or changelog."
             print(f"OK: {message}")
-            append_step_summary(["## Release metadata", "", f"- Current version: **{current}**", f"- {message}"])
+            append_step_summary(
+                [
+                    "## Release metadata",
+                    "",
+                    f"- Current version: **{current}**",
+                    "- Changelog summary:",
+                    *[f"  - {bullet}" for bullet in bullets],
+                    f"- {message}",
+                ]
+            )
             return 0
 
-        bullets = extract_changelog_bullets(os.environ.get("PR_BODY", ""))
-        validate_summary(bullets)
         next_version = format_version(bump_version(version, release_type))  # type: ignore[arg-type]
         print(f"OK: release:{release_type}; proposed version {current} -> {next_version}")
         for bullet in bullets:
@@ -316,8 +326,7 @@ def prepare_push(event_path: str) -> int:
                 body,
                 allow_bootstrap_fallback=not state.get("labels_initialized", False),
             )
-            if release_type != "none":
-                validate_summary(extract_changelog_bullets(body))
+            validate_summary(extract_changelog_bullets(body))
         else:
             release_type = "already-processed"
 
@@ -363,6 +372,9 @@ def apply_release() -> int:
             allow_bootstrap_fallback=not state.get("labels_initialized", False),
         )
 
+        bullets = extract_changelog_bullets(body)
+        validate_summary(bullets)
+
         # Mark label enforcement as initialized only when a PR is successfully processed.
         state["labels_initialized"] = True
 
@@ -375,9 +387,6 @@ def apply_release() -> int:
             print("Release type is none; no firmware-version or changelog update is needed.")
             write_step_output(release="false", changed="true", version="")
             return 0
-
-        bullets = extract_changelog_bullets(body)
-        validate_summary(bullets)
 
         app_text = APP_CPP.read_text(encoding="utf-8")
         old_version_tuple = current_version(app_text)
