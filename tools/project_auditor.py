@@ -825,6 +825,7 @@ def check_i2c_motor_backend_integration() -> None:
     else:
         report("FAIL", "OLED must report an unavailable I2C motor board")
 
+
 def main() -> int:
     print("=" * 64)
     print("LEGO TECHNIC ESP32 — PROJECT AUDITOR")
@@ -843,7 +844,7 @@ def main() -> int:
         print("\n--- Application checks ---")
         check_app_entry_points()
         check_motor_safety_anchor()
-        print("\\n--- I2C motor backend integration checks ---")
+        print("\n--- I2C motor backend integration checks ---")
         check_i2c_motor_backend_integration()
         print("\n--- Control-safety regression checks ---")
         check_gui_heartbeat_safety()
