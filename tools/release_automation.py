@@ -282,6 +282,11 @@ def prepare_push(event_path: str) -> int:
             and pr.get("number")
             and pr.get("merged_at")
             and (pr.get("base") or {}).get("ref") == "main"
+            # The bot's metadata PR only updates idempotency state and must not
+            # recursively generate another metadata PR after it is merged.
+            and not str(((pr.get("head") or {}).get("ref") or "")).startswith(
+                "automation/release-metadata-pr-"
+            )
         ]
         if not candidates:
             print("No merged PR for main is associated with this push; release processing skipped.")

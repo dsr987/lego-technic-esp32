@@ -68,11 +68,14 @@ class FirstRunBootstrapTests(unittest.TestCase):
         self.assertIn("steps.update.outputs.release == 'true'", workflow)
         self.assertIn("steps.update.outputs.changed == 'true'", workflow)
         self.assertIn("github.event.workflow_run.event == 'push'", workflow)
-        self.assertIn("workflow_dispatch", workflow)
+        self.assertIn("gh workflow run ci-build-deploy.yml --ref main --field build_bootstrap=false", workflow)
         self.assertIn("gh pr create", workflow)
         self.assertIn("gh pr merge", workflow)
-        self.assertIn("gh workflow run pull-request-validation.yml", workflow)
-        self.assertIn("gh workflow run release-metadata-validation.yml", workflow)
+        self.assertIn("secrets.RELEASE_AUTOMATION_TOKEN", workflow)
+        self.assertIn("event pull_request", workflow)
+        self.assertIn("x-access-token:%s", workflow)
+        self.assertNotIn("gh workflow run pull-request-validation.yml", workflow)
+        self.assertNotIn("gh workflow run release-metadata-validation.yml", workflow)
         self.assertNotIn("git push origin HEAD:main", workflow)
 
         metadata_validation = (
@@ -145,6 +148,24 @@ class FirstRunBootstrapTests(unittest.TestCase):
             event_path = root / "associated-prs.json"
             output_path = root / "github-output"
             event_path.write_text("[]", encoding="utf-8")
+            with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output_path), "GITHUB_STEP_SUMMARY": ""}, clear=False):
+                result = release.prepare_push(str(event_path))
+            self.assertEqual(result, 0)
+            self.assertIn("process=false", output_path.read_text(encoding="utf-8"))
+
+    def test_prepare_push_skips_automation_metadata_pr(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            event_path = root / "associated-prs.json"
+            output_path = root / "github-output"
+            event_path.write_text(json.dumps([{
+                "number": 21,
+                "merged_at": "2026-10-17T05:12:00Z",
+                "base": {"ref": "main"},
+                "head": {"ref": "automation/release-metadata-pr-20"},
+                "labels": [{"name": "release:none"}],
+                "body": "Release type: release:none",
+            }]), encoding="utf-8")
             with patch.dict(os.environ, {"GITHUB_OUTPUT": str(output_path), "GITHUB_STEP_SUMMARY": ""}, clear=False):
                 result = release.prepare_push(str(event_path))
             self.assertEqual(result, 0)
