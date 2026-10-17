@@ -12,30 +12,75 @@ on:
       - edited
       - labeled
       - unlabeled
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Open pull request number to validate on an automation branch"
+        required: true
+        type: string
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
-  group: release-metadata-${{ github.event.pull_request.number || github.ref }}
+  group: release-metadata-${{ github.event.pull_request.number || inputs.pr_number || github.ref }}
   cancel-in-progress: true
 
 jobs:
   validate:
     name: Validate release type and changelog
     runs-on: ubuntu-latest
-    env:
-      PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
-      PR_BODY: ${{ github.event.pull_request.body || '' }}
 
     steps:
-      - name: Checkout pull request
+      - name: Checkout workflow branch
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+
+      - name: Resolve pull request metadata
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER_INPUT: ${{ inputs.pr_number || '' }}
+          PR_LABELS_EVENT: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          PR_BODY_EVENT: ${{ github.event.pull_request.body || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            labels="$PR_LABELS_EVENT"
+            body="$PR_BODY_EVENT"
+          else
+            if [[ ! "$PR_NUMBER_INPUT" =~ ^[1-9][0-9]*$ ]]; then
+              echo "::error::workflow_dispatch requires a valid pr_number input."
+              exit 1
+            fi
+            gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER_INPUT}" > "$RUNNER_TEMP/release-pr.json"
+            pr_state="$(jq -r '.state' "$RUNNER_TEMP/release-pr.json")"
+            pr_base="$(jq -r '.base.ref' "$RUNNER_TEMP/release-pr.json")"
+            pr_head_sha="$(jq -r '.head.sha' "$RUNNER_TEMP/release-pr.json")"
+            if [[ "$pr_state" != "open" || "$pr_base" != "main" || "$pr_head_sha" != "$GITHUB_SHA" ]]; then
+              echo "::error::The supplied PR must be open, target main, and point to this workflow-dispatch commit."
+              exit 1
+            fi
+            labels="$(jq -r '[.labels[].name] | join(",")' "$RUNNER_TEMP/release-pr.json")"
+            body="$(jq -r '.body // ""' "$RUNNER_TEMP/release-pr.json")"
+          fi
+
+          delimiter="$(python3 -c 'import uuid; print("EOF_" + uuid.uuid4().hex)')"
+          {
+            echo "PR_LABELS<<$delimiter"
+            printf '%s\n' "$labels"
+            echo "$delimiter"
+            echo "PR_BODY<<$delimiter"
+            printf '%s\n' "$body"
+            echo "$delimiter"
+          } >> "$GITHUB_ENV"
 
       - name: Test release automation rules
         run: python3 tools/test_release_automation.py
