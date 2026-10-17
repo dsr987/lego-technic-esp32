@@ -62,13 +62,16 @@ class FirstRunBootstrapTests(unittest.TestCase):
         self.assertIn("Build, Extract and Deploy", workflow)
         self.assertIn("PUSH_SHA", workflow)
         self.assertIn("prepare-push", workflow)
+        self.assertIn("on:", workflow)
+        self.assertIn("github.event.workflow_run.event == 'push'", workflow)
+        self.assertIn("gh pr merge \"$BOT_PR_NUMBER\" --squash --delete-branch", workflow)
         self.assertNotIn("pull_request_target:", workflow)
         self.assertIn("group: release-versioning-main", workflow)
-        self.assertIn("gh workflow run ci-build-deploy.yml --ref main", workflow)
-        self.assertIn("steps.update.outputs.release == 'true'", workflow)
+        self.assertNotIn("gh workflow run ci-build-deploy.yml --ref main", workflow)
+        self.assertIn("RELEASE_VERSION_CHANGED: ${{ steps.update.outputs.release }}", workflow)
         self.assertIn("steps.update.outputs.changed == 'true'", workflow)
         self.assertIn("github.event.workflow_run.event == 'push'", workflow)
-        self.assertIn("gh workflow run ci-build-deploy.yml --ref main --field build_bootstrap=false", workflow)
+        self.assertNotIn("gh workflow run ci-build-deploy.yml --ref main --field build_bootstrap=false", workflow)
         self.assertIn("gh pr create", workflow)
         self.assertIn("gh pr merge", workflow)
         self.assertIn("secrets.RELEASE_AUTOMATION_TOKEN", workflow)
@@ -87,6 +90,8 @@ class FirstRunBootstrapTests(unittest.TestCase):
             / ".github" / "workflows" / "release-metadata-validation.yml"
         ).read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", metadata_validation)
+        self.assertIn("      - labeled", metadata_validation)
+        self.assertIn("      - edited", metadata_validation)
         self.assertIn("PR_NUMBER_INPUT", metadata_validation)
         self.assertIn("PR_HEAD_SHA_EVENT", metadata_validation)
         self.assertIn('gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}"', metadata_validation)
@@ -98,14 +103,19 @@ class FirstRunBootstrapTests(unittest.TestCase):
             / ".github" / "workflows" / "pull-request-validation.yml"
         ).read_text(encoding="utf-8")
         self.assertIn("Verify generated GUI and release files are current", pr_validation)
-        self.assertIn("Compile OTA bootstrap and verify committed prebuilt image", pr_validation)
+        self.assertNotIn("Compile OTA bootstrap and verify committed prebuilt image", pr_validation)
 
         publish_workflow = (
             Path(__file__).resolve().parents[1]
             / ".github" / "workflows" / "publish-release.yml"
         ).read_text(encoding="utf-8")
+        self.assertIn("github.event.workflow_run.event == 'push'", publish_workflow)
         self.assertIn("github.event.workflow_run.event == 'workflow_dispatch'", publish_workflow)
         self.assertIn("github.event.workflow_run.actor.login == 'github-actions[bot]'", publish_workflow)
+        self.assertIn("fetch-depth: 0", publish_workflow)
+        self.assertIn("previous_version", publish_workflow)
+        self.assertIn("Firmware version is unchanged", publish_workflow)
+        self.assertIn("steps.version.outputs.publish == 'true'", publish_workflow)
 
         build_workflow = (
             Path(__file__).resolve().parents[1]

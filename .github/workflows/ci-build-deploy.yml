@@ -13,16 +13,10 @@ on:
       - '.github/release-automation/**'
       - 'platformio.ini'
       - 'arduino-cli.yaml'
-      - 'tools/extract_html.py'
-      - 'tools/embed_web_gui_assets.py'
-      - 'tools/update_gui_version.py'
-      - 'tools/extract_changelog.py'
-      - 'tools/update_readme_version.py'
       - 'index.html'
       - 'README.md'
       - 'CHANGELOG.md'
       - 'docs/**'
-      - '.github/workflows/ci-build-deploy.yml'
   workflow_dispatch:
     inputs:
       build_bootstrap:

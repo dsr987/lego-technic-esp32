@@ -236,13 +236,3 @@ jobs:
           gh pr merge "$BOT_PR_NUMBER" --squash --delete-branch
           echo "Merged checked release metadata PR #$BOT_PR_NUMBER."
 
-      # The metadata PR is already merged before any new firmware is compiled.
-      # For release:none, only idempotency state changed and no rebuild is needed.
-      - name: Dispatch firmware build and deployment for a real release
-        if: ${{ steps.resolve.outputs.process == 'true' && steps.update.outputs.release == 'true' }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          gh workflow run ci-build-deploy.yml --ref main --field build_bootstrap=false
-          echo "Dispatched the protected-main build for firmware version ${{ steps.update.outputs.version }}."

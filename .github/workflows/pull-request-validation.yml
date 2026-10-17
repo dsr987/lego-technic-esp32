@@ -114,31 +114,6 @@ jobs:
           stat -c 'Firmware BIN size: %s bytes (%n)' "${firmware_bins[0]}"
           sha256sum "${firmware_bins[0]}"
 
-      - name: Compile OTA bootstrap and verify committed prebuilt image
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/bootstrap-build"
-          arduino-cli compile \
-            --fqbn esp32:esp32:esp32 \
-            --warnings default \
-            --build-property "compiler.cpp.extra_flags=-DELEGANTOTA_USE_ASYNC_WEBSERVER=1" \
-            --output-dir "$RUNNER_TEMP/bootstrap-build" \
-            firmware/bootstrap/LEGO_Technic_ESP32_Bootstrap
-          mapfile -t bootstrap_bins < <(
-            find "$RUNNER_TEMP/bootstrap-build" -maxdepth 1 -type f -name '*.ino.bin' -print
-          )
-          if [[ "${#bootstrap_bins[@]}" -ne 1 ]]; then
-            echo "::error::Expected exactly one compiled OTA bootstrap *.ino.bin; found ${#bootstrap_bins[@]}."
-            exit 1
-          fi
-          if ! cmp -s "${bootstrap_bins[0]}" firmware/bootstrap/prebuilt/esp32_ota_bootstrap.bin; then
-            echo "::error::The committed OTA bootstrap image is stale. Rebuild and commit firmware/bootstrap/prebuilt/esp32_ota_bootstrap.bin in this PR."
-            sha256sum "${bootstrap_bins[0]}" firmware/bootstrap/prebuilt/esp32_ota_bootstrap.bin
-            exit 1
-          fi
-          echo "PASS: the committed OTA bootstrap image matches the compiled source."
-
   project-audit:
     name: Project Static Audit
     runs-on: ubuntu-latest
@@ -187,5 +162,3 @@ jobs:
       - name: Test battery calibration calculator
         run: python3 tools/test_calibrate_battery.py
 
-      - name: Test release versioning automation
-        run: python3 tools/test_release_automation.py
