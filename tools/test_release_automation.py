@@ -453,7 +453,62 @@ class GeneratedChangelogTests(unittest.TestCase):
             result = path.read_text(encoding="utf-8")
             self.assertIn("- Second pre-release fix.", result)
             self.assertIn("## 0.9.0 — 2026-10-16", result)
-            self.assertNotIn("OK: Version 0.10.0 already exists", result)
+            self.assertEqual(result.count("- First pre-release fix."), 1)
+
+
+class PreReleaseApplyTests(unittest.TestCase):
+    def test_pre_release_keeps_version_and_accumulates_changelog_until_stable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app_path = root / "app.cpp"
+            state_path = root / "state.json"
+            output_path = root / "github-output"
+            app_path.write_text(
+                AppUpdateTests.SAMPLE_APP.replace("0.5.27", "0.9.1"),
+                encoding="utf-8",
+            )
+            state_path.write_text(
+                json.dumps({
+                    "schema_version": 1,
+                    "labels_initialized": True,
+                    "processed_prs": [],
+                    "release_prs": [],
+                    "last_version": "0.9.1",
+                }),
+                encoding="utf-8",
+            )
+
+            env = {
+                "PR_LABELS": "release:pre-release",
+                "PR_BODY": "## Changelog\n- First pre-release fix.",
+                "PR_NUMBER": "50",
+                "GITHUB_OUTPUT": str(output_path),
+                "GITHUB_STEP_SUMMARY": "",
+            }
+            with patch.object(release, "APP_CPP", app_path), \\
+                 patch.object(release, "STATE_PATH", state_path), \\
+                 patch.dict(os.environ, env, clear=False):
+                first_result = release.apply_release()
+            self.assertEqual(first_result, 0)
+            self.assertIn("CHANGELOG_VERSION: 0.10.0", app_path.read_text(encoding="utf-8"))
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertTrue(state["pre_release_active"])
+            self.assertEqual(state["pre_release_version"], "0.10.0")
+
+            env["PR_NUMBER"] = "51"
+            env["PR_BODY"] = "## Changelog\n- Second pre-release fix."
+            with patch.object(release, "APP_CPP", app_path), \\
+                 patch.object(release, "STATE_PATH", state_path), \\
+                 patch.dict(os.environ, env, clear=False):
+                second_result = release.apply_release()
+            self.assertEqual(second_result, 0)
+            result = app_path.read_text(encoding="utf-8")
+            self.assertIn("First pre-release fix.", result)
+            self.assertIn("Second pre-release fix.", result)
+            self.assertEqual(result.count("CHANGELOG_VERSION: 0.10.0"), 1)
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertTrue(state["pre_release_active"])
+            self.assertEqual(state["pre_release_version"], "0.10.0")
 
 
 if __name__ == "__main__":
