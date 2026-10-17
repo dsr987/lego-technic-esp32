@@ -116,7 +116,7 @@ jobs:
         id: metadata_pr
         if: ${{ steps.resolve.outputs.process == 'true' && steps.update.outputs.changed == 'true' }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
           RELEASE_SOURCE_PR: ${{ env.PR_NUMBER }}
           RELEASE_VERSION_CHANGED: ${{ steps.update.outputs.release }}
           BOT_BRANCH: ${{ steps.branch.outputs.name }}
@@ -135,7 +135,9 @@ jobs:
 
           git diff --cached --check
           git commit -m "chore: prepare release metadata for PR #${RELEASE_SOURCE_PR}"
-          git push --force origin "HEAD:${BOT_BRANCH}"
+          auth_header="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
+            push --force origin "HEAD:${BOT_BRANCH}"
           head_sha="$(git rev-parse HEAD)"
 
           bot_pr="$(gh pr list --state open --base main --head "${BOT_BRANCH}" --json number --jq '.[0].number // empty')"
@@ -158,6 +160,7 @@ jobs:
               --base main \
               --head "${BOT_BRANCH}" \
               --title "chore: update release metadata after PR #${RELEASE_SOURCE_PR}" \
+              --label release:none \
               --body "$body" >/dev/null
             bot_pr="$(gh pr list --state open --base main --head "${BOT_BRANCH}" --json number --jq '.[0].number // empty')"
           fi
@@ -176,7 +179,7 @@ jobs:
       - name: Run required checks and merge metadata PR
         if: ${{ steps.metadata_pr.outputs.changed == 'true' }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
           BOT_PR_NUMBER: ${{ steps.metadata_pr.outputs.number }}
           BOT_PR_SHA: ${{ steps.metadata_pr.outputs.head_sha }}
           BOT_BRANCH: ${{ steps.branch.outputs.name }}
@@ -188,14 +191,14 @@ jobs:
             local workflow_file="$1"
             local run_id=""
             for attempt in $(seq 1 60); do
-              run_id="$(gh run list --workflow "$workflow_file" --branch "$BOT_BRANCH" --commit "$BOT_PR_SHA" --event workflow_dispatch --limit 1 --json databaseId --jq '.[0].databaseId // empty' || true)"
+              run_id="$(gh run list --workflow "$workflow_file" --branch "$BOT_BRANCH" --commit "$BOT_PR_SHA" --event pull_request --limit 1 --json databaseId --jq '.[0].databaseId // empty' || true)"
               if [[ -n "$run_id" ]]; then
                 break
               fi
               sleep 5
             done
             if [[ -z "$run_id" ]]; then
-              echo "::error::Timed out waiting for workflow_dispatch run: $workflow_file"
+              echo "::error::Timed out waiting for pull_request validation run: $workflow_file"
               return 1
             fi
             echo "Watching $workflow_file run $run_id for commit $BOT_PR_SHA."
@@ -208,8 +211,8 @@ jobs:
             exit 1
           fi
 
-          gh workflow run pull-request-validation.yml --ref "$BOT_BRANCH"
-          gh workflow run release-metadata-validation.yml --ref "$BOT_BRANCH" --field pr_number="$BOT_PR_NUMBER"
+          # PR workflows are triggered by the automation PAT, so GitHub can attach
+          # their native pull_request check suites to this commit and enforce branch protection.
 
           wait_for_run "pull-request-validation.yml"
           wait_for_run "release-metadata-validation.yml"
