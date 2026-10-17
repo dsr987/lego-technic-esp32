@@ -145,7 +145,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
                 "GITHUB_OUTPUT": str(output_path),
                 "GITHUB_STEP_SUMMARY": "",
             }
-            with patch.object(release, "STATE_PATH", state_path), patch.dict(os.environ, env, clear=False):
+                 patch.object(release, "STATE_PATH", state_path), \
                 result = release.prepare_push(str(event_path))
             self.assertEqual(result, 0)
             exported = env_path.read_text(encoding="utf-8")
@@ -485,8 +485,8 @@ class PreReleaseApplyTests(unittest.TestCase):
                 "GITHUB_OUTPUT": str(output_path),
                 "GITHUB_STEP_SUMMARY": "",
             }
-            with patch.object(release, "APP_CPP", app_path), \\
-                 patch.object(release, "STATE_PATH", state_path), \\
+            with patch.object(release, "APP_CPP", app_path), \
+                 patch.object(release, "STATE_PATH", state_path), \
                  patch.dict(os.environ, env, clear=False):
                 first_result = release.apply_release()
             self.assertEqual(first_result, 0)
@@ -497,8 +497,8 @@ class PreReleaseApplyTests(unittest.TestCase):
 
             env["PR_NUMBER"] = "51"
             env["PR_BODY"] = "## Changelog\n- Second pre-release fix."
-            with patch.object(release, "APP_CPP", app_path), \\
-                 patch.object(release, "STATE_PATH", state_path), \\
+            with patch.object(release, "APP_CPP", app_path), \
+                 patch.object(release, "STATE_PATH", state_path), \
                  patch.dict(os.environ, env, clear=False):
                 second_result = release.apply_release()
             self.assertEqual(second_result, 0)
