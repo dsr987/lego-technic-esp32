@@ -18,7 +18,7 @@ Do not use release:major to leave beta. Use release:stable for the first stable 
 
 ## Changelog summary
 
-For any release label other than release:none, add one heading named Changelog (level 2) to the PR description with one or more concise bullets. This is the only user-written release summary; do not manually copy it to CHANGELOG.md, README.md, index.html, or app.cpp.
+For every release label, including release:none, add one heading named Changelog (level 2) to the PR description with at least one concise bullet. This is the required PR summary; do not manually copy it to CHANGELOG.md, README.md, index.html, or app.cpp. For release:none, the summary is kept in the PR record and does not produce a firmware changelog/version update.
 
 Example:
 
