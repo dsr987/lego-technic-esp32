@@ -135,6 +135,9 @@ jobs:
 
           git diff --cached --check
           git commit -m "chore: prepare release metadata for PR #${RELEASE_SOURCE_PR}"
+          # actions/checkout configures an Authorization extraheader for GITHUB_TOKEN.
+          # Remove it before adding the PAT header, otherwise Git sends two Authorization headers.
+          git config --local --unset-all http.https://github.com/.extraheader || true
           auth_header="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
             push --force origin "HEAD:${BOT_BRANCH}"

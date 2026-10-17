@@ -74,6 +74,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
         self.assertIn("secrets.RELEASE_AUTOMATION_TOKEN", workflow)
         self.assertIn("event pull_request", workflow)
         self.assertIn("x-access-token:%s", workflow)
+        self.assertIn("git config --local --unset-all http.https://github.com/.extraheader", workflow)
         self.assertNotIn("gh workflow run pull-request-validation.yml", workflow)
         self.assertNotIn("gh workflow run release-metadata-validation.yml", workflow)
         self.assertNotIn("git push origin HEAD:main", workflow)
