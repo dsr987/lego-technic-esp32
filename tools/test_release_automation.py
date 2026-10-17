@@ -449,7 +449,7 @@ class GeneratedChangelogTests(unittest.TestCase):
                 "## 0.9.0 — 2026-10-16\n### Изменено\n- Older release.\n",
                 encoding="utf-8",
             )
-            changelog.update_changelog(path, "0.10.0", "- First pre-release fix.\n- Second pre-release fix.")
+            changelog.update_changelog(path, "0.10.0", "- First pre-release fix.\n- Second pre-release fix.", refresh_existing=True)
             result = path.read_text(encoding="utf-8")
             self.assertIn("- Second pre-release fix.", result)
             self.assertIn("## 0.9.0 — 2026-10-16", result)
