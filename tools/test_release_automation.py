@@ -374,6 +374,13 @@ class VersionBumpTests(unittest.TestCase):
         with self.assertRaisesRegex(release.ReleaseMetadataError, "A pre-release is active"):
             release.resolve_release_transition((0, 10, 0), "patch", active_state)
 
+    def test_stable_promotion_requires_completed_pre_release_phase(self):
+        with self.assertRaisesRegex(release.ReleaseMetadataError, "complete its checks"):
+            release.resolve_release_transition(
+                (0, 9, 1), "stable",
+                {"pre_release_active": False, "pre_release_version": None},
+            )
+
     def test_pre_release_cannot_start_after_stable_major(self):
         with self.assertRaisesRegex(release.ReleaseMetadataError, "only available before"):
             release.resolve_release_transition(
