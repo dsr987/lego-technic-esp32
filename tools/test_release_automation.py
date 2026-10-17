@@ -68,7 +68,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
         self.assertNotIn("pull_request_target:", workflow)
         self.assertIn("group: release-versioning-main", workflow)
         self.assertNotIn("gh workflow run ci-build-deploy.yml --ref main", workflow)
-        self.assertIn("steps.update.outputs.release == 'true'", workflow)
+        self.assertIn("RELEASE_VERSION_CHANGED: ${{ steps.update.outputs.release }}", workflow)
         self.assertIn("steps.update.outputs.changed == 'true'", workflow)
         self.assertIn("github.event.workflow_run.event == 'push'", workflow)
         self.assertNotIn("gh workflow run ci-build-deploy.yml --ref main --field build_bootstrap=false", workflow)
