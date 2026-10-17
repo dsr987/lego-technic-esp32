@@ -77,12 +77,39 @@ def update_changelog(md_file, version, entries):
     )
 
     version_pattern = re.compile(
-        r"^##\s+" + re.escape(version) + r"\s*[—-]",
+        r"^##\s+" + re.escape(version) + r"\s*[—-].*$",
         re.MULTILINE,
     )
+    version_match = version_pattern.search(content)
+    all_sections = list(re.finditer(r"^##\s+.+$", content, re.MULTILINE))
 
-    if version_pattern.search(content):
-        print(f"OK: Version {version} already exists; no changes.")
+    if version_match:
+        # Repeated pre-release builds reuse one numeric version. Refresh only the
+        # newest section; a stale build must not rewrite an older historical entry.
+        if not all_sections or all_sections[0].start() != version_match.start():
+            print(f"OK: Version {version} already exists in history; leaving older entry unchanged.")
+            return
+
+        heading_end = content.find("\n", version_match.start())
+        if heading_end == -1:
+            heading_end = len(content)
+        heading_line = content[version_match.start():heading_end]
+        next_heading = next(
+            (section.start() for section in all_sections if section.start() > version_match.start()),
+            len(content),
+        )
+        section = (
+            f"{heading_line}\n"
+            f"### Изменено\n"
+            f"{entries}\n\n"
+        )
+        if content[version_match.start():next_heading] == section:
+            print(f"OK: Version {version} changelog is already current.")
+            return
+
+        content = content[:version_match.start()] + section + content[next_heading:].lstrip("\n")
+        path.write_text(content, encoding="utf-8", newline="\n")
+        print(f"OK: Updated CHANGELOG version {version}")
         return
 
     section = (
