@@ -73,6 +73,8 @@ class FirstRunBootstrapTests(unittest.TestCase):
         self.assertIn("gh pr merge", workflow)
         self.assertIn("secrets.RELEASE_AUTOMATION_TOKEN", workflow)
         self.assertIn("event pull_request", workflow)
+        self.assertIn("--limit 20 --json databaseId,status,conclusion", workflow)
+        self.assertIn('select(.status == "completed" and .conclusion == "success")', workflow)
         self.assertIn("x-access-token:%s", workflow)
         self.assertIn("git config --local --unset-all http.https://github.com/.extraheader", workflow)
         self.assertNotIn("gh workflow run pull-request-validation.yml", workflow)
