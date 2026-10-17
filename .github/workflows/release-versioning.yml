@@ -74,6 +74,7 @@ jobs:
           ensure_label "release:minor" "1D76DB" "Minor release: new backward-compatible functionality"
           ensure_label "release:major" "B60205" "Major release: breaking changes after v1.0.0"
           ensure_label "release:stable" "5319E7" "Promote beta 0.x to stable v1.0.0"
+          ensure_label "release:pre-release" "FBCA04" "Pre-release firmware work; keep the active 0.x.y version and do not publish a GitHub Release"
           ensure_label "release:none" "C5DEF5" "No firmware release; documentation or automation only"
 
       - name: Create release metadata branch

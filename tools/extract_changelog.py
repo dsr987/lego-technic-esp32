@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Extract a marked CHANGELOG block from app.cpp."""
 
+import json
 import re
 import sys
 from datetime import date
@@ -68,7 +69,7 @@ def extract_changelog(cpp_file):
     return version, "\n".join(entries)
 
 
-def update_changelog(md_file, version, entries):
+def update_changelog(md_file, version, entries, refresh_existing=False):
     path = Path(md_file)
     content = (
         path.read_text(encoding="utf-8")
@@ -76,36 +77,43 @@ def update_changelog(md_file, version, entries):
         else "# История версий\n\n"
     )
 
-    version_pattern = re.compile(
-        r"^##\s+" + re.escape(version) + r"\s*[—-]",
-        re.MULTILINE,
-    )
-
-    if version_pattern.search(content):
-        print(f"OK: Version {version} already exists; no changes.")
-        return
-
     section = (
         f"## {version} — {date.today().isoformat()}\n"
         f"### Изменено\n"
         f"{entries}\n\n"
     )
 
-    heading = re.search(r"^# .+$", content, re.MULTILINE)
-
-    if heading:
-        position = heading.end()
-        content = (
-            content[:position]
-            + "\n\n"
-            + section
-            + content[position:].lstrip("\n")
+    version_section = re.compile(
+        r"(?ms)^##\s+" + re.escape(version) + r"\s*[—-].*?(?=^##\s+|\Z)"
+    )
+    match = version_section.search(content)
+    if match and not refresh_existing:
+        print(f"OK: Version {version} already exists; no changes.")
+        return
+    if match:
+        existing_heading = match.group(0).splitlines()[0]
+        refreshed_section = (
+            f"{existing_heading}\n"
+            f"### Изменено\n"
+            f"{entries}\n\n"
         )
+        content = content[:match.start()] + refreshed_section + content[match.end():]
+        print(f"OK: Updated CHANGELOG version {version}")
     else:
-        content = "# История версий\n\n" + section + content
+        heading = re.search(r"^# .+$", content, re.MULTILINE)
+        if heading:
+            position = heading.end()
+            content = (
+                content[:position]
+                + "\n\n"
+                + section
+                + content[position:].lstrip("\n")
+            )
+        else:
+            content = "# История версий\n\n" + section
+        print(f"OK: Added CHANGELOG version {version}")
 
     path.write_text(content, encoding="utf-8", newline="\n")
-    print(f"OK: Added CHANGELOG version {version}")
 
 
 if __name__ == "__main__":
@@ -119,4 +127,16 @@ if __name__ == "__main__":
     version, entries = extract_changelog(cpp_file)
     print(f"Version: {version}")
     print(entries)
-    update_changelog(md_file, version, entries)
+    state_path = Path(__file__).resolve().parent.parent / ".github" / "release-automation" / "state.json"
+    refresh_existing = False
+    if state_path.is_file():
+        try:
+            state = json.loads(state_path.read_text(encoding="utf-8"))
+            refresh_existing = (
+                state.get("pre_release_active") is True
+                and state.get("pre_release_version") == version
+            )
+        except (OSError, json.JSONDecodeError) as error:
+            raise SystemExit(f"ERROR: Cannot read pre-release state: {error}") from error
+
+    update_changelog(md_file, version, entries, refresh_existing=refresh_existing)

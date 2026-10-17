@@ -23,7 +23,9 @@ def main() -> int:
         return 1
 
     version = version_match.group(1)
-    pattern = re.compile(r'(<div class="brand-ver">)\d+\.\d+\.\d+(\s*·\s*beta</div>)')
+    # Keep the beta badge for all 0.x firmware; remove it for stable 1.0.0+.
+    beta_suffix = " · beta" if int(version.split(".", 1)[0]) == 0 else ""
+    pattern = re.compile(r'(<div class="brand-ver">)\d+\.\d+\.\d+(?:\s*·\s*beta)?</div>')
 
     updated = 0
     for path in (WEB_PAGE_CPP, INDEX_HTML):
@@ -36,7 +38,7 @@ def main() -> int:
             return 1
 
         text = path.read_text(encoding="utf-8-sig")
-        text, count = pattern.subn(rf"\g<1>{version}\g<2>", text)
+        text, count = pattern.subn(lambda match: f"{match.group(1)}{version}{beta_suffix}</div>", text)
         if count != 1:
             print(
                 f"ERROR: Expected exactly one GUI version label in {path}, found {count}",
