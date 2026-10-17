@@ -23,7 +23,7 @@ The first PR labelled `release:pre-release` advances the current `0.x.y` version
 
 Pre-release builds are compiled and retained as GitHub Actions artifacts. They are not published as GitHub Releases and must not replace the latest stable download. The changelog generator refreshes the newest section for a repeated version so the full pre-release history stays visible.
 
-When ready for the first stable release, a PR labelled `release:stable` promotes the firmware to `1.0.0`, carries accumulated pre-release notes into the stable changelog, and clears the pre-release state. Stable publication then returns to the normal release workflow.
+When ready for the first stable release, a PR labelled `release:stable` is accepted only while pre-release mode is active. It promotes the firmware to `1.0.0`, carries accumulated pre-release notes into the stable changelog, and clears the pre-release state. Stable publication then returns to the normal release workflow.
 
 ## Changelog summary
 
