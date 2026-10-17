@@ -91,7 +91,7 @@ def update_changelog(md_file, version, entries, refresh_existing=False):
         print(f"OK: Version {version} already exists; no changes.")
         return
     if match and refresh_existing:
-        all_sections = list(re.finditer(r"^##\\s+.+$", content, re.MULTILINE))
+        all_sections = list(re.finditer(r"^##\s+.+$", content, re.MULTILINE))
         if all_sections and all_sections[0].start() != match.start():
             print(f"OK: Version {version} is historical; leaving its older entry unchanged.")
             return
