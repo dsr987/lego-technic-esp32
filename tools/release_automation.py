@@ -20,6 +20,7 @@ RELEASE_TYPES = {
     "release:minor": "minor",
     "release:major": "major",
     "release:stable": "stable",
+    "release:pre-release": "pre-release",
     "release:none": "none",
 }
 VERSION_PATTERN = re.compile(r"^\s*\*\s*CHANGELOG_VERSION:\s*(\d+\.\d+\.\d+)\s*$", re.MULTILINE)
@@ -52,7 +53,7 @@ def parse_release_type(raw_labels: str, body: str = "", allow_bootstrap_fallback
     # until the first successful run provisions them. Once initialized, labels
     # are mandatory and the body fallback is no longer accepted.
     if allow_bootstrap_fallback:
-        matches = re.findall(r"(?im)^Release type:[ \t]*(release:[a-z]+)[ \t]*$", body)
+        matches = re.findall(r"(?im)^Release type:[ \t]*(release:[a-z-]+)[ \t]*$", body)
         if len(matches) == 1 and matches[0] in RELEASE_TYPES:
             return RELEASE_TYPES[matches[0]]
     raise ReleaseMetadataError(
@@ -97,6 +98,53 @@ def bump_version(version: tuple[int, int, int], release_type: str) -> tuple[int,
             )
         return major + 1, 0, 0
     raise ReleaseMetadataError(f"Unsupported release type: {release_type}")
+
+
+def resolve_release_transition(
+    version: tuple[int, int, int],
+    release_type: str,
+    state: dict,
+) -> tuple[tuple[int, int, int] | None, bool, bool]:
+    """Return (target version, append changelog, pre-release active after processing)."""
+    active = state.get("pre_release_active", False)
+    current = format_version(version)
+    tracked_version = state.get("pre_release_version")
+
+    if active and tracked_version != current:
+        raise ReleaseMetadataError(
+            "Pre-release state does not match CHANGELOG_VERSION; refusing to guess "
+            f"(state={tracked_version!r}, app.cpp={current!r})."
+        )
+
+    if active and release_type not in {"pre-release", "stable", "none"}:
+        raise ReleaseMetadataError(
+            "A pre-release is active. Use release:pre-release for firmware fixes, "
+            "release:none for documentation-only changes, or release:stable to promote to 1.0.0."
+        )
+
+    if release_type == "none":
+        return None, False, active
+
+    if release_type == "pre-release":
+        if version[0] != 0:
+            raise ReleaseMetadataError(
+                "release:pre-release is only available before the first stable 1.0.0 release."
+            )
+        if active:
+            # Continue the same pre-release; keep its numeric version and history.
+            return version, True, True
+        # Starting the pre-release phase bumps the current 0.x beta to the next minor.
+        return bump_version(version, "minor"), False, True
+
+    if release_type == "stable":
+        if not active:
+            raise ReleaseMetadataError(
+                "Start the fixed-version pre-release with release:pre-release and complete its checks before release:stable."
+            )
+        # Keep accumulated pre-release notes when promoting that same codebase to 1.0.0.
+        return bump_version(version, "stable"), True, False
+
+    return bump_version(version, release_type), False, active
 
 
 def extract_changelog_bullets(body: str) -> list[str]:
@@ -152,7 +200,14 @@ def write_step_output(**values: str) -> None:
 
 def load_state() -> dict:
     if not STATE_PATH.exists():
-        return {"schema_version": 1, "labels_initialized": False, "processed_prs": [], "release_prs": []}
+        return {
+            "schema_version": 1,
+            "labels_initialized": False,
+            "processed_prs": [],
+            "release_prs": [],
+            "pre_release_active": False,
+            "pre_release_version": None,
+        }
     try:
         state = json.loads(STATE_PATH.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError) as error:
@@ -161,8 +216,14 @@ def load_state() -> dict:
         raise ReleaseMetadataError("Release automation state has an unsupported format")
     state.setdefault("labels_initialized", False)
     state.setdefault("release_prs", [])
+    state.setdefault("pre_release_active", False)
+    state.setdefault("pre_release_version", None)
     if not isinstance(state["release_prs"], list):
         raise ReleaseMetadataError("Release automation state has an unsupported release_prs field")
+    if not isinstance(state["pre_release_active"], bool):
+        raise ReleaseMetadataError("Release automation state has an invalid pre_release_active field")
+    if state["pre_release_active"] and not isinstance(state.get("pre_release_version"), str):
+        raise ReleaseMetadataError("Active pre-release state must record pre_release_version")
     return state
 
 
@@ -180,6 +241,9 @@ def validate_pr() -> int:
 
         bullets = extract_changelog_bullets(os.environ.get("PR_BODY", ""))
         validate_summary(bullets)
+        next_version_tuple, _append_changelog, _next_pre_release_active = resolve_release_transition(
+            version, release_type, state
+        )
 
         if release_type == "none":
             message = "Release type is none. This PR will not bump firmware version or changelog."
@@ -196,8 +260,15 @@ def validate_pr() -> int:
             )
             return 0
 
-        next_version = format_version(bump_version(version, release_type))  # type: ignore[arg-type]
-        print(f"OK: release:{release_type}; proposed version {current} -> {next_version}")
+        if next_version_tuple is None:
+            raise ReleaseMetadataError(f"Unsupported release type: {release_type}")
+        next_version = format_version(next_version_tuple)
+        phase_note = ""
+        if release_type == "pre-release":
+            phase_note = " (continuing pre-release)" if state.get("pre_release_active") else " (starting pre-release)"
+        elif release_type == "stable" and state.get("pre_release_active"):
+            phase_note = " (promoting accumulated pre-release changes)"
+        print(f"OK: release:{release_type}; proposed version {current} -> {next_version}{phase_note}")
         for bullet in bullets:
             print(f"- {bullet}")
         append_step_summary(
@@ -223,11 +294,29 @@ def write_state(state: dict) -> None:
     STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
+def extract_app_changelog_bullets(app_text: str) -> list[str]:
+    """Read the current marked changelog entries, preserving their PR links."""
+    match = CHANGELOG_BLOCK_PATTERN.search(app_text)
+    if not match:
+        raise ReleaseMetadataError("Could not find the CHANGELOG_START/CHANGELOG_END block")
+
+    content = app_text[match.end(1):match.start(2)]
+    bullets = []
+    for line in content.splitlines():
+        bullet = re.match(r"^\s*\*\s*-\s+(.+?)\s*$", line)
+        if bullet:
+            text = bullet.group(1).strip()
+            if text:
+                bullets.append(text)
+    return bullets
+
+
 def update_app_text(
     app_text: str,
     new_version: str,
     bullets: list[str],
     pr_number: int,
+    append_existing: bool = False,
 ) -> str:
     app_text, version_count = re.subn(
         r"(^\s*\*\s*CHANGELOG_VERSION:\s*)\d+\.\d+\.\d+(\s*$)",
@@ -258,8 +347,14 @@ def update_app_text(
         safe = re.sub(r"\s+", " ", bullet).strip().replace("*/", "* /")
         safe = safe.replace("\r", " ").replace("\n", " ")
         safe_bullets.append(safe)
+    if not safe_bullets:
+        raise ReleaseMetadataError("At least one changelog bullet is required")
+
     pr_link = f"([PR #{pr_number}]({REPOSITORY_URL}/pull/{pr_number}))"
     safe_bullets[0] = f"{safe_bullets[0]} {pr_link}"
+
+    if append_existing:
+        safe_bullets = extract_app_changelog_bullets(app_text) + safe_bullets
 
     changelog_lines = "".join(f" * - {bullet}\n" for bullet in safe_bullets)
     replacement = changelog_match.group(1) + changelog_lines + changelog_match.group(2)
@@ -327,6 +422,8 @@ def prepare_push(event_path: str) -> int:
                 allow_bootstrap_fallback=not state.get("labels_initialized", False),
             )
             validate_summary(extract_changelog_bullets(body))
+            app_text = APP_CPP.read_text(encoding="utf-8")
+            resolve_release_transition(current_version(app_text), release_type, state)
         else:
             release_type = "already-processed"
 
@@ -390,13 +487,21 @@ def apply_release() -> int:
 
         app_text = APP_CPP.read_text(encoding="utf-8")
         old_version_tuple = current_version(app_text)
-        new_version_tuple = bump_version(old_version_tuple, release_type)
+        new_version_tuple, append_changelog, pre_release_active_after = resolve_release_transition(
+            old_version_tuple, release_type, state
+        )
         if new_version_tuple is None:
             raise ReleaseMetadataError(f"Unsupported release type: {release_type}")
         old_version = format_version(old_version_tuple)
         new_version = format_version(new_version_tuple)
 
-        new_app_text = update_app_text(app_text, new_version, bullets, pr_number)
+        new_app_text = update_app_text(
+            app_text,
+            new_version,
+            bullets,
+            pr_number,
+            append_existing=append_changelog,
+        )
         APP_CPP.write_text(new_app_text, encoding="utf-8", newline="\n")
 
         state["processed_prs"] = sorted(processed | {pr_number})
@@ -404,6 +509,8 @@ def apply_release() -> int:
         state["last_processed_pr"] = pr_number
         state["last_release_type"] = release_type
         state["last_version"] = new_version
+        state["pre_release_active"] = pre_release_active_after
+        state["pre_release_version"] = new_version if pre_release_active_after else None
         write_state(state)
 
         print(f"Updated app.cpp: {old_version} -> {new_version} from PR #{pr_number}.")

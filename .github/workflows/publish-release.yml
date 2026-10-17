@@ -83,6 +83,21 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
+      - name: Detect active pre-release mode
+        id: release_mode
+        if: ${{ steps.compiled.outputs.publish == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          active="$(python3 -c 'import json; from pathlib import Path; state=json.loads(Path(".github/release-automation/state.json").read_text(encoding="utf-8")); print("true" if state.get("pre_release_active") is True else "false")')"
+          if [[ "$active" == "true" ]]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::This is an active pre-release build; the binary remains a workflow artifact and will not be published as a GitHub Release."
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            echo "Stable-release publication is allowed."
+          fi
+
       - name: Ensure this is the newest firmware source on main
         if: ${{ steps.compiled.outputs.publish == 'true' }}
         id: latest_source
@@ -108,7 +123,7 @@ jobs:
           fi
 
       - name: Read firmware version
-        if: ${{ steps.compiled.outputs.publish == 'true' && steps.latest_source.outputs.current == 'true' }}
+        if: ${{ steps.compiled.outputs.publish == 'true' && steps.release_mode.outputs.publish == 'true' && steps.latest_source.outputs.current == 'true' }}
         id: version
         shell: bash
         run: |
@@ -124,7 +139,7 @@ jobs:
           echo "Firmware version: $version"
 
       - name: Publish firmware as a GitHub Release
-        if: ${{ steps.compiled.outputs.publish == 'true' && steps.latest_source.outputs.current == 'true' }}
+        if: ${{ steps.compiled.outputs.publish == 'true' && steps.release_mode.outputs.publish == 'true' && steps.latest_source.outputs.current == 'true' }}
         uses: softprops/action-gh-release@v3
         with:
           tag_name: firmware-build-${{ github.event.workflow_run.id }}

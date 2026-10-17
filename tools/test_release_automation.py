@@ -11,6 +11,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import release_automation as release  # noqa: E402
+import extract_changelog  # noqa: E402
+import update_gui_version  # noqa: E402
 
 
 class FirstRunBootstrapTests(unittest.TestCase):
@@ -69,6 +71,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
         self.assertIn("steps.update.outputs.changed == 'true'", workflow)
         self.assertIn("github.event.workflow_run.event == 'push'", workflow)
         self.assertIn("gh workflow run ci-build-deploy.yml --ref main --field build_bootstrap=false", workflow)
+        self.assertIn('ensure_label "release:pre-release"', workflow)
         self.assertIn("gh pr create", workflow)
         self.assertIn("gh pr merge", workflow)
         self.assertIn("secrets.RELEASE_AUTOMATION_TOKEN", workflow)
@@ -115,6 +118,13 @@ class FirstRunBootstrapTests(unittest.TestCase):
         self.assertIn("'.github/workflows/**'", build_workflow)
         self.assertIn("https://github.com/dsr987/lego-technic-esp32/releases/latest/download/lego_technic_esp32.ino.bin", build_workflow)
         self.assertNotIn("https://dsr987.github.io/lego-technic-esp32/downloads/build_firmware_for_esp32.bin", build_workflow)
+
+        publish_workflow = (
+            Path(__file__).resolve().parents[1]
+            / ".github" / "workflows" / "publish-release.yml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("pre_release_active", publish_workflow)
+        self.assertIn("steps.release_mode.outputs.publish == 'true'", publish_workflow)
         self.assertIn("build_bootstrap:", build_workflow)
         self.assertIn("this workflow must not push directly to protected main", build_workflow)
 
@@ -301,6 +311,7 @@ class ReleaseTypeTests(unittest.TestCase):
             "release:minor": "minor",
             "release:major": "major",
             "release:stable": "stable",
+            "release:pre-release": "pre-release",
             "release:none": "none",
         }
         for label, expected in cases.items():
@@ -331,6 +342,51 @@ class VersionBumpTests(unittest.TestCase):
 
     def test_release_none_does_not_bump(self):
         self.assertIsNone(release.bump_version((0, 5, 27), "none"))
+
+    def test_pre_release_starts_next_minor_then_keeps_same_version(self):
+        inactive = {"pre_release_active": False, "pre_release_version": None}
+        next_version, append_existing, active = release.resolve_release_transition(
+            (0, 9, 1), "pre-release", inactive
+        )
+        self.assertEqual(release.format_version(next_version), "0.10.0")
+        self.assertFalse(append_existing)
+        self.assertTrue(active)
+
+        active_state = {"pre_release_active": True, "pre_release_version": "0.10.0"}
+        same_version, append_existing, active = release.resolve_release_transition(
+            (0, 10, 0), "pre-release", active_state
+        )
+        self.assertEqual(release.format_version(same_version), "0.10.0")
+        self.assertTrue(append_existing)
+        self.assertTrue(active)
+
+    def test_stable_promotion_ends_pre_release_and_keeps_accumulated_changelog(self):
+        active_state = {"pre_release_active": True, "pre_release_version": "0.10.0"}
+        next_version, append_existing, active = release.resolve_release_transition(
+            (0, 10, 0), "stable", active_state
+        )
+        self.assertEqual(release.format_version(next_version), "1.0.0")
+        self.assertTrue(append_existing)
+        self.assertFalse(active)
+
+    def test_active_pre_release_rejects_regular_version_bumps(self):
+        active_state = {"pre_release_active": True, "pre_release_version": "0.10.0"}
+        with self.assertRaisesRegex(release.ReleaseMetadataError, "A pre-release is active"):
+            release.resolve_release_transition((0, 10, 0), "patch", active_state)
+
+    def test_stable_promotion_requires_completed_pre_release_phase(self):
+        with self.assertRaisesRegex(release.ReleaseMetadataError, "complete its checks"):
+            release.resolve_release_transition(
+                (0, 9, 1), "stable",
+                {"pre_release_active": False, "pre_release_version": None},
+            )
+
+    def test_pre_release_cannot_start_after_stable_major(self):
+        with self.assertRaisesRegex(release.ReleaseMetadataError, "only available before"):
+            release.resolve_release_transition(
+                (1, 0, 0), "pre-release",
+                {"pre_release_active": False, "pre_release_version": None},
+            )
 
 
 class ChangelogParsingTests(unittest.TestCase):
@@ -390,9 +446,107 @@ class AppUpdateTests(unittest.TestCase):
         self.assertIn("Handles * / safely", result)
         self.assertNotIn("Handles */ safely", result)
 
+    def test_appends_entries_during_pre_release_without_dropping_previous_notes(self):
+        first = release.update_app_text(
+            self.SAMPLE_APP, "0.6.0", ["First pre-release fix."], 100
+        )
+        second = release.update_app_text(
+            first, "0.6.0", ["Second pre-release fix."], 101, append_existing=True
+        )
+        self.assertIn("CHANGELOG_VERSION: 0.6.0", second)
+        self.assertIn("First pre-release fix.", second)
+        self.assertIn("Second pre-release fix.", second)
+        self.assertEqual(len(release.extract_app_changelog_bullets(second)), 2)
+
     def test_requires_changelog_markers_and_version_header(self):
         with self.assertRaises(release.ReleaseMetadataError):
             release.update_app_text("CHANGELOG_VERSION: 0.5.27", "0.5.28", ["Note"], 7)
+
+
+class PreReleaseLifecycleTests(unittest.TestCase):
+    def test_start_continue_and_promote_pre_release(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app_path = root / "app.cpp"
+            state_path = root / "state.json"
+            output_path = root / "github-output"
+            app_path.write_text(AppUpdateTests.SAMPLE_APP, encoding="utf-8")
+            state_path.write_text(
+                json.dumps({
+                    "schema_version": 1,
+                    "labels_initialized": True,
+                    "processed_prs": [],
+                    "release_prs": [],
+                }),
+                encoding="utf-8",
+            )
+
+            changes = [
+                (100, "release:pre-release", "First pre-release fix.", "0.6.0", True),
+                (101, "release:pre-release", "Second pre-release fix.", "0.6.0", True),
+                (102, "release:stable", "Publish stable firmware.", "1.0.0", False),
+            ]
+            with patch.object(release, "APP_CPP", app_path), patch.object(release, "STATE_PATH", state_path):
+                for number, label, bullet, expected_version, expected_active in changes:
+                    env = {
+                        "PR_LABELS": label,
+                        "PR_BODY": f"Release type: {label}\n\n## Changelog\n- {bullet}",
+                        "PR_NUMBER": str(number),
+                        "GITHUB_OUTPUT": str(output_path),
+                        "GITHUB_STEP_SUMMARY": "",
+                    }
+                    with patch.dict(os.environ, env, clear=False):
+                        self.assertEqual(release.apply_release(), 0)
+
+                    app_text = app_path.read_text(encoding="utf-8")
+                    self.assertIn(f"CHANGELOG_VERSION: {expected_version}", app_text)
+                    state = json.loads(state_path.read_text(encoding="utf-8"))
+                    self.assertEqual(state["pre_release_active"], expected_active)
+                    self.assertEqual(state["pre_release_version"], expected_version if expected_active else None)
+
+            final_app = app_path.read_text(encoding="utf-8")
+            for entry in ("First pre-release fix.", "Second pre-release fix.", "Publish stable firmware."):
+                self.assertIn(entry, final_app)
+            final_state = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual(final_state["processed_prs"], [100, 101, 102])
+            self.assertEqual(final_state["release_prs"], [100, 101, 102])
+            self.assertEqual(final_state["last_version"], "1.0.0")
+
+
+class GeneratedFileVersionTests(unittest.TestCase):
+    def test_changelog_refreshes_existing_latest_pre_release_section(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "CHANGELOG.md"
+            extract_changelog.update_changelog(path, "0.10.0", "- First fix.")
+            before = path.read_text(encoding="utf-8")
+            extract_changelog.update_changelog(path, "0.10.0", "- First fix.\n- Second fix.")
+            after = path.read_text(encoding="utf-8")
+            self.assertEqual(after.count("## 0.10.0"), 1)
+            self.assertIn("First fix.", after)
+            self.assertIn("Second fix.", after)
+            self.assertNotEqual(after, before)
+
+    def test_stale_build_does_not_rewrite_older_changelog_entry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "CHANGELOG.md"
+            path.write_text(
+                "# История версий\n\n## 0.10.0 — 2026-10-17\n### Изменено\n- Current.\n\n"
+                "## 0.9.1 — 2026-10-16\n### Изменено\n- Older.\n\n",
+                encoding="utf-8",
+            )
+            extract_changelog.update_changelog(path, "0.9.1", "- Stale output.")
+            content = path.read_text(encoding="utf-8")
+            self.assertIn("- Older.", content)
+            self.assertNotIn("- Stale output.", content)
+
+    def test_gui_version_suffix_tracks_beta_or_stable_major(self):
+        initial = '<div class="brand-ver">0.9.1 · beta</div>'
+        pre_release, pre_count = update_gui_version.replace_brand_version(initial, "0.10.0")
+        self.assertEqual(pre_count, 1)
+        self.assertEqual(pre_release, '<div class="brand-ver">0.10.0 · beta</div>')
+        stable, stable_count = update_gui_version.replace_brand_version(pre_release, "1.0.0")
+        self.assertEqual(stable_count, 1)
+        self.assertEqual(stable, '<div class="brand-ver">1.0.0</div>')
 
 
 if __name__ == "__main__":
