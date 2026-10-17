@@ -200,7 +200,7 @@ jobs:
             # of blindly taking the first result, which may be the cancelled attempt.
             for attempt in $(seq 1 60); do
               runs_json="$(gh run list --workflow "$workflow_file" --branch "$BOT_BRANCH" --commit "$BOT_PR_SHA" --event pull_request --limit 20 --json databaseId,status,conclusion || printf '[]')"
-              run_id="$(jq -r '[.[] | select(.status == "completed" and .conclusion == "success")] | first | .databaseId // empty' <<< "$runs_json")"
+              run_id="$(jq -r '[.[] | select(.status == "completed" and .conclusion == "success")][0].databaseId // empty' <<< "$runs_json")"
               if [[ -n "$run_id" ]]; then
                 break
               fi
