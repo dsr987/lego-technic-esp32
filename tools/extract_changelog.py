@@ -83,7 +83,7 @@ def update_changelog(md_file, version, entries):
     )
 
     version_section = re.compile(
-        r"(?ms)^##\\s+" + re.escape(version) + r"\\s*[—-].*?(?=^##\\s+|\\Z)"
+        r"(?ms)^##\s+" + re.escape(version) + r"\s*[—-].*?(?=^##\s+|\Z)"
     )
     match = version_section.search(content)
     if match:
@@ -103,7 +103,7 @@ def update_changelog(md_file, version, entries):
             content = "# История версий\n\n" + section
         print(f"OK: Added CHANGELOG version {version}")
 
-    path.write_text(content, encoding="utf-8", newline="\\n")
+    path.write_text(content, encoding="utf-8", newline="\n")
 
 
 if __name__ == "__main__":
