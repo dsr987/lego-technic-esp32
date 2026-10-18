@@ -310,7 +310,7 @@ GPIO34 и коэффициент 0.2680 описаны для существую
 - [Инициализация, OLED и сигналы ESP32](../lego_technic_esp32/app.cpp)
 - [Измерение и калибровка батареи](../lego_technic_esp32/battery_monitor.cpp)
 - [Логика и архитектура проекта](project_logic.md)
-- [План предрелиза 0.10.0 / hardware 2.0](pre-release-0.10.0-plan.md)
+- [План предрелиза 0.10.0 / hardware 2.0](https://github.com/dsr987/lego-technic-esp32/blob/release/0.10.0-prerelease-fresh/docs/pre-release-0.10.0-plan.md)
 - [История аппаратных ревизий и дорожная карта](ideas.md)
 
 ## Что требуется уточнить перед объявлением инструкции полностью проверенной
