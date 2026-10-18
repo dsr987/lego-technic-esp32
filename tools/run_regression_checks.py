@@ -15,6 +15,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -103,19 +104,20 @@ def install_and_compile_firmware() -> None:
     run("arduino-cli", "core", "update-index")
     run("arduino-cli", "core", "install", "esp32:esp32@2.0.9")
     run("arduino-cli", "lib", "install", *LIBRARIES)
-    run(
-        "arduino-cli",
-        "compile",
-        "--fqbn",
-        "esp32:esp32:esp32",
-        "--warnings",
-        "default",
-        "--build-property",
-        "compiler.cpp.extra_flags=-DELEGANTOTA_USE_ASYNC_WEBSERVER=1",
-        "--output-dir",
-        str(ROOT / ".regression-build"),
-        "lego_technic_esp32",
-    )
+    with tempfile.TemporaryDirectory(prefix="lego-technic-esp32-regression-") as build_dir:
+        run(
+            "arduino-cli",
+            "compile",
+            "--fqbn",
+            "esp32:esp32:esp32",
+            "--warnings",
+            "default",
+            "--build-property",
+            "compiler.cpp.extra_flags=-DELEGANTOTA_USE_ASYNC_WEBSERVER=1",
+            "--output-dir",
+            build_dir,
+            "lego_technic_esp32",
+        )
 
 
 def main() -> int:

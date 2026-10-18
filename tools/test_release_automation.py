@@ -61,10 +61,10 @@ class FirstRunBootstrapTests(unittest.TestCase):
         self.assertIn("prepare-push", workflow)
         self.assertIn("Create standard release labels if missing", workflow)
         self.assertIn("Create or update release metadata PR", workflow)
-        self.assertIn("gh pr merge \\"$BOT_PR_NUMBER\\" --squash --delete-branch", workflow)
+        self.assertIn('gh pr merge "$BOT_PR_NUMBER" --squash --delete-branch', workflow)
         self.assertIn("secrets.RELEASE_AUTOMATION_TOKEN", workflow)
-        self.assertIn("wait_for_run \\"pull-request-validation.yml\\"", workflow)
-        self.assertIn("wait_for_run \\"release-metadata-validation.yml\\"", workflow)
+        self.assertIn('wait_for_run "pull-request-validation.yml"', workflow)
+        self.assertIn('wait_for_run "release-metadata-validation.yml"', workflow)
         self.assertIn("Full regression checks are run manually", workflow)
         self.assertNotIn("git push origin HEAD:main", workflow)
 
