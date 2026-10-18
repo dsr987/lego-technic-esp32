@@ -33,6 +33,14 @@
 
 Правила SemVer и выбора метки релиза описаны в [документе о версионировании](docs/release-versioning.md).
 
+### Чертежи, модели и сборка
+
+- [Чертежи отдельных деталей](hardware/part-drawings/README.md)
+- [Справочные размеры компонентов и LEGO Technic](hardware/reference-dimensions/README.md)
+- [3D-модель корпуса и исходники KOMPAS-3D](hardware/3d-models/enclosure/README.md)
+- [Иллюстрации распиновки и схем подключения](docs/assets/connection-guide/README.md)
+- [Руководство по подключению и сборке](docs/connection_guide.md)
+
 ## Первоначальная прошивка ESP32
 
 Если у тебя новая ESP32 без прошивки, все необходимые файлы для первоначальной настройки через USB находятся в папке `firmware/bootstrap/`. Там есть стартовая прошивка с ElegantOTA, BAT-скрипт для Windows, вспомогательные скрипты и пошаговая инструкция. После первоначальной прошивки основную прошивку можно загружать через браузер с помощью ElegantOTA.
