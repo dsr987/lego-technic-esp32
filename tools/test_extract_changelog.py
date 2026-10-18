@@ -42,6 +42,35 @@ class UpdateChangelogTests(unittest.TestCase):
         self.assertEqual(result.count("## 0.9.1"), 1)
         self.assertEqual(result.index("- Shared entry."), result.index("- New entry.") - len("- Shared entry.\n"))
 
+    def test_compact_summary_is_not_duplicated_when_pr_is_already_detailed(self):
+        initial = """# История версий
+
+## 0.9.1 — 2026-10-16
+### Изменено
+- Added detailed battery calibration instructions. ([PR #11](https://github.com/dsr987/lego-technic-esp32/pull/11))
+- Added automated tests and safe calibration guidance. ([PR #11](https://github.com/dsr987/lego-technic-esp32/pull/11))
+"""
+        result = self.write_and_update(
+            initial,
+            "- Added battery calibration and a calculation helper. ([PR #11](https://github.com/dsr987/lego-technic-esp32/pull/11))",
+        )
+        self.assertNotIn("- Added battery calibration and a calculation helper.", result)
+        self.assertIn("- Added detailed battery calibration instructions.", result)
+
+    def test_new_pr_entry_is_appended_even_when_version_already_exists(self):
+        initial = """# История версий
+
+## 0.9.1 — 2026-10-16
+### Изменено
+- Existing entry. ([PR #11](https://github.com/dsr987/lego-technic-esp32/pull/11))
+"""
+        result = self.write_and_update(
+            initial,
+            "- New entry. ([PR #12](https://github.com/dsr987/lego-technic-esp32/pull/12))",
+        )
+        self.assertIn("- Existing entry.", result)
+        self.assertIn("- New entry.", result)
+
     def test_existing_version_without_changed_subsection_gets_one(self):
         initial = """# История версий
 
