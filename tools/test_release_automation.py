@@ -96,6 +96,14 @@ class FirstRunBootstrapTests(unittest.TestCase):
         self.assertIn("PR_HEAD_SHA_EVENT", metadata_validation)
         self.assertIn('gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}"', metadata_validation)
         self.assertIn("current PR metadata rather than trusting the event snapshot", metadata_validation)
+        self.assertIn("id: resolve", metadata_validation)
+        self.assertIn('echo "should_validate=false" >> "$GITHUB_OUTPUT"', metadata_validation)
+        self.assertIn("is no longer eligible for validation", metadata_validation)
+        self.assertIn("if: steps.resolve.outputs.should_validate == 'true'", metadata_validation)
+        self.assertNotIn("The pull request must be open and target main.", metadata_validation)
+        self.assertIn("skipping this stale event", metadata_validation)
+        self.assertIn("A dispatched validation must target the current pull request head.", metadata_validation)
+        self.assertNotIn('echo "::error::This validation event is stale:', metadata_validation)
         self.assertNotIn("cancel-in-progress: true", metadata_validation)
 
         pr_validation = (
@@ -115,7 +123,11 @@ class FirstRunBootstrapTests(unittest.TestCase):
         self.assertIn("fetch-depth: 0", publish_workflow)
         self.assertIn("previous_version", publish_workflow)
         self.assertIn("Firmware version is unchanged", publish_workflow)
+        self.assertIn('publish=false', publish_workflow)
+        self.assertIn('if [[ "$version" == "$previous_version" ]]', publish_workflow)
         self.assertIn("steps.version.outputs.publish == 'true'", publish_workflow)
+        self.assertIn("A newer firmware source is already on main; skipping this older release.", publish_workflow)
+        self.assertIn("github.event.workflow_run.event == 'workflow_dispatch' && github.event.workflow_run.actor.login == 'github-actions[bot]'", publish_workflow)
 
         build_workflow = (
             Path(__file__).resolve().parents[1]
