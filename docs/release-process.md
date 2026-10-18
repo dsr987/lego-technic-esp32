@@ -1,6 +1,6 @@
 # Release version automation
 
-The release metadata process uses pull request labels and one changelog summary as its inputs. The canonical source for the firmware version and current release notes remains lego_technic_esp32/app.cpp. The existing build workflow regenerates CHANGELOG.md, README.md, and index.html, then builds the firmware and deploys GitHub Pages.
+The release metadata process uses merged pull request labels and a changelog summary as inputs when a change is delivered through a PR. The canonical source for the firmware version and current release notes remains `lego_technic_esp32/app.cpp`. The build workflow regenerates derived files such as `CHANGELOG.md`, `README.md`, and `index.html`, then builds firmware and deploys GitHub Pages according to its current path filters. Treat this document as a description of the post-merge flow, not a list of mandatory pre-merge checks.
 
 ## Required PR label
 
@@ -8,13 +8,13 @@ Every pull request targeting main should have exactly one of these labels. After
 
 | Label | Result while the project is in beta |
 | --- | --- |
-| release:patch | Increment patch: 0.5.27 to 0.5.28 |
-| release:minor | Increment minor and reset patch: 0.5.27 to 0.6.0 |
+| release:patch | Increment patch: 0.9.1 to 0.9.2 (example only) |
+| release:minor | Increment minor and reset patch: 0.9.1 to 0.10.0 (example only) |
 | release:stable | Promote 0.x.y to 1.0.0 when beta is explicitly over |
 | release:major | After 1.0.0, increment the major version and reset minor and patch |
 | release:none | No firmware-version bump for documentation or automation-only changes |
 
-Do not use release:major to leave beta. Use release:stable for the first stable release. The validation workflow checks that exactly one recognized release label is present once setup is complete. The temporary body fallback is disabled after a post-installation PR has been processed and the state is committed.
+Do not use release:major to leave beta. Use release:stable for the first stable release. The post-merge workflow resolves the merged PR and uses its release label and changelog summary. The current `main` does not contain a separate `release-metadata-validation.yml` or `pull-request-validation.yml`; do not treat this document as proof of a pre-merge required check. Confirm the actual workflow and repository settings before relying on a gate.
 
 ## Changelog summary
 
@@ -30,7 +30,7 @@ Example:
 
 1. After the successful Build, Extract and Deploy run for a main push, the release workflow asks GitHub for pull requests associated with that run's exact commit. If no merged PR targeting main is associated with it, release processing is skipped. The workflow checks out trusted main and never checks out a PR head branch.
 2. It ensures the release labels exist, calculates the next version, replaces the current CHANGELOG block in app.cpp, updates the version header, and records processed PR numbers in .github/release-automation/state.json so retries cannot bump the version twice.
-3. By running only after the existing CI/deploy run completes, the versioning commit cannot race that run's generated-file commit. The CI path filters include tools and workflow files so automation-only PRs also enter this sequence.
-4. For an actual version bump, the workflow explicitly dispatches ci-build-deploy.yml. This is necessary because pushes made with GITHUB_TOKEN do not automatically start ordinary push workflows. The existing workflow generates CHANGELOG.md, synchronizes the GUI version in index.html, updates README.md, compiles firmware, and deploys the site.
+3. The workflow coordinates with the completed build and regenerates derived files when the version metadata changes. Check `.github/workflows/release-versioning.yml` for the exact current sequence and conditions.
+4. A new build may be explicitly dispatched by the automation after a version bump because pushes made with `GITHUB_TOKEN` do not automatically start ordinary push workflows. The build workflow regenerates derived files, compiles firmware when needed, and deploys the site according to its path filters.
 
 The version is advanced only after merge, so parallel feature branches do not independently hard-code competing versions. Physical hardware validation remains separate from automated compilation and tests.
