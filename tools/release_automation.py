@@ -321,6 +321,14 @@ def prepare_push(event_path: str) -> int:
         state = load_state()
         processed = {int(value) for value in state["processed_prs"]}
         if number not in processed:
+            release_labels = [label.strip() for label in labels.split(",") if label.strip().startswith("release:")]
+            if not release_labels:
+                print(
+                    f"PR #{number} has no release label; skipping version metadata automation. "
+                    "Use an explicit release:* label when a version or changelog update is intended."
+                )
+                write_step_output(process="false")
+                return 0
             release_type = parse_release_type(
                 labels,
                 body,
