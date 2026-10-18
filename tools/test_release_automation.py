@@ -115,7 +115,11 @@ class FirstRunBootstrapTests(unittest.TestCase):
         self.assertIn("fetch-depth: 0", publish_workflow)
         self.assertIn("previous_version", publish_workflow)
         self.assertIn("Firmware version is unchanged", publish_workflow)
+        self.assertIn('publish=false', publish_workflow)
+        self.assertIn('if [[ "$version" == "$previous_version" ]]', publish_workflow)
         self.assertIn("steps.version.outputs.publish == 'true'", publish_workflow)
+        self.assertIn("A newer firmware source is already on main; skipping this older release.", publish_workflow)
+        self.assertIn("github.event.workflow_run.event == 'workflow_dispatch' && github.event.workflow_run.actor.login == 'github-actions[bot]'", publish_workflow)
 
         build_workflow = (
             Path(__file__).resolve().parents[1]
