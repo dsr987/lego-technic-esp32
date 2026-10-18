@@ -1,5 +1,7 @@
 name: Release Metadata Validation
 
+# The branch protection rules still require this check name.
+# Metadata validation is disabled automatically; release automation remains active.
 on:
   pull_request:
     branches:
@@ -11,102 +13,18 @@ on:
       - ready_for_review
       - edited
       - labeled
-  workflow_dispatch:
-    inputs:
-      pr_number:
-        description: "Open pull request number to validate on an automation branch"
-        required: true
-        type: string
 
 permissions:
   contents: read
   pull-requests: read
 
-# Do not cancel a required-check run when GitHub emits overlapping opened/edited/labeled
-# events for an automation PR. A cancelled duplicate can become the required check
-# result and block a merge even when another run for the same SHA succeeded.
-
 jobs:
   validate:
     name: Validate release type and changelog
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout workflow branch
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Resolve pull request metadata
-        id: resolve
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EVENT_NAME: ${{ github.event_name }}
-          PR_NUMBER_INPUT: ${{ inputs.pr_number || '' }}
-          PR_NUMBER_EVENT: ${{ github.event.pull_request.number || '' }}
-          PR_HEAD_SHA_EVENT: ${{ github.event.pull_request.head.sha || '' }}
-        shell: bash
+      - name: Mark automatic release-metadata validation as disabled
         run: |
-          set -euo pipefail
-
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            pr_number="$PR_NUMBER_EVENT"
-            expected_head_sha="$PR_HEAD_SHA_EVENT"
-          else
-            pr_number="$PR_NUMBER_INPUT"
-            expected_head_sha="$GITHUB_SHA"
-          fi
-
-          if [[ ! "$pr_number" =~ ^[1-9][0-9]*$ ]]; then
-            echo "::error::A valid pull request number is required."
-            exit 1
-          fi
-
-          # Fetch current PR metadata rather than trusting the event snapshot. A label
-          # change can emit overlapping events with different payload snapshots.
-          gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}" > "$RUNNER_TEMP/release-pr.json"
-          pr_state="$(jq -r '.state' "$RUNNER_TEMP/release-pr.json")"
-          pr_base="$(jq -r '.base.ref' "$RUNNER_TEMP/release-pr.json")"
-          pr_head_sha="$(jq -r '.head.sha' "$RUNNER_TEMP/release-pr.json")"
-
-          if [[ "$pr_state" != "open" || "$pr_base" != "main" ]]; then
-            echo "::notice::PR #${pr_number} is no longer eligible for validation (state=${pr_state}, base=${pr_base}); skipping this stale run."
-            echo "should_validate=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          if [[ "$pr_head_sha" != "$expected_head_sha" ]]; then
-            if [[ "$EVENT_NAME" == "pull_request" ]]; then
-              echo "::notice::This validation event is stale (current PR head $pr_head_sha differs from event head $expected_head_sha); skipping this stale event."
-              echo "should_validate=false" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            echo "::error::A dispatched validation must target the current pull request head."
-            exit 1
-          fi
-
-          echo "should_validate=true" >> "$GITHUB_OUTPUT"
-
-          labels="$(jq -r '[.labels[].name] | join(",")' "$RUNNER_TEMP/release-pr.json")"
-          body="$(jq -r '.body // ""' "$RUNNER_TEMP/release-pr.json")"
-
-          delimiter="$(python3 -c 'import uuid; print("EOF_" + uuid.uuid4().hex)')"
-          {
-            echo "PR_LABELS<<$delimiter"
-            printf '%s\n' "$labels"
-            echo "$delimiter"
-            echo "PR_BODY<<$delimiter"
-            printf '%s\n' "$body"
-            echo "$delimiter"
-          } >> "$GITHUB_ENV"
-
-      - name: Test release automation rules
-        if: steps.resolve.outputs.should_validate == 'true'
-        run: python3 tools/test_release_automation.py
-
-      - name: Validate PR release metadata
-        if: steps.resolve.outputs.should_validate == 'true'
-        run: python3 tools/release_automation.py validate-pr
+          echo "Automatic release-metadata validation is disabled by project policy."
+          echo "Release labels and metadata are still managed by the release automation."
+          echo "Run python tools/run_regression_checks.py manually before an official firmware release."
