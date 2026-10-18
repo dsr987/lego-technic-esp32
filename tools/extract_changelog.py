@@ -104,7 +104,18 @@ def update_changelog(md_file, version, entries):
             for line in section_text.splitlines()
             if line.strip().startswith("- ")
         }
-        missing_entries = [line for line in entry_lines if line not in existing_entries]
+        existing_pr_refs = set(re.findall(r"\[PR #([0-9]+)\]", section_text))
+        missing_entries = []
+        for line in entry_lines:
+            if line in existing_entries:
+                continue
+            incoming_pr_refs = set(re.findall(r"\[PR #([0-9]+)\]", line))
+            # CHANGELOG.md may contain expanded notes for a PR while app.cpp
+            # contains only that PR's compact summary. Do not append a second,
+            # less detailed summary when that PR is already represented.
+            if incoming_pr_refs and incoming_pr_refs.issubset(existing_pr_refs):
+                continue
+            missing_entries.append(line)
 
         if not missing_entries:
             print(f"OK: Version {version} already contains all changelog entries; no changes.")
@@ -159,7 +170,7 @@ def update_changelog(md_file, version, entries):
 
         content = content[:section_start] + section_text + content[section_end:]
         path.write_text(content, encoding="utf-8", newline="\n")
-        print(f"OK: Updated CHANGELOG version {version} with {len(missing_entries)} new entr(y/ies).")
+        print(f"OK: Updated CHANGELOG version {version} with {len(missing_entries)} new changelog entries.")
         return
 
     section = (
