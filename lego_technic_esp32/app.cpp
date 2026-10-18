@@ -198,6 +198,10 @@ void setup() {
 
   // 5. Инициализация OLED-дисплея.
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+  // Ограничиваем ожидание одной I²C-транзакции, чтобы отказ шины не мог
+  // надолго заблокировать цикл или асинхронный обработчик управления.
+  // Это ограничивает время ожидания, но не подтверждает доставку команд моторам.
+  Wire.setTimeOut(20);
   oledAvailable = display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
   motorBoardReady = i2cMotorBackendBegin(Wire);
 
