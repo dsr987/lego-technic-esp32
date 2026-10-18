@@ -6,6 +6,7 @@
 #include "web_control.h"
 #include "steering_control.h"
 #include "preferences_manager.h"
+#include "i2c_motor_backend.h"
 
 // ---------- Состояние, объявленное в app.cpp ----------
 
@@ -41,6 +42,14 @@ void handleWsMessage(uint8_t *data, size_t len) {
   StaticJsonDocument<256> doc;
 
   if (deserializeJson(doc, data, len) != DeserializationError::Ok) {
+    return;
+  }
+
+  // После отказа I²C не принимаем новые команды и heartbeat: иначе браузер
+  // продолжит поддерживать логическую активность при недоступном backend.
+  // stopAll() сбрасывает программные команды; физический стоп не гарантируется.
+  if (!i2cMotorBackendIsReady()) {
+    stopAll();
     return;
   }
 
