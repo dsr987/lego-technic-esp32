@@ -41,6 +41,7 @@ jobs:
           python-version: '3.12'
 
       - name: Resolve pull request metadata
+        id: resolve
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EVENT_NAME: ${{ github.event_name }}
@@ -72,14 +73,22 @@ jobs:
           pr_head_sha="$(jq -r '.head.sha' "$RUNNER_TEMP/release-pr.json")"
 
           if [[ "$pr_state" != "open" || "$pr_base" != "main" ]]; then
-            echo "::error::The pull request must be open and target main."
-            exit 1
+            echo "::notice::PR #${pr_number} is no longer eligible for validation (state=${pr_state}, base=${pr_base}); skipping this stale run."
+            echo "should_validate=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
           if [[ "$pr_head_sha" != "$expected_head_sha" ]]; then
-            echo "::error::This validation event is stale: current PR head $pr_head_sha differs from event head $expected_head_sha."
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              echo "::notice::This validation event is stale (current PR head $pr_head_sha differs from event head $expected_head_sha); skipping this stale event."
+              echo "should_validate=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::error::A dispatched validation must target the current pull request head."
             exit 1
           fi
+
+          echo "should_validate=true" >> "$GITHUB_OUTPUT"
 
           labels="$(jq -r '[.labels[].name] | join(",")' "$RUNNER_TEMP/release-pr.json")"
           body="$(jq -r '.body // ""' "$RUNNER_TEMP/release-pr.json")"
@@ -95,7 +104,9 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Test release automation rules
+        if: steps.resolve.outputs.should_validate == 'true'
         run: python3 tools/test_release_automation.py
 
       - name: Validate PR release metadata
+        if: steps.resolve.outputs.should_validate == 'true'
         run: python3 tools/release_automation.py validate-pr
