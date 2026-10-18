@@ -112,7 +112,7 @@ jobs:
           python3 tools/extract_changelog.py lego_technic_esp32/app.cpp CHANGELOG.md
           python3 tools/update_readme_version.py
 
-      - name: Create or update checked metadata PR
+      - name: Create or update release metadata PR
         id: metadata_pr
         if: ${{ steps.resolve.outputs.process == 'true' && steps.update.outputs.changed == 'true' }}
         env:
@@ -155,8 +155,8 @@ jobs:
           ## Changelog
           - Synchronize version metadata and generated project files for source PR #${RELEASE_SOURCE_PR}.
 
-          ## Validation
-          - Firmware build, static audit and release metadata validation are dispatched against this PR before merge.
+          ## Regression checks
+          - Full regression checks are run manually with `python tools/run_regression_checks.py` before an official firmware release.
           EOF
           )"
             gh pr create \
@@ -179,7 +179,7 @@ jobs:
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "Created or updated metadata PR #$bot_pr for source PR #${RELEASE_SOURCE_PR}."
 
-      - name: Run required checks and merge metadata PR
+      - name: Wait for required PR statuses and merge metadata PR
         if: ${{ steps.metadata_pr.outputs.changed == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}

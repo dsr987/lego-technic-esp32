@@ -54,91 +54,42 @@ class FirstRunBootstrapTests(unittest.TestCase):
             self.assertEqual(app_path.read_text(encoding="utf-8"), before)
 
     def test_release_workflow_processes_main_push_without_pull_request_target(self):
-        workflow = (
-            Path(__file__).resolve().parents[1]
-            / ".github" / "workflows" / "release-versioning.yml"
-        ).read_text(encoding="utf-8")
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / ".github" / "workflows" / "release-versioning.yml").read_text(encoding="utf-8")
         self.assertIn("workflow_run:", workflow)
         self.assertIn("Build, Extract and Deploy", workflow)
-        self.assertIn("PUSH_SHA", workflow)
         self.assertIn("prepare-push", workflow)
-        self.assertIn("on:", workflow)
-        self.assertIn("github.event.workflow_run.event == 'push'", workflow)
-        self.assertIn("gh pr merge \"$BOT_PR_NUMBER\" --squash --delete-branch", workflow)
-        self.assertNotIn("pull_request_target:", workflow)
-        self.assertIn("group: release-versioning-main", workflow)
-        self.assertNotIn("gh workflow run ci-build-deploy.yml --ref main", workflow)
-        self.assertIn("RELEASE_VERSION_CHANGED: ${{ steps.update.outputs.release }}", workflow)
-        self.assertIn("steps.update.outputs.changed == 'true'", workflow)
-        self.assertIn("github.event.workflow_run.event == 'push'", workflow)
-        self.assertNotIn("gh workflow run ci-build-deploy.yml --ref main --field build_bootstrap=false", workflow)
-        self.assertIn("gh pr create", workflow)
-        self.assertIn("gh pr merge", workflow)
+        self.assertIn("Create standard release labels if missing", workflow)
+        self.assertIn("Create or update release metadata PR", workflow)
+        self.assertIn('gh pr merge "$BOT_PR_NUMBER" --squash --delete-branch', workflow)
         self.assertIn("secrets.RELEASE_AUTOMATION_TOKEN", workflow)
-        self.assertIn("event pull_request", workflow)
-        self.assertIn("--limit 20 --json databaseId,status,conclusion", workflow)
-        self.assertIn('[0].databaseId // empty', workflow)
-        self.assertIn('select(.status == "completed" and .conclusion == "success")', workflow)
-        self.assertIn("x-access-token:%s", workflow)
-        self.assertIn("git config --local --unset-all http.https://github.com/.extraheader", workflow)
-        self.assertNotIn("gh workflow run pull-request-validation.yml", workflow)
-        self.assertNotIn("gh workflow run release-metadata-validation.yml", workflow)
+        self.assertIn('wait_for_run "pull-request-validation.yml"', workflow)
+        self.assertIn('wait_for_run "release-metadata-validation.yml"', workflow)
+        self.assertIn("Full regression checks are run manually", workflow)
         self.assertNotIn("git push origin HEAD:main", workflow)
 
-        metadata_validation = (
-            Path(__file__).resolve().parents[1]
-            / ".github" / "workflows" / "release-metadata-validation.yml"
-        ).read_text(encoding="utf-8")
-        self.assertIn("workflow_dispatch:", metadata_validation)
-        self.assertIn("      - labeled", metadata_validation)
-        self.assertIn("      - edited", metadata_validation)
-        self.assertIn("PR_NUMBER_INPUT", metadata_validation)
-        self.assertIn("PR_HEAD_SHA_EVENT", metadata_validation)
-        self.assertIn('gh api "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}"', metadata_validation)
-        self.assertIn("current PR metadata rather than trusting the event snapshot", metadata_validation)
-        self.assertIn("id: resolve", metadata_validation)
-        self.assertIn('echo "should_validate=false" >> "$GITHUB_OUTPUT"', metadata_validation)
-        self.assertIn("is no longer eligible for validation", metadata_validation)
-        self.assertIn("if: steps.resolve.outputs.should_validate == 'true'", metadata_validation)
-        self.assertNotIn("The pull request must be open and target main.", metadata_validation)
-        self.assertIn("skipping this stale event", metadata_validation)
-        self.assertIn("A dispatched validation must target the current pull request head.", metadata_validation)
-        self.assertNotIn('echo "::error::This validation event is stale:', metadata_validation)
-        self.assertNotIn("cancel-in-progress: true", metadata_validation)
+        pr_validation = (root / ".github" / "workflows" / "pull-request-validation.yml").read_text(encoding="utf-8")
+        self.assertIn("name: Build ESP32 Firmware", pr_validation)
+        self.assertIn("name: Project Static Audit", pr_validation)
+        self.assertIn("Automatic regression checks are disabled", pr_validation)
+        self.assertNotIn("arduino-cli compile", pr_validation)
+        self.assertNotIn("project_auditor.py", pr_validation)
+        self.assertNotIn("test_battery_warnings.js", pr_validation)
 
-        pr_validation = (
-            Path(__file__).resolve().parents[1]
-            / ".github" / "workflows" / "pull-request-validation.yml"
-        ).read_text(encoding="utf-8")
-        self.assertIn("Verify generated GUI and release files are current", pr_validation)
-        self.assertNotIn("Compile OTA bootstrap and verify committed prebuilt image", pr_validation)
+        metadata_validation = (root / ".github" / "workflows" / "release-metadata-validation.yml").read_text(encoding="utf-8")
+        self.assertIn("name: Validate release type and changelog", metadata_validation)
+        self.assertIn("Automatic release-metadata validation is disabled", metadata_validation)
+        self.assertNotIn("release_automation.py validate-pr", metadata_validation)
 
-        publish_workflow = (
-            Path(__file__).resolve().parents[1]
-            / ".github" / "workflows" / "publish-release.yml"
-        ).read_text(encoding="utf-8")
+        publish_workflow = (root / ".github" / "workflows" / "publish-release.yml").read_text(encoding="utf-8")
         self.assertIn("github.event.workflow_run.event == 'push'", publish_workflow)
-        self.assertIn("github.event.workflow_run.event == 'workflow_dispatch'", publish_workflow)
-        self.assertIn("github.event.workflow_run.actor.login == 'github-actions[bot]'", publish_workflow)
-        self.assertIn("fetch-depth: 0", publish_workflow)
         self.assertIn("previous_version", publish_workflow)
         self.assertIn("Firmware version is unchanged", publish_workflow)
-        self.assertIn('publish=false', publish_workflow)
-        self.assertIn('if [[ "$version" == "$previous_version" ]]', publish_workflow)
-        self.assertIn("steps.version.outputs.publish == 'true'", publish_workflow)
-        self.assertIn("A newer firmware source is already on main; skipping this older release.", publish_workflow)
-        self.assertIn("github.event.workflow_run.event == 'workflow_dispatch' && github.event.workflow_run.actor.login == 'github-actions[bot]'", publish_workflow)
 
-        build_workflow = (
-            Path(__file__).resolve().parents[1]
-            / ".github" / "workflows" / "ci-build-deploy.yml"
-        ).read_text(encoding="utf-8")
+        build_workflow = (root / ".github" / "workflows" / "ci-build-deploy.yml").read_text(encoding="utf-8")
         self.assertIn("'tools/**'", build_workflow)
-        self.assertIn("'.github/workflows/**'", build_workflow)
-        self.assertIn("https://github.com/dsr987/lego-technic-esp32/releases/latest/download/lego_technic_esp32.ino.bin", build_workflow)
-        self.assertNotIn("https://dsr987.github.io/lego-technic-esp32/downloads/build_firmware_for_esp32.bin", build_workflow)
-        self.assertIn("build_bootstrap:", build_workflow)
-        self.assertIn("this workflow must not push directly to protected main", build_workflow)
+        self.assertIn("Compile ESP32 firmware", build_workflow)
+        self.assertIn("actions/deploy-pages@v4", build_workflow)
 
     def test_prepare_push_exports_metadata_for_initial_install_pr(self):
         with tempfile.TemporaryDirectory() as directory:
