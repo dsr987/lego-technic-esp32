@@ -5,7 +5,6 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 from datetime import date
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -13,11 +12,11 @@ import extract_changelog as changelog  # noqa: E402
 
 
 class UpdateChangelogTests(unittest.TestCase):
-    def write_and_update(self, initial, entries):
+    def write_and_update(self, initial, entries, version="0.9.1"):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "CHANGELOG.md"
             path.write_text(initial, encoding="utf-8")
-            changelog.update_changelog(str(path), "0.9.1", entries)
+            changelog.update_changelog(str(path), version, entries)
             return path.read_text(encoding="utf-8")
 
     def test_appends_new_entries_to_existing_version_and_preserves_old_ones(self):
