@@ -38,9 +38,24 @@ LIBRARIES = (
 )
 
 
-def run(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+def run(
+    *args: str,
+    check: bool = True,
+    capture_output: bool = False,
+) -> subprocess.CompletedProcess[str]:
     print("\n[RUN] " + " ".join(args), flush=True)
-    return subprocess.run(args, cwd=ROOT, text=True, check=check)
+    result = subprocess.run(
+        args,
+        cwd=ROOT,
+        text=True,
+        check=check,
+        capture_output=capture_output,
+    )
+    if capture_output and result.stdout:
+        print(result.stdout, end="")
+    if capture_output and result.stderr:
+        print(result.stderr, end="", file=sys.stderr)
+    return result
 
 
 def require_tool(name: str) -> None:
@@ -49,7 +64,7 @@ def require_tool(name: str) -> None:
 
 
 def require_clean_tree() -> None:
-    result = run("git", "status", "--porcelain", check=True)
+    result = run("git", "status", "--porcelain", check=True, capture_output=True)
     if result.stdout.strip():
         raise RuntimeError(
             "The working tree must be clean before regression checks. "
@@ -99,14 +114,21 @@ def check_generated_files() -> None:
 
 def install_and_compile_firmware() -> None:
     require_tool("arduino-cli")
-    run("arduino-cli", "config", "init", "--overwrite")
-    run("arduino-cli", "config", "add", "board_manager.additional_urls", ESP32_INDEX)
-    run("arduino-cli", "core", "update-index")
-    run("arduino-cli", "core", "install", "esp32:esp32@2.0.9")
-    run("arduino-cli", "lib", "install", *LIBRARIES)
-    with tempfile.TemporaryDirectory(prefix="lego-technic-esp32-regression-") as build_dir:
+    with tempfile.TemporaryDirectory(prefix="lego-technic-esp32-regression-") as temp_dir:
+        temp_path = Path(temp_dir)
+        config_file = str(temp_path / "arduino-cli.yaml")
+        build_dir = str(temp_path / "build")
+
+        # Use a temporary CLI config instead of overwriting the user's global config.
+        run("arduino-cli", "--config-file", config_file, "config", "init", "--overwrite")
+        run("arduino-cli", "--config-file", config_file, "config", "add", "board_manager.additional_urls", ESP32_INDEX)
+        run("arduino-cli", "--config-file", config_file, "core", "update-index")
+        run("arduino-cli", "--config-file", config_file, "core", "install", "esp32:esp32@2.0.9")
+        run("arduino-cli", "--config-file", config_file, "lib", "install", *LIBRARIES)
         run(
             "arduino-cli",
+            "--config-file",
+            config_file,
             "compile",
             "--fqbn",
             "esp32:esp32:esp32",
