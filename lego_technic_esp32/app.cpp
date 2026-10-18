@@ -288,6 +288,16 @@ void recordSafetyTimeout() {
 
 void loop() {
 
+  // Отказ моторного I²C-backend нельзя оставлять зависимым от heartbeat:
+  // браузер может продолжать слать heartbeat даже после потери управления моторами.
+  // Сбрасываем логическое состояние и сервокоманду; физическая остановка моторов
+  // при отказавшей шине этим не гарантируется.
+  if (!i2cMotorBackendIsReady() &&
+      (motorAVal != 0 || motorBVal != 0 || motorCVal != 0 || motorDVal != 0 ||
+       servoVal != 0 || engineSimOn)) {
+    stopAll();
+  }
+
   // Аварийная остановка при отсутствии команд управления.
   if (millis() - lastCmdMillis > CMD_TIMEOUT_MS) {
     if (motorAVal != 0 ||
