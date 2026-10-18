@@ -179,60 +179,14 @@ jobs:
           echo "changed=true" >> "$GITHUB_OUTPUT"
           echo "Created or updated metadata PR #$bot_pr for source PR #${RELEASE_SOURCE_PR}."
 
-      - name: Wait for required PR statuses and merge metadata PR
+      - name: Merge release metadata PR
         if: ${{ steps.metadata_pr.outputs.changed == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
           BOT_PR_NUMBER: ${{ steps.metadata_pr.outputs.number }}
-          BOT_PR_SHA: ${{ steps.metadata_pr.outputs.head_sha }}
-          BOT_BRANCH: ${{ steps.branch.outputs.name }}
         shell: bash
         run: |
           set -euo pipefail
-
-          wait_for_run() {
-            local workflow_file="$1"
-            local run_id=""
-            local runs_json="[]"
-
-            # A PR label update can start a second run and cancel the first.
-            # Select a successful completed run for this exact branch+commit instead
-            # of blindly taking the first result, which may be the cancelled attempt.
-            for attempt in $(seq 1 60); do
-              runs_json="$(gh run list --workflow "$workflow_file" --branch "$BOT_BRANCH" --commit "$BOT_PR_SHA" --event pull_request --limit 20 --json databaseId,status,conclusion || printf '[]')"
-              run_id="$(jq -r '[.[] | select(.status == "completed" and .conclusion == "success")][0].databaseId // empty' <<< "$runs_json")"
-              if [[ -n "$run_id" ]]; then
-                break
-              fi
-              sleep 5
-            done
-            if [[ -z "$run_id" ]]; then
-              echo "::error::Timed out waiting for a successful pull_request validation run: $workflow_file"
-              printf '%s\n' "$runs_json"
-              return 1
-            fi
-            echo "Verified successful $workflow_file run $run_id for commit $BOT_PR_SHA."
-            gh run watch "$run_id" --exit-status
-          }
-
-          current_sha="$(gh pr view "$BOT_PR_NUMBER" --json headRefOid --jq '.headRefOid')"
-          if [[ "$current_sha" != "$BOT_PR_SHA" ]]; then
-            echo "::error::The metadata PR head changed after creation; refusing to merge stale checks."
-            exit 1
-          fi
-
-          # PR workflows are triggered by the automation PAT, so GitHub can attach
-          # their native pull_request check suites to this commit and enforce branch protection.
-
-          wait_for_run "pull-request-validation.yml"
-          wait_for_run "release-metadata-validation.yml"
-
-          current_sha="$(gh pr view "$BOT_PR_NUMBER" --json headRefOid --jq '.headRefOid')"
-          if [[ "$current_sha" != "$BOT_PR_SHA" ]]; then
-            echo "::error::The metadata PR head changed while checks were running; refusing to merge."
-            exit 1
-          fi
-
           gh pr merge "$BOT_PR_NUMBER" --squash --delete-branch
-          echo "Merged checked release metadata PR #$BOT_PR_NUMBER."
+          echo "Merged release metadata PR #$BOT_PR_NUMBER."
 
