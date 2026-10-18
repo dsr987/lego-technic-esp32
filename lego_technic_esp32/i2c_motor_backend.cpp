@@ -217,7 +217,19 @@ bool i2cMotorBackendBegin(TwoWire &wire) {
 }
 
 bool i2cMotorBackendIsReady() {
-  return backendReady;
+  BackendLock lock;
+  return lock.acquired() && backendReady;
+}
+
+bool i2cMotorBackendLockSharedI2c(uint32_t timeoutMs) {
+  return backendMutex != nullptr &&
+         xSemaphoreTake(backendMutex, pdMS_TO_TICKS(timeoutMs)) == pdTRUE;
+}
+
+void i2cMotorBackendUnlockSharedI2c() {
+  if (backendMutex != nullptr) {
+    xSemaphoreGive(backendMutex);
+  }
 }
 
 bool i2cMotorBackendSetMotor(I2CMotorChannel channel, int speedPercent) {

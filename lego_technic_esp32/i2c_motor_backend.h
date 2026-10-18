@@ -18,6 +18,11 @@ bool i2cMotorBackendBegin(TwoWire &wire = Wire);
 // Это состояние инициализации ПО, а не гарантия постоянной доступности I2C.
 bool i2cMotorBackendIsReady();
 
+// Общая блокировка Wire для дисплея и моторного backend.
+// Вызывать вокруг операций, которые физически обращаются к I²C.
+bool i2cMotorBackendLockSharedI2c(uint32_t timeoutMs = 250);
+void i2cMotorBackendUnlockSharedI2c();
+
 // Задаёт подписанную скорость в диапазоне -100..100.
 // Возвращает false, если backend не инициализирован или канал некорректен.
 // Arduino-библиотека не отдаёт статус каждой I2C-записи, поэтому true не

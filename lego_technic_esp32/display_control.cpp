@@ -9,17 +9,26 @@
 #include "battery_monitor.h"
 #include "display_control.h"
 #include "display_assets.h"
+#include "i2c_motor_backend.h"
 
 // Дисплей, WebSocket и признак успешной инициализации объявлены в app.cpp.
 extern Adafruit_SSD1306 display;
 extern AsyncWebSocket ws;
 extern bool oledAvailable;
-extern bool motorBoardReady;
 
 // Режим работы объявлен в app.cpp.
 extern Mode currentMode;
 
 // Состояние загрузочной анимации.
+// OLED и моторный контроллер используют один объект Wire. Асинхронный
+// WebSocket может управлять моторами из другой задачи, поэтому обновление
+// экрана должно сериализоваться с транзакциями PCA9685.
+static void flushDisplayOnSharedI2c() {
+  if (!i2cMotorBackendLockSharedI2c()) return;
+  display.display();
+  i2cMotorBackendUnlockSharedI2c();
+}
+
 static bool startupAnimationActive = false;
 static unsigned long startupAnimationStartedAt = 0;
 static int lastStartupDotCount = 0;
@@ -139,7 +148,7 @@ void showBootLogo() {
     OLED_BOOT_HEIGHT,
     SSD1306_WHITE
   );
-  display.display();
+  flushDisplayOnSharedI2c();
 }
 
 void showInitialisingScreen() {
@@ -151,7 +160,7 @@ void showInitialisingScreen() {
   display.setTextWrap(false);
   display.setCursor(19, 28);
   display.print("Initialising");
-  display.display();
+  flushDisplayOnSharedI2c();
 }
 
 void startDisplayStartupAnimation() {
@@ -183,7 +192,7 @@ bool updateDisplayStartup() {
     for (int i = 0; i < dotCount; i++) {
       display.print('.');
     }
-    display.display();
+    flushDisplayOnSharedI2c();
     lastStartupDotCount = dotCount;
   }
 
@@ -249,18 +258,18 @@ void updateDisplay() {
   // При подтверждённом низком заряде заменяем панель состояния предупреждением.
   if (lowBattCount >= 3) {
     drawLowBatteryScreen();
-    display.display();
+    flushDisplayOnSharedI2c();
     return;
   }
 
-  // Не скрываем ошибку инициализации моторной платы за обычным экраном состояния.
-  if (!motorBoardReady) {
+  // Не скрываем ошибку инициализации или последующий отказ I²C-моторов.
+  if (!i2cMotorBackendIsReady()) {
     display.setTextSize(2);
     display.setCursor(0, 10);
     display.print("MOTOR");
     display.setCursor(0, 32);
     display.print("I2C ERR");
-    display.display();
+    flushDisplayOnSharedI2c();
     return;
   }
 
@@ -290,5 +299,5 @@ void updateDisplay() {
   snprintf(clientText, sizeof(clientText), "clients: %u", static_cast<unsigned int>(ws.count()));
   drawCompactText(78, 53, clientText);
 
-  display.display();
+  flushDisplayOnSharedI2c();
 }
