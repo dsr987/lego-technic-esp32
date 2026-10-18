@@ -80,15 +80,19 @@ def update_changelog(md_file, version, entries):
         r"^##\s+" + re.escape(version) + r"\s*[—-]",
         re.MULTILINE,
     )
-
     version_match = version_pattern.search(content)
     entry_lines = list(dict.fromkeys(
         line.strip() for line in entries.splitlines() if line.strip().startswith("- ")
     ))
+    entry_text = "\n".join(entry_lines)
 
     if version_match:
         section_start = version_match.start()
-        next_heading = re.search(r"^##\\s+", content[version_match.end():], re.MULTILINE)
+        next_heading = re.search(
+            r"^##\s+",
+            content[version_match.end():],
+            re.MULTILINE,
+        )
         section_end = (
             version_match.end() + next_heading.start()
             if next_heading
@@ -106,19 +110,19 @@ def update_changelog(md_file, version, entries):
             print(f"OK: Version {version} already contains all changelog entries; no changes.")
             return
 
-        section_heading = re.search(r"^##\\s+[^\\n]+", section_text, re.MULTILINE)
+        section_heading = re.search(r"^##\s+[^\n]+", section_text, re.MULTILINE)
         if section_heading is None:
             raise SystemExit(f"ERROR: Could not locate heading for version {version}")
 
         changed_heading = re.search(
-            r"^###\\s+Изменено\\s*$",
+            r"^###\s+Изменено\s*$",
             section_text[section_heading.end():],
             re.MULTILINE,
         )
         if changed_heading:
             subsection_start = section_heading.end() + changed_heading.end()
             next_subsection = re.search(
-                r"^###\\s+",
+                r"^###\s+",
                 section_text[subsection_start:],
                 re.MULTILINE,
             )
@@ -128,12 +132,12 @@ def update_changelog(md_file, version, entries):
                 else len(section_text)
             )
             existing_block = section_text[subsection_start:subsection_end].rstrip()
-            suffix = section_text[subsection_end:].lstrip("\\n")
+            suffix = section_text[subsection_end:].lstrip("\n")
             updated_block = (
                 existing_block
-                + ("\\n" if existing_block else "")
-                + "\\n".join(missing_entries)
-                + "\\n\\n"
+                + ("\n" if existing_block else "")
+                + "\n".join(missing_entries)
+                + "\n\n"
             )
             section_text = (
                 section_text[:subsection_start]
@@ -143,21 +147,25 @@ def update_changelog(md_file, version, entries):
         else:
             insert_at = section_heading.end()
             added_section = (
-                "\\n### Изменено\\n"
-                + "\\n".join(missing_entries)
-                + "\\n\\n"
+                "\n### Изменено\n"
+                + "\n".join(missing_entries)
+                + "\n\n"
             )
-            section_text = section_text[:insert_at] + added_section + section_text[insert_at:].lstrip("\\n")
+            section_text = (
+                section_text[:insert_at]
+                + added_section
+                + section_text[insert_at:].lstrip("\n")
+            )
 
         content = content[:section_start] + section_text + content[section_end:]
-        path.write_text(content, encoding="utf-8", newline="\\n")
+        path.write_text(content, encoding="utf-8", newline="\n")
         print(f"OK: Updated CHANGELOG version {version} with {len(missing_entries)} new entr(y/ies).")
         return
 
     section = (
-        f"## {version} — {date.today().isoformat()}\\n"
-        f"### Изменено\\n"
-        f"{'\\n'.join(entry_lines)}\\n\\n"
+        f"## {version} — {date.today().isoformat()}\n"
+        f"### Изменено\n"
+        f"{entry_text}\n\n"
     )
 
     heading = re.search(r"^# .+$", content, re.MULTILINE)
