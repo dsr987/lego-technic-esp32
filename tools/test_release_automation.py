@@ -69,18 +69,8 @@ class FirstRunBootstrapTests(unittest.TestCase):
         self.assertIn("Full regression checks are run manually", workflow)
         self.assertNotIn("git push origin HEAD:main", workflow)
 
-        pr_validation = (root / ".github" / "workflows" / "pull-request-validation.yml").read_text(encoding="utf-8")
-        self.assertIn("name: Build ESP32 Firmware", pr_validation)
-        self.assertIn("name: Project Static Audit", pr_validation)
-        self.assertIn("Automatic regression checks are disabled", pr_validation)
-        self.assertNotIn("arduino-cli compile", pr_validation)
-        self.assertNotIn("project_auditor.py", pr_validation)
-        self.assertNotIn("test_battery_warnings.js", pr_validation)
-
-        metadata_validation = (root / ".github" / "workflows" / "release-metadata-validation.yml").read_text(encoding="utf-8")
-        self.assertIn("name: Validate release type and changelog", metadata_validation)
-        self.assertIn("Automatic release-metadata validation is disabled", metadata_validation)
-        self.assertNotIn("release_automation.py validate-pr", metadata_validation)
+        self.assertFalse((root / ".github" / "workflows" / "pull-request-validation.yml").exists())
+        self.assertFalse((root / ".github" / "workflows" / "release-metadata-validation.yml").exists())
 
         publish_workflow = (root / ".github" / "workflows" / "publish-release.yml").read_text(encoding="utf-8")
         self.assertIn("github.event.workflow_run.event == 'push'", publish_workflow)
