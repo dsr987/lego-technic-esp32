@@ -1,5 +1,4 @@
 #include <Arduino.h>
-#include <Adafruit_MotorShield.h>
 #include <Wire.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
@@ -12,8 +11,25 @@ constexpr uint8_t I2C_MOTOR_WING_ADDRESS = 0x60;
 constexpr uint16_t MOTOR_PWM_FREQUENCY_HZ = 1600;
 constexpr uint8_t MOTOR_COUNT = 4;
 
-Adafruit_MotorShield shield(I2C_MOTOR_WING_ADDRESS);
-Adafruit_DCMotor *motors[MOTOR_COUNT] = {nullptr, nullptr, nullptr, nullptr};
+constexpr uint8_t PCA9685_MODE1 = 0x00;
+constexpr uint8_t PCA9685_PRESCALE = 0xFE;
+constexpr uint8_t PCA9685_LED0_ON_L = 0x06;
+
+struct MotorPins {
+  uint8_t pwm;
+  uint8_t in1;
+  uint8_t in2;
+};
+
+// Раскладка каналов повторяет Adafruit Motor Shield V2.
+constexpr MotorPins MOTOR_PINS[MOTOR_COUNT] = {
+  {8, 10, 9},  // M1
+  {13, 11, 12}, // M2
+  {2, 4, 3},   // M3
+  {7, 5, 6}    // M4
+};
+
+TwoWire *motorWire = &Wire;
 int8_t lastDirection[MOTOR_COUNT] = {0, 0, 0, 0};
 bool backendReady = false;
 SemaphoreHandle_t backendMutex = nullptr;
@@ -38,12 +54,139 @@ class BackendLock {
   bool acquired_;
 };
 
+// Любая ошибка транзакции защёлкивает отказ: обычные команды и повторные
+// записи не выполняются до перезапуска устройства. Это не аппаратный стоп.
+bool writeRegister(uint8_t reg, uint8_t value) {
+  if (motorWire == nullptr) {
+    backendReady = false;
+    return false;
+  }
+
+  motorWire->beginTransmission(I2C_MOTOR_WING_ADDRESS);
+  const uint8_t regWritten = motorWire->write(reg);
+  const uint8_t valueWritten = motorWire->write(value);
+  const uint8_t status = motorWire->endTransmission();
+
+  if (regWritten != 1 || valueWritten != 1 || status != 0) {
+    backendReady = false;
+    return false;
+  }
+
+  return true;
+}
+
+bool readRegister(uint8_t reg, uint8_t &value) {
+  if (motorWire == nullptr) {
+    backendReady = false;
+    return false;
+  }
+
+  motorWire->beginTransmission(I2C_MOTOR_WING_ADDRESS);
+  if (motorWire->write(reg) != 1 ||
+      motorWire->endTransmission(false) != 0) {
+    backendReady = false;
+    return false;
+  }
+
+  if (motorWire->requestFrom(I2C_MOTOR_WING_ADDRESS, static_cast<uint8_t>(1)) != 1 ||
+      motorWire->available() < 1) {
+    backendReady = false;
+    return false;
+  }
+
+  value = static_cast<uint8_t>(motorWire->read());
+  return true;
+}
+
+// PCA9685 PWM-регистр: ON=0, OFF=value. Значение 4096 означает полный ON.
+bool writePwm(uint8_t channel, uint16_t on, uint16_t off) {
+  if (channel > 15 || motorWire == nullptr) {
+    backendReady = false;
+    return false;
+  }
+
+  const uint8_t buffer[5] = {
+    static_cast<uint8_t>(PCA9685_LED0_ON_L + 4 * channel),
+    static_cast<uint8_t>(on & 0xFF),
+    static_cast<uint8_t>((on >> 8) & 0x1F),
+    static_cast<uint8_t>(off & 0xFF),
+    static_cast<uint8_t>((off >> 8) & 0x1F)
+  };
+
+  motorWire->beginTransmission(I2C_MOTOR_WING_ADDRESS);
+  const size_t written = motorWire->write(buffer, sizeof(buffer));
+  const uint8_t status = motorWire->endTransmission();
+
+  if (written != sizeof(buffer) || status != 0) {
+    backendReady = false;
+    return false;
+  }
+
+  return true;
+}
+
+bool setPin(uint8_t pin, bool high) {
+  return high ? writePwm(pin, 4096, 0) : writePwm(pin, 0, 0);
+}
+
+bool setMotorSpeed(uint8_t index, uint8_t speed) {
+  return writePwm(MOTOR_PINS[index].pwm, 0, static_cast<uint16_t>(speed) * 16U);
+}
+
+bool releaseMotor(uint8_t index) {
+  return setPin(MOTOR_PINS[index].in1, false) &&
+         setPin(MOTOR_PINS[index].in2, false);
+}
+
+bool setMotorDirection(uint8_t index, int8_t direction) {
+  const MotorPins &pins = MOTOR_PINS[index];
+
+  // Порядок повторяет Adafruit_DCMotor::run(): сначала неактивный вход,
+  // затем активный. При реверсе вызывающий код предварительно делает RELEASE.
+  if (direction > 0) {
+    return setPin(pins.in2, false) && setPin(pins.in1, true);
+  }
+  return setPin(pins.in1, false) && setPin(pins.in2, true);
+}
+
+bool initializePca9685() {
+  uint8_t oldMode = 0;
+  if (!readRegister(PCA9685_MODE1, oldMode)) {
+    return false;
+  }
+
+  const uint8_t sleepMode = static_cast<uint8_t>((oldMode & 0x7F) | 0x10);
+  const float adjustedFrequency = MOTOR_PWM_FREQUENCY_HZ * 0.9f;
+  const float prescaleValue =
+      25000000.0f / 4096.0f / adjustedFrequency - 1.0f;
+  const uint8_t prescale = static_cast<uint8_t>(prescaleValue + 0.5f);
+
+  if (!writeRegister(PCA9685_MODE1, sleepMode) ||
+      !writeRegister(PCA9685_PRESCALE, prescale) ||
+      !writeRegister(PCA9685_MODE1, oldMode)) {
+    return false;
+  }
+
+  delay(5);
+
+  if (!writeRegister(PCA9685_MODE1, static_cast<uint8_t>(oldMode | 0xA1))) {
+    return false;
+  }
+
+  // Как и Adafruit_MotorShield::begin(), выключаем все 16 выходов.
+  for (uint8_t channel = 0; channel < 16; ++channel) {
+    if (!writePwm(channel, 0, 0)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 } // namespace
 
 bool i2cMotorBackendBegin(TwoWire &wire) {
-  // Setup runs before WebSocket control starts. Create a mutex now so an
-  // async control callback and the loop watchdog cannot interleave a motor
-  // direction/PWM sequence with a stopAll() sequence.
+  // Инициализация выполняется до запуска WebSocket-управления.
   if (backendMutex == nullptr) {
     backendMutex = xSemaphoreCreateMutex();
   }
@@ -59,28 +202,14 @@ bool i2cMotorBackendBegin(TwoWire &wire) {
   }
 
   backendReady = false;
-
+  motorWire = &wire;
   for (uint8_t i = 0; i < MOTOR_COUNT; ++i) {
-    motors[i] = nullptr;
     lastDirection[i] = 0;
   }
 
-  // Adafruit_MotorShield::begin() checks for the PCA9685 and clears all
-  // PCA9685 outputs on success. The caller owns Wire.begin() and its pins.
-  if (!shield.begin(MOTOR_PWM_FREQUENCY_HZ, &wire)) {
+  if (!initializePca9685()) {
+    backendReady = false;
     return false;
-  }
-
-  // Library ports 1..4 are M1..M4. Do not pass zero-based indexes directly
-  // to getMotor(): the Adafruit API is one-based.
-  for (uint8_t i = 0; i < MOTOR_COUNT; ++i) {
-    motors[i] = shield.getMotor(static_cast<uint8_t>(i + 1));
-    if (motors[i] == nullptr) {
-      return false;
-    }
-
-    motors[i]->setSpeed(0);
-    motors[i]->run(RELEASE);
   }
 
   backendReady = true;
@@ -98,36 +227,39 @@ bool i2cMotorBackendSetMotor(I2CMotorChannel channel, int speedPercent) {
   }
 
   const uint8_t index = static_cast<uint8_t>(channel);
-  if (!backendReady || index >= MOTOR_COUNT || motors[index] == nullptr) {
+  if (!backendReady || index >= MOTOR_COUNT) {
     return false;
   }
 
   speedPercent = constrain(speedPercent, -100, 100);
-  Adafruit_DCMotor *motor = motors[index];
 
   if (speedPercent == 0) {
-    motor->setSpeed(0);
-    motor->run(RELEASE);
+    if (!setMotorSpeed(index, 0) || !releaseMotor(index)) {
+      return false;
+    }
     lastDirection[index] = 0;
     return true;
   }
 
   const int8_t direction = speedPercent > 0 ? 1 : -1;
 
-  // Remove drive before changing direction so the two direction inputs are
-  // not switched while the prior non-zero PWM command is still requested.
   if (lastDirection[index] != 0 && lastDirection[index] != direction) {
-    motor->setSpeed(0);
-    motor->run(RELEASE);
+    if (!setMotorSpeed(index, 0) || !releaseMotor(index)) {
+      return false;
+    }
   }
 
-  motor->run(direction > 0 ? FORWARD : BACKWARD);
+  if (!setMotorDirection(index, direction)) {
+    return false;
+  }
 
   const int magnitude = speedPercent > 0 ? speedPercent : -speedPercent;
   const uint8_t pwm = static_cast<uint8_t>((magnitude * 255 + 50) / 100);
-  motor->setSpeed(pwm);
-  lastDirection[index] = direction;
+  if (!setMotorSpeed(index, pwm)) {
+    return false;
+  }
 
+  lastDirection[index] = direction;
   return true;
 }
 
@@ -138,9 +270,10 @@ void i2cMotorBackendStopAll() {
   }
 
   for (uint8_t i = 0; i < MOTOR_COUNT; ++i) {
-    if (motors[i] != nullptr) {
-      motors[i]->setSpeed(0);
-      motors[i]->run(RELEASE);
+    if (!setMotorSpeed(i, 0) || !releaseMotor(i)) {
+      // Ошибка уже защёлкнула backendReady=false. Не отправляем новые
+      // команды по потенциально неисправной шине.
+      return;
     }
     lastDirection[i] = 0;
   }
