@@ -4,7 +4,7 @@ The release metadata process uses merged pull request labels and a changelog sum
 
 ## Required PR label
 
-Every pull request targeting main should have exactly one of these labels. After the existing Build, Extract and Deploy workflow completes successfully for a main push, release automation asks GitHub which merged PR is associated with that exact commit. This handles the first PR that installs the workflow and avoids the privileged pull_request_target event. The first installation PR creates missing labels. It does not change the firmware version. For this one-time PR, use the line Release type: release:none in its body. Until the first merged PR is recorded in state.json, the validator retains this explicit fallback; afterwards, a real release label is required.
+When a change is delivered through a PR, the PR targeting `main` should have exactly one recognized release label. After a successful `Build, Extract and Deploy` run for a push to `main`, `release-versioning.yml` resolves the merged PR associated with that commit and applies the release metadata. This is post-merge automation, not a separate pre-merge validation workflow. The current `main` does not contain `pull-request-validation.yml` or `release-metadata-validation.yml`; do not describe those files as active checks.
 
 | Label | Result while the project is in beta |
 | --- | --- |
