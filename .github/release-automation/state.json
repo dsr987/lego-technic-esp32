@@ -28,13 +28,14 @@
     54,
     56,
     58,
-    60
+    60,
+    63
   ],
   "release_prs": [
     10,
     11
   ],
-  "last_processed_pr": 60,
+  "last_processed_pr": 63,
   "last_release_type": "none",
   "last_version": "0.9.1"
 }
