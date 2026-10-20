@@ -17,7 +17,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
     def test_release_none_first_run_initializes_state_without_bumping_version(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            app_path = root / "app.cpp"
+            app_path = root / "lego_technic_esp32.ino"
             state_path = root / "state.json"
             output_path = root / "github-output"
             app_path.write_text(AppUpdateTests.SAMPLE_APP, encoding="utf-8")
@@ -33,7 +33,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
                 "GITHUB_OUTPUT": str(output_path),
                 "GITHUB_STEP_SUMMARY": "",
             }
-            with patch.object(release, "APP_CPP", app_path), \
+            with patch.object(release, "MAIN_SKETCH", app_path), \
                  patch.object(release, "STATE_PATH", state_path), \
                  patch.dict(os.environ, env, clear=False):
                 result = release.apply_release()
@@ -46,7 +46,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
             self.assertIn("release=false", output_path.read_text(encoding="utf-8"))
 
             # A retry after the state commit must not require the one-time body fallback.
-            with patch.object(release, "APP_CPP", app_path), \
+            with patch.object(release, "MAIN_SKETCH", app_path), \
                  patch.object(release, "STATE_PATH", state_path), \
                  patch.dict(os.environ, env, clear=False):
                 retry_result = release.apply_release()
@@ -118,7 +118,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
     def test_validate_pr_requires_changelog_for_release_none(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            app_path = root / "app.cpp"
+            app_path = root / "lego_technic_esp32.ino"
             state_path = root / "state.json"
             app_path.write_text(AppUpdateTests.SAMPLE_APP, encoding="utf-8")
             state_path.write_text(
@@ -135,7 +135,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
                 "PR_BODY": "No changelog section.",
                 "GITHUB_STEP_SUMMARY": "",
             }
-            with patch.object(release, "APP_CPP", app_path):
+            with patch.object(release, "MAIN_SKETCH", app_path):
                 with patch.object(release, "STATE_PATH", state_path):
                     with patch.dict(os.environ, env, clear=False):
                         result = release.validate_pr()
@@ -144,7 +144,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
     def test_apply_release_rejects_release_none_without_changelog(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            app_path = root / "app.cpp"
+            app_path = root / "lego_technic_esp32.ino"
             state_path = root / "state.json"
             output_path = root / "github-output"
             app_path.write_text(AppUpdateTests.SAMPLE_APP, encoding="utf-8")
@@ -165,7 +165,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
                 "GITHUB_OUTPUT": str(output_path),
                 "GITHUB_STEP_SUMMARY": "",
             }
-            with patch.object(release, "APP_CPP", app_path):
+            with patch.object(release, "MAIN_SKETCH", app_path):
                 with patch.object(release, "STATE_PATH", state_path):
                     with patch.dict(os.environ, env, clear=False):
                         result = release.apply_release()
