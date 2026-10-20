@@ -164,4 +164,4 @@ jobs:
             ${{ runner.temp }}/firmware-artifact/lego_technic_esp32.ino.bin
             ${{ runner.temp }}/firmware-artifact/lego_technic_esp32.ino.bin.sha256
           fail_on_unmatched_files: true
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_RELEASE_TOKEN || github.token }}
