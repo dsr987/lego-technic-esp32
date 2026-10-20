@@ -11,7 +11,7 @@
 | Презентация | [README](../README.md) |
 | Веб-интерфейс | [Демо GUI](https://dsr987.github.io/lego-technic-esp32/index.html?v=0.9.1) |
 | История версий | [CHANGELOG](../CHANGELOG.md) |
-| Главный код прошивки | [`lego_technic_esp32/lego_technic_esp32.ino`](../lego_technic_esp32/lego_technic_esp32.ino) |
+| Главный скетч и точка входа | [`lego_technic_esp32.ino`](../lego_technic_esp32/lego_technic_esp32.ino) |
 | HTML/CSS/JS интерфейса | [`web_page.cpp`](../lego_technic_esp32/web_page.cpp) |
 | Распиновка | [`hardware_config.h`](../lego_technic_esp32/hardware_config.h) |
 
@@ -100,7 +100,6 @@ ESP32-WROOM-32 создаёт собственную Wi-Fi точку досту
 | Файл | Ответственность |
 |---|---|
 | `lego_technic_esp32/lego_technic_esp32.ino` | Инициализация, основной цикл, состояние приложения, HTTP/WebSocket-сервер и координация модулей |
-| `lego_technic_esp32/lego_technic_esp32.ino` | Точка входа Arduino IDE |
 | `hardware_config.h` | Назначения GPIO и LEDC-каналов |
 | `motor_control.h/.cpp` | Управление DC-моторами, реверс, общий STBY и остановка |
 | `web_page.h/.cpp` | HTML, CSS и JavaScript веб-интерфейса |
@@ -413,7 +412,7 @@ python3 tools/calibrate_battery.py \
 Основной workflow выполняет операции в зависимости от события запуска и изменённых файлов:
 
 1. Определяет, затронуты ли исходники прошивки, HTML и метаданные.
-2. При необходимости извлекает HTML из `web_page.cpp` (или из `lego_technic_esp32/lego_technic_esp32.ino`, если там находится `PAGE_HTML`).
+2. При необходимости извлекает HTML из `web_page.cpp` ().
 3. Обновляет `CHANGELOG.md` по маркерам в начале `lego_technic_esp32/lego_technic_esp32.ino` и синхронизирует версию и ссылку на демо в `README.md`.
 4. При изменении исходников прошивки компилирует приложение ESP32. При необходимости также собирает bootstrap для первоначальной прошивки по USB.
 5. Подготавливает артефакты сборки; они предназначены для проверки и скачивания из GitHub Actions и хранятся ограниченное время.
@@ -471,7 +470,7 @@ python3 tools/calibrate_battery.py \
 
 - Не менять GPIO без пересмотра схемы и проверки ограничений ESP32.
 - Не менять PWM-каналы без проверки совместимости с используемыми библиотеками.
-- Не объединять модули обратно в `lego_technic_esp32/lego_technic_esp32.ino` без архитектурной необходимости.
+- Не переносить реализации отдельных модулей в главный скетч без архитектурной необходимости.
 - Не дублировать обработку одних и тех же команд в нескольких модулях.
 - Не удалять ключи NVS без плана миграции.
 - Не считать функцию реализованной только потому, что для неё есть кнопка в интерфейсе.
