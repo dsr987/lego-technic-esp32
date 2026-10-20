@@ -137,7 +137,7 @@ int steerCenterUs    = 1500;
 int steerMaxAngleDeg = 45;
 
 // ---------- Свет ----------
-// GPIO5 и GPIO15 не настраиваются при загрузке: это strapping-пины.
+// GPIO из hardware_config.h пока временные; окончательная схема света не выбрана.
 // Выводы впервые становятся OUTPUT только после команды включения по WebSocket.
 namespace {
 bool ledFrontOutputInitialized = false;
