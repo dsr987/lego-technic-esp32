@@ -7,7 +7,7 @@
  *   from a browser through ElegantOTA.
  *
  * Keep the AP, OTA route, OTA credentials, ESP32 core and partition scheme
- * compatible with the main firmware in lego_technic_esp32/app.cpp.
+ * compatible with the main firmware in the `lego_technic_esp32/` sketch directory.
  */
 
 #include <WiFi.h>

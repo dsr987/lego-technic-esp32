@@ -2,6 +2,16 @@
 
 The release metadata process uses merged pull request labels and a changelog summary as inputs when a change is delivered through a PR. The canonical source for the firmware version and current release notes remains `lego_technic_esp32/lego_technic_esp32.ino`. The build workflow regenerates derived files such as `CHANGELOG.md`, `README.md`, and `index.html`, then builds firmware and deploys GitHub Pages according to its current path filters. Treat this document as a description of the post-merge flow, not a list of mandatory pre-merge checks.
 
+
+## GitHub Release token permissions
+
+The publishing job requires the repository token to have `contents: write` permission to create a release and upload firmware assets. The workflow declares this permission explicitly. If repository or organization policy still prevents the built-in `GITHUB_TOKEN` from creating releases, configure a repository Actions secret named `GH_RELEASE_TOKEN` and use a token limited to this repository with:
+
+- **Contents:** Read and write
+- **Actions:** Read-only, for downloading the completed build artifact
+
+A fine-grained personal access token is preferred. The workflow uses this secret when present and otherwise falls back to the built-in token. Do not put the token in source files, workflow YAML, or PR descriptions.
+
 ## Required PR label
 
 When a change is delivered through a PR, the PR targeting `main` should have exactly one recognized release label. After a successful `Build, Extract and Deploy` run for a push to `main`, `release-versioning.yml` resolves the merged PR associated with that commit and applies the release metadata. This is post-merge automation, not a separate pre-merge validation workflow. The current `main` does not contain `pull-request-validation.yml` or `release-metadata-validation.yml`; do not describe those files as active checks.
