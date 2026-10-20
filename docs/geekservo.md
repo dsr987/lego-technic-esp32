@@ -115,14 +115,14 @@
 
 Проверены файлы ветки main:
 
-- [app.cpp](../lego_technic_esp32/app.cpp)
+- [lego_technic_esp32.ino](../lego_technic_esp32/lego_technic_esp32.ino)
 - [steering_control.cpp](../lego_technic_esp32/steering_control.cpp)
 - [web_control.cpp](../lego_technic_esp32/web_control.cpp)
 - [web_page.cpp](../lego_technic_esp32/web_page.cpp)
 
 ### 8.1. Текущие ограничения кода
 
-В app.cpp:
+В lego_technic_esp32.ino:
 
 ~~~
 steerServo.setPeriodHertz(50);
