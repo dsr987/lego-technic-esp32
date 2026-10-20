@@ -126,10 +126,18 @@ jobs:
 
           publish=true
           if [[ "$WORKFLOW_EVENT" == "push" ]]; then
-            previous_app="$(git show "${SOURCE_SHA}^:lego_technic_esp32/lego_technic_esp32.ino")"
+            previous_app="$(git show "${SOURCE_SHA}^:lego_technic_esp32/lego_technic_esp32.ino" 2>/dev/null || true)"
             previous_version="$(printf '%s\n' "$previous_app" | sed -n 's/^[[:space:]]*\*[[:space:]]*Версия разработки:[[:space:]]*//p' | head -n 1 | tr -d '\r')"
+
+            # Before the sketch migration, the .ino was only a placeholder
+            # and the real firmware version lived in app.cpp.
             if [[ -z "$previous_version" ]]; then
-              echo "::error::Could not read the previous firmware version from the parent commit."
+              previous_app="$(git show "${SOURCE_SHA}^:lego_technic_esp32/app.cpp" 2>/dev/null || true)"
+              previous_version="$(printf '%s\n' "$previous_app" | sed -n 's/^[[:space:]]*\*[[:space:]]*Версия разработки:[[:space:]]*//p' | head -n 1 | tr -d '\r')"
+            fi
+
+            if [[ -z "$previous_version" ]]; then
+              echo "::error::Could not read the previous firmware version from the Arduino sketch or legacy app.cpp."
               exit 1
             fi
             if [[ "$version" == "$previous_version" ]]; then
