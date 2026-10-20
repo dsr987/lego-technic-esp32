@@ -82,13 +82,9 @@ def check_generated_files() -> None:
         run(sys.executable, "tools/update_gui_version.py")
 
         web_page = (ROOT / "lego_technic_esp32/web_page.cpp").read_text(encoding="utf-8")
-        app_cpp = (ROOT / "lego_technic_esp32/lego_technic_esp32.ino").read_text(encoding="utf-8")
-        if "PAGE_HTML" in web_page:
-            html_source = "lego_technic_esp32/web_page.cpp"
-        elif "PAGE_HTML" in app_cpp:
-            html_source = "lego_technic_esp32/lego_technic_esp32.ino"
-        else:
-            raise RuntimeError("PAGE_HTML was not found in web_page.cpp or lego_technic_esp32.ino")
+        if "PAGE_HTML" not in web_page:
+            raise RuntimeError("PAGE_HTML was not found in lego_technic_esp32/web_page.cpp")
+        html_source = "lego_technic_esp32/web_page.cpp"
 
         run(sys.executable, "tools/extract_html.py", html_source, "index.html")
         run(
