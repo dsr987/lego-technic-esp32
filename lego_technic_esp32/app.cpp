@@ -1,8 +1,8 @@
 /*
  * LEGO Technic ESP32
- * Версия разработки: 0.9.1
+ * Версия разработки: 0.10.0 pre-release
  *
- * Текущий выпуск: калибровка измерения напряжения батареи.
+ * Текущий этап: переход на I²C Motor Shield и подготовка железа 2.0.
  * В проекте также доступны обновлённый Web GUI и OLED Update 2.0.
  *
  * Совместимость:
@@ -22,9 +22,10 @@
  * - Рабочая панель OLED показывает режим, процент заряда и напряжение батареи, количество подключённых клиентов Wi-Fi и предупреждение о низком заряде.
  * - Если инициализация OLED не удалась, прошивка продолжает запуск без попыток выводить данные на недоступный дисплей.
  *
- * CHANGELOG_VERSION: 0.9.1
+ * CHANGELOG_VERSION: 0.10.0
  * CHANGELOG_START
- * - Добавлен отдельный коэффициент калибровки напряжения батареи и скрипт расчёта поправки по показаниям мультиметра. ([PR #11](https://github.com/dsr987/lego-technic-esp32/pull/11))
+ * - Начат переход на I²C Motor Shield для управления четырьмя моторами и подготовка прошивки к железу 2.0.
+ * - Сохранён существующий интерфейс управления моторами; аппаратная проверка ожидает подключения FeatherWing.
  * CHANGELOG_END
  *
  */
@@ -49,6 +50,7 @@
 #include "display_control.h"
 #include "steering_control.h"
 #include "preferences_manager.h"
+#include "i2c_motor_backend.h"
 
 // ============================================================
 // НАСТРОЙКИ ДОСТУПА — МЕНЯТЬ ЗДЕСЬ
@@ -72,8 +74,7 @@ constexpr char OTA_PASSWORD[] = "admin";
 // ---------- Периферия ----------
 
 #define SERVO_PIN 27
-#define OLED_SDA  25
-#define OLED_SCL  26
+// I2C_SDA_PIN и I2C_SCL_PIN заданы в hardware_config.h.
 
 // ---------- Режим и состояние системы ----------
 
@@ -85,6 +86,7 @@ Preferences prefs;
 // OLED-дисплей
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
 bool oledAvailable = false;
+bool motorBoardReady = false;
 
 // Рулевой сервопривод
 Servo steerServo;
@@ -124,8 +126,7 @@ bool reverseD = false;
 // ---------- Состояние света ----------
 
 // Состояния сохранены для совместимости с интерфейсом.
-// GPIO для фар пока не назначены: GPIO32 и GPIO33
-// используются вторым TB6612FNG.
+// GPIO для фар пока не назначены; управление моторами вынесено на I²C Motor Shield.
 bool ledFrontOn = false;
 bool ledRearOn  = false;
 
@@ -140,16 +141,7 @@ int steerMaxAngleDeg = 45;
 // ---------- Свет ----------
 
 void applyLeds() {
-  /*
-   * Временно пустая функция.
-   *
-   * GPIO32 и GPIO33 используются вторым TB6612FNG:
-   * GPIO32 — TB2_BIN1
-   * GPIO33 — TB2_BIN2
-   *
-   * После выбора отдельных GPIO для фар здесь
-   * будет реализовано управление светом.
-   */
+  // Временно пустая функция: отдельные GPIO для фар ещё не назначены.
 }
 
 // ---------- Формирование статуса для веб-интерфейса ----------
@@ -198,60 +190,20 @@ void setup() {
   // Аппаратная Serial-отладка не используется.
   // Диагностика доступна через Wi-Fi и веб-интерфейс.
 
-  // 1. Безопасное состояние драйверов.
-  // Оба TB6612FNG выключены до завершения настройки.
-  pinMode(TB_STBY, OUTPUT);
-  digitalWrite(TB_STBY, LOW);
-
-  // 2. Настройка входов направления четырёх моторов.
-  pinMode(TB_AIN1, OUTPUT);
-  pinMode(TB_AIN2, OUTPUT);
-
-  pinMode(TB_BIN1, OUTPUT);
-  pinMode(TB_BIN2, OUTPUT);
-
-  pinMode(TB2_AIN1, OUTPUT);
-  pinMode(TB2_AIN2, OUTPUT);
-
-  pinMode(TB2_BIN1, OUTPUT);
-  pinMode(TB2_BIN2, OUTPUT);
-
-  // Устанавливаем безопасное начальное состояние входов.
-  digitalWrite(TB_AIN1, LOW);
-  digitalWrite(TB_AIN2, LOW);
-
-  digitalWrite(TB_BIN1, LOW);
-  digitalWrite(TB_BIN2, LOW);
-
-  digitalWrite(TB2_AIN1, LOW);
-  digitalWrite(TB2_AIN2, LOW);
-
-  digitalWrite(TB2_BIN1, LOW);
-  digitalWrite(TB2_BIN2, LOW);
-
-  // 3. Настройка четырёх PWM-каналов.
-  // Частота 5 кГц, разрешение 8 бит.
-  // LEDC-каналы и GPIO определены в hardware_config.h.
-
-  ledcSetup(LEDC_CH_A, 5000, 8);
-  ledcAttachPin(TB_PWMA, LEDC_CH_A);
-
-  ledcSetup(LEDC_CH_B, 5000, 8);
-  ledcAttachPin(TB_PWMB, LEDC_CH_B);
-
-  ledcSetup(LEDC_CH_C, 5000, 8);
-  ledcAttachPin(TB2_PWMA, LEDC_CH_C);
-
-  ledcSetup(LEDC_CH_D, 5000, 8);
-  ledcAttachPin(TB2_PWMB, LEDC_CH_D);
+  // Моторы управляются через PCA9685 на общей I²C-шине.
 
   // 4. Инициализация рулевого сервопривода.
   steerServo.setPeriodHertz(50);
   steerServo.attach(SERVO_PIN, 1000, 2000);
 
   // 5. Инициализация OLED-дисплея.
-  Wire.begin(OLED_SDA, OLED_SCL);
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+  // Ограничиваем ожидание одной I²C-транзакции, чтобы отказ шины не мог
+  // надолго заблокировать цикл или асинхронный обработчик управления.
+  // Это ограничивает время ожидания, но не подтверждает доставку команд моторам.
+  Wire.setTimeOut(20);
   oledAvailable = display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  motorBoardReady = i2cMotorBackendBegin(Wire);
 
   if (oledAvailable) {
     // Фирменная заставка появляется только после успешного определения OLED.
@@ -335,6 +287,16 @@ void recordSafetyTimeout() {
 // ---------- Основной цикл ----------
 
 void loop() {
+
+  // Отказ моторного I²C-backend нельзя оставлять зависимым от heartbeat:
+  // браузер может продолжать слать heartbeat даже после потери управления моторами.
+  // Сбрасываем логическое состояние и сервокоманду; физическая остановка моторов
+  // при отказавшей шине этим не гарантируется.
+  if (!i2cMotorBackendIsReady() &&
+      (motorAVal != 0 || motorBVal != 0 || motorCVal != 0 || motorDVal != 0 ||
+       servoVal != 0 || engineSimOn)) {
+    stopAll();
+  }
 
   // Аварийная остановка при отсутствии команд управления.
   if (millis() - lastCmdMillis > CMD_TIMEOUT_MS) {
