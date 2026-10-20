@@ -102,10 +102,8 @@ jobs:
           python3 tools/update_gui_version.py
           if grep -q 'PAGE_HTML' lego_technic_esp32/web_page.cpp; then
             html_source="lego_technic_esp32/web_page.cpp"
-          elif grep -q 'PAGE_HTML' lego_technic_esp32/lego_technic_esp32.ino; then
-            html_source="lego_technic_esp32/lego_technic_esp32.ino"
           else
-            echo "::error::PAGE_HTML not found in web_page.cpp or lego_technic_esp32.ino"
+            echo "::error::PAGE_HTML not found in lego_technic_esp32/web_page.cpp"
             exit 1
           fi
           python3 tools/extract_html.py "$html_source" index.html
