@@ -1,5 +1,7 @@
 /*
  * LEGO Technic ESP32
+ * Main Arduino sketch: filename and containing directory must match.
+ * Shared module implementations remain in their dedicated .cpp/.h files.
  * Версия разработки: 0.9.1
  *
  * Текущий выпуск: калибровка измерения напряжения батареи.
