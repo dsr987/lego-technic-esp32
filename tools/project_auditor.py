@@ -20,7 +20,7 @@ MODULES = (
 )
 
 REQUIRED_FILES = (
-    "app.cpp",
+    "lego_technic_esp32.ino",
     "hardware_config.h",
     *(f"{name}.h" for name in MODULES),
     *(f"{name}.cpp" for name in MODULES),
@@ -117,16 +117,16 @@ def check_module_pairs() -> None:
 
 
 def check_app_entry_points() -> None:
-    app_content = read_text(SOURCE_DIR / "app.cpp")
+    app_content = read_text(SOURCE_DIR / "lego_technic_esp32.ino")
     if app_content is None:
-        report("FAIL", "Cannot read app.cpp")
+        report("FAIL", "Cannot read lego_technic_esp32.ino")
         return
 
     for function_name in ("setup", "loop"):
         if re.search(rf"\bvoid\s+{function_name}\s*\(", app_content):
-            report("PASS", f"app.cpp contains {function_name}()")
+            report("PASS", f"lego_technic_esp32.ino contains {function_name}()")
         else:
-            report("FAIL", f"app.cpp is missing {function_name}()")
+            report("FAIL", f"lego_technic_esp32.ino is missing {function_name}()")
 
 
 def check_motor_safety_anchor() -> None:
@@ -217,12 +217,12 @@ def check_gui_engine_guards() -> None:
 
 def check_firmware_heartbeat_and_watchdog() -> None:
     control = read_text(SOURCE_DIR / "web_control.cpp")
-    app = read_text(SOURCE_DIR / "app.cpp")
+    app = read_text(SOURCE_DIR / "lego_technic_esp32.ino")
     if control is None:
         report("FAIL", "Cannot read web_control.cpp for heartbeat regression checks")
         return
     if app is None:
-        report("FAIL", "Cannot read app.cpp for watchdog regression checks")
+        report("FAIL", "Cannot read lego_technic_esp32.ino for watchdog regression checks")
         return
 
     heartbeat_branch = re.search(
@@ -501,11 +501,11 @@ def check_accent_theme_regressions() -> None:
 
 def check_diagnostics_regressions() -> None:
     """Validate read-only diagnostic telemetry and its GUI without control commands."""
-    app = read_text(SOURCE_DIR / "app.cpp")
+    app = read_text(SOURCE_DIR / "lego_technic_esp32.ino")
     control = read_text(SOURCE_DIR / "web_control.cpp")
     html = read_text(REPO_ROOT / "index.html")
     if app is None or control is None or html is None:
-        report("FAIL", "Cannot read app.cpp, web_control.cpp or index.html for diagnostics checks")
+        report("FAIL", "Cannot read lego_technic_esp32.ino, web_control.cpp or index.html for diagnostics checks")
         return
 
     status_fields = ("sta", "up", "heap", "minh", "age", "lb", "fsc", "fsa")
