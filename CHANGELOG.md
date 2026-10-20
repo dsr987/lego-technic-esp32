@@ -1,5 +1,11 @@
 # История версий
 
+## 0.9.2 — 2026-10-20
+### Изменено
+- Move the main firmware code into `lego_technic_esp32.ino` and remove the obsolete `app.cpp`. ([PR #65](https://github.com/dsr987/lego-technic-esp32/pull/65))
+- Fix source-path dependencies in build and release automation so version metadata, changelog generation, compilation, and release publication follow the canonical sketch.
+- Update regression checks, project auditing, and documentation to match the source layout.
+
 ## 0.9.1 — 2026-10-16
 ### Изменено
 - Добавлен отдельный коэффициент калибровки измерения напряжения батареи `BATT_CALIBRATION_FACTOR`; по умолчанию он равен `1.0000`, поэтому исходные показания не изменяются до проведения калибровки.
