@@ -9,6 +9,7 @@ on:
       - 'test/**/README.md'
       - 'test/**/src/**'
       - 'test/**/lib/**'
+      - '.github/workflows/compile-tests.yml'
   pull_request:
     branches:
       - main
