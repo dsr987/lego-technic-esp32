@@ -118,6 +118,7 @@ jobs:
         env:
           WORKFLOW_EVENT: ${{ github.event.workflow_run.event }}
           SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN || github.token }}
         run: |
           set -euo pipefail
 
