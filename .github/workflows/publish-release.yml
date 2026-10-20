@@ -118,6 +118,7 @@ jobs:
         env:
           WORKFLOW_EVENT: ${{ github.event.workflow_run.event }}
           SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          GH_TOKEN: ${{ secrets.GH_RELEASE_TOKEN || github.token }}
         run: |
           set -euo pipefail
 
@@ -135,8 +136,15 @@ jobs:
             if [[ -z "$previous_version" ]]; then
               echo "::notice::The parent commit has no firmware version marker; treating this as the first release from the canonical sketch."
             elif [[ "$version" == "$previous_version" ]]; then
-              publish=false
-              echo "::notice::Firmware version is unchanged ($version); release publication is skipped."
+              latest_release_name="$(gh release list --limit 1 --json name --jq '.[0].name // ""')"
+              latest_release_version="$(printf '%s\n' "$latest_release_name" | sed -nE 's/.* — ([0-9]+\.[0-9]+\.[0-9]+)( \(build [0-9]+\))?$/\1/p')"
+
+              if [[ "$latest_release_version" == "$version" ]]; then
+                publish=false
+                echo "::notice::Firmware version $version is already the latest published release; skipping duplicate publication."
+              else
+                echo "::notice::Firmware source version is unchanged from its parent, but latest published release is '$latest_release_name'; publishing the missing release."
+              fi
             fi
           fi
 

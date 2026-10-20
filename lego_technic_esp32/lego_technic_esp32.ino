@@ -27,8 +27,8 @@
  * CHANGELOG_VERSION: 0.9.2
  * CHANGELOG_START
  * - Move the main firmware entry point into the canonical Arduino sketch and remove obsolete source-layout dependencies. ([PR #65](https://github.com/dsr987/lego-technic-esp32/pull/65))
- * - Fix source-path dependencies in build and release automation so version metadata, changelog generation, compilation, and release publication follow the canonical sketch.
- * - Update regression checks, project auditing, and documentation to match the source layout.
+ * - Fix source-path dependencies in build and release automation so version metadata, changelog generation, compilation, and release publication follow the canonical sketch. ([PR #65](https://github.com/dsr987/lego-technic-esp32/pull/65))
+ * - Update regression checks, project auditing, and documentation to match the source layout. ([PR #65](https://github.com/dsr987/lego-technic-esp32/pull/65))
  * CHANGELOG_END
  *
  * тестовый запуск сборки

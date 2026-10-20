@@ -77,7 +77,7 @@ def update_changelog(md_file, version, entries):
     )
 
     version_pattern = re.compile(
-        r"^##\s+" + re.escape(version) + r"\s*[—-]",
+        r"^##\s+" + re.escape(version) + r"(?:\s+beta)?\s*[—-]",
         re.MULTILINE,
     )
     version_match = version_pattern.search(content)
