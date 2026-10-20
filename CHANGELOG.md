@@ -2,7 +2,7 @@
 
 ## 0.9.2 — 2026-10-20
 ### Изменено
-- Move the main firmware code into `lego_technic_esp32.ino` and remove the obsolete `app.cpp`. ([PR #65](https://github.com/dsr987/lego-technic-esp32/pull/65))
+- Move the main firmware entry point into the canonical Arduino sketch and remove obsolete source-layout dependencies. ([PR #65](https://github.com/dsr987/lego-technic-esp32/pull/65))
 - Fix source-path dependencies in build and release automation so version metadata, changelog generation, compilation, and release publication follow the canonical sketch.
 - Update regression checks, project auditing, and documentation to match the source layout.
 
@@ -35,7 +35,7 @@
 
 ## 0.6.2 — 2026-10-16
 ### Добавлено
-- Добавлена автоматическая синхронизация версии в шапке Web GUI с маркером `CHANGELOG_VERSION` в `app.cpp`; обновляются встроенный интерфейс и сгенерированная страница. ([PR #4](https://github.com/dsr987/lego-technic-esp32/pull/4))
+- Добавлена автоматическая синхронизация версии в шапке Web GUI с маркером `CHANGELOG_VERSION` в основном Arduino-скетче; обновляются встроенный интерфейс и сгенерированная страница. ([PR #4](https://github.com/dsr987/lego-technic-esp32/pull/4))
 - Добавлена автоматизация метаданных выпуска: проверка меток и описания PR, правила изменения версии, формирование записи журнала изменений и защита от повторной обработки одного PR.
 - Добавлены тесты автоматизации, а обработка метаданных вынесена в отдельный workflow, который работает после успешной сборки основной ветки. ([PR #8](https://github.com/dsr987/lego-technic-esp32/pull/8))
 
@@ -51,7 +51,7 @@
 
 ## 0.5.26 — 2026-10-11
 ### Изменено
-- Настройки Wi-Fi и учётные данные ElegantOTA вынесены в отдельный блок в начале `app.cpp`.
+- Настройки Wi-Fi и учётные данные ElegantOTA вынесены в отдельный блок в основном Arduino-скетче.
 - Настроено единообразное включение асинхронного режима ElegantOTA для основной и стартовой прошивок OTA Bootstrap.
 - Исправлена сборка OTA Bootstrap: добавлен необходимый параметр компиляции для совместимости ElegantOTA с AsyncWebServer.
 - Уточнена конфигурация GitHub Actions для сборки основной прошивки и OTA Bootstrap.

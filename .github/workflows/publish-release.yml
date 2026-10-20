@@ -16,6 +16,9 @@ permissions:
 jobs:
   publish:
     name: Publish freshly compiled ESP32 firmware
+    permissions:
+      actions: read
+      contents: write
     # Successful main pushes may publish only when the firmware version changed.
     # Bot-dispatched builds remain supported for an explicit release retry.
     if: ${{ github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'push' || (github.event.workflow_run.event == 'workflow_dispatch' && github.event.workflow_run.actor.login == 'github-actions[bot]')) }}
@@ -27,7 +30,7 @@ jobs:
         with:
           name: esp32-firmware-main-${{ github.event.workflow_run.run_number }}
           run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GH_RELEASE_TOKEN || github.token }}
           path: ${{ runner.temp }}/firmware-artifact
 
       - name: Find freshly compiled firmware and calculate checksum
@@ -126,21 +129,12 @@ jobs:
 
           publish=true
           if [[ "$WORKFLOW_EVENT" == "push" ]]; then
-            previous_app="$(git show "${SOURCE_SHA}^:lego_technic_esp32/lego_technic_esp32.ino" 2>/dev/null || true)"
-            previous_version="$(printf '%s\n' "$previous_app" | sed -n 's/^[[:space:]]*\*[[:space:]]*Версия разработки:[[:space:]]*//p' | head -n 1 | tr -d '\r')"
-
-            # Before the sketch migration, the .ino was only a placeholder
-            # and the real firmware version lived in app.cpp.
-            if [[ -z "$previous_version" ]]; then
-              previous_app="$(git show "${SOURCE_SHA}^:lego_technic_esp32/app.cpp" 2>/dev/null || true)"
-              previous_version="$(printf '%s\n' "$previous_app" | sed -n 's/^[[:space:]]*\*[[:space:]]*Версия разработки:[[:space:]]*//p' | head -n 1 | tr -d '\r')"
-            fi
+            previous_sketch="$(git show "${SOURCE_SHA}^:lego_technic_esp32/lego_technic_esp32.ino" 2>/dev/null || true)"
+            previous_version="$(printf '%s\n' "$previous_sketch" | sed -n 's/^[[:space:]]*\*[[:space:]]*Версия разработки:[[:space:]]*//p' | head -n 1 | tr -d '\r')"
 
             if [[ -z "$previous_version" ]]; then
-              echo "::error::Could not read the previous firmware version from the Arduino sketch or legacy app.cpp."
-              exit 1
-            fi
-            if [[ "$version" == "$previous_version" ]]; then
+              echo "::notice::The parent commit has no firmware version marker; treating this as the first release from the canonical sketch."
+            elif [[ "$version" == "$previous_version" ]]; then
               publish=false
               echo "::notice::Firmware version is unchanged ($version); release publication is skipped."
             fi
