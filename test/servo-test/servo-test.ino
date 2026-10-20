@@ -145,11 +145,14 @@ void setup() {
       if (!Update.begin(UPDATE_SIZE_UNKNOWN)) Update.printError(Serial);
     } else if (upload.status == UPLOAD_FILE_WRITE) {
       if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) Update.printError(Serial);
-    } else if (upload.status == UPLOAD_FILE_END) {\n      if (Update.end(true)) Serial.printf("OTA upload complete: %u bytes\\n", upload.totalSize);
+    } else if (upload.status == UPLOAD_FILE_END) {
+      if (Update.end(true)) Serial.printf("OTA upload complete: %u bytes\\n", upload.totalSize);
       else Update.printError(Serial);
     } else if (upload.status == UPLOAD_FILE_ABORTED) {
-      Update.abort();\n    }
-  });\n  server.on("/range", HTTP_GET, []() {
+      Update.abort();
+    }
+  });
+  server.on("/range", HTTP_GET, []() {
     if (!server.hasArg("min") || !server.hasArg("max")) {
       server.send(400, "application/json", "{\"error\":\"missing pulse range\"}");
       return;
