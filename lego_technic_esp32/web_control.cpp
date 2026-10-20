@@ -151,12 +151,11 @@ void handleWsMessage(uint8_t *data, size_t len) {
     saveReverseD(reverseD);
   }
 
-  // Передний и задний свет. Физическая реализация applyLeds() пока пустая.
+  // Передний и задний свет. GPIO настраиваются лениво только при команде ON.
   if (doc.containsKey("ledF")) {
     if (!doc["ledF"].is<int>()) return;
 
     ledFrontOn = doc["ledF"].as<int>() == 1;
-    saveLedFront(ledFrontOn);
     applyLeds();
   }
 
@@ -164,7 +163,6 @@ void handleWsMessage(uint8_t *data, size_t len) {
     if (!doc["ledR"].is<int>()) return;
 
     ledRearOn = doc["ledR"].as<int>() == 1;
-    saveLedRear(ledRearOn);
     applyLeds();
   }
 

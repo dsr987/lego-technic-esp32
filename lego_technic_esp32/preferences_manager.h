@@ -14,6 +14,3 @@ void saveReverseB(bool value);
 void saveReverseC(bool value);
 void saveReverseD(bool value);
 
-// Передний и задний свет
-void saveLedFront(bool value);
-void saveLedRear(bool value);
