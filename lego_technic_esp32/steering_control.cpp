@@ -5,7 +5,7 @@
 
 #include "steering_control.h"
 
-// Объект и параметры объявлены в app.cpp
+// Объект и параметры объявлены в lego_technic_esp32.ino
 extern Servo steerServo;
 extern int servoVal;
 extern int steerCenterUs;
