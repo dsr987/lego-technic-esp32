@@ -18,6 +18,11 @@ on:
       - 'test/**/src/**'
       - 'test/**/lib/**'
 
+# Newer source changes supersede older builds. Prevent parallel pushes to main.
+concurrency:
+  group: compile-test-sketches-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
@@ -46,7 +51,6 @@ jobs:
         shell: bash
         run: |
           set -Eeuo pipefail
-          shopt -s nullglob
           count=0
           failed=0
 
@@ -64,7 +68,9 @@ jobs:
               continue
             fi
 
-            output_dir="$GITHUB_WORKSPACE/$sketch_dir/build"
+            # Keep compiler intermediates outside the repository. Only the OTA
+            # application binary is copied back into the sketch directory.
+            output_dir="$RUNNER_TEMP/test-sketch-build/$ino_name"
             mkdir -p "$output_dir"
             if arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir "$output_dir" "$sketch_dir"; then
               compiled_bin="$output_dir/$ino_name.ino.bin"
@@ -96,12 +102,20 @@ jobs:
           set -Eeuo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Commit only the intended application BINs, never bootloader,
+          # partition-table, merged or other intermediate images.
           while IFS= read -r -d '' bin; do
             git add -f -- "$bin"
-          done < <(find test -type f -name '*.bin' -print0 | sort -z)
+          done < <(find test -type f -name '*.bin' -not -path '*/build/*' -print0 | sort -z)
+
           if git diff --cached --quiet; then
             echo "Test binaries unchanged; no commit needed."
             exit 0
           fi
+
           git commit -m "Update ESP32 test binaries"
-          git push
+
+          # Rebase on any unrelated commits that landed while compiling.
+          git pull --rebase origin "$GITHUB_REF_NAME"
+          git push origin "HEAD:$GITHUB_REF_NAME"
