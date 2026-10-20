@@ -31,6 +31,7 @@
  * - Update regression checks, project auditing, and documentation to match the source layout.
  * CHANGELOG_END
  *
+ * тестовый запуск сборки
  */
 
 #include <Arduino.h>
