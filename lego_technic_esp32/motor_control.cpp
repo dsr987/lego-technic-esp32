@@ -5,7 +5,7 @@
 #include "motor_control.h"
 #include "steering_control.h" 
 
-// Состояние объявлено и определяется в app.cpp
+// Состояние объявлено и определяется в lego_technic_esp32.ino
 extern Mode currentMode;
 
 extern int motorAVal;
