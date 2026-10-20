@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/four-dc-motors
+      - fix/ino-entrypoint-release-0-9-2
     paths:
       - 'lego_technic_esp32/**'
       - 'firmware/bootstrap/**'
@@ -154,10 +155,8 @@ jobs:
 
           if grep -q 'PAGE_HTML' lego_technic_esp32/web_page.cpp; then
             echo "file=lego_technic_esp32/web_page.cpp" >> "$GITHUB_OUTPUT"
-          elif grep -q 'PAGE_HTML' lego_technic_esp32/lego_technic_esp32.ino; then
-            echo "file=lego_technic_esp32/lego_technic_esp32.ino" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::PAGE_HTML not found in web_page.cpp or lego_technic_esp32.ino"
+            echo "::error::PAGE_HTML not found in lego_technic_esp32/web_page.cpp"
             exit 1
           fi
 
