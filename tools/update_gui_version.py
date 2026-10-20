@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
-"""Synchronize the web GUI header version with CHANGELOG_VERSION in app.cpp."""
+"""Synchronize the web GUI header version with CHANGELOG_VERSION in lego_technic_esp32.ino."""
 
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-APP_CPP = ROOT / "lego_technic_esp32" / "app.cpp"
+MAIN_SKETCH = ROOT / "lego_technic_esp32" / "lego_technic_esp32.ino"
 WEB_PAGE_CPP = ROOT / "lego_technic_esp32" / "web_page.cpp"
 INDEX_HTML = ROOT / "index.html"
 
 
 def main() -> int:
-    app = APP_CPP.read_text(encoding="utf-8-sig")
+    app = MAIN_SKETCH.read_text(encoding="utf-8-sig")
     version_match = re.search(
         r"^\s*\*?\s*CHANGELOG_VERSION:\s*(\d+\.\d+\.\d+)\s*$",
         app,
         re.MULTILINE,
     )
     if not version_match:
-        print(f"ERROR: CHANGELOG_VERSION not found in {APP_CPP}", file=sys.stderr)
+        print(f"ERROR: CHANGELOG_VERSION not found in {MAIN_SKETCH}", file=sys.stderr)
         return 1
 
     version = version_match.group(1)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate pull-request release metadata and apply it to the canonical app.cpp changelog."""
+"""Validate pull-request release metadata and apply it to the canonical lego_technic_esp32.ino changelog."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import uuid
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-APP_CPP = ROOT / "lego_technic_esp32" / "app.cpp"
+MAIN_SKETCH = ROOT / "lego_technic_esp32" / "lego_technic_esp32.ino"
 STATE_PATH = ROOT / ".github" / "release-automation" / "state.json"
 REPOSITORY_URL = "https://github.com/dsr987/lego-technic-esp32"
 
@@ -174,7 +174,7 @@ def validate_pr() -> int:
             os.environ.get("PR_BODY", ""),
             allow_bootstrap_fallback=not state.get("labels_initialized", False),
         )
-        app_text = APP_CPP.read_text(encoding="utf-8")
+        app_text = MAIN_SKETCH.read_text(encoding="utf-8")
         version = current_version(app_text)
         current = format_version(version)
 
@@ -396,7 +396,7 @@ def apply_release() -> int:
             write_step_output(release="false", changed="true", version="")
             return 0
 
-        app_text = APP_CPP.read_text(encoding="utf-8")
+        app_text = MAIN_SKETCH.read_text(encoding="utf-8")
         old_version_tuple = current_version(app_text)
         new_version_tuple = bump_version(old_version_tuple, release_type)
         if new_version_tuple is None:
@@ -405,7 +405,7 @@ def apply_release() -> int:
         new_version = format_version(new_version_tuple)
 
         new_app_text = update_app_text(app_text, new_version, bullets, pr_number)
-        APP_CPP.write_text(new_app_text, encoding="utf-8", newline="\n")
+        MAIN_SKETCH.write_text(new_app_text, encoding="utf-8", newline="\n")
 
         state["processed_prs"] = sorted(processed | {pr_number})
         state["release_prs"] = sorted(release_processed | {pr_number})
@@ -414,7 +414,7 @@ def apply_release() -> int:
         state["last_version"] = new_version
         write_state(state)
 
-        print(f"Updated app.cpp: {old_version} -> {new_version} from PR #{pr_number}.")
+        print(f"Updated lego_technic_esp32.ino: {old_version} -> {new_version} from PR #{pr_number}.")
         for bullet in bullets:
             print(f"- {bullet}")
         append_step_summary(

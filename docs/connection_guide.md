@@ -85,7 +85,7 @@
 # Аппаратная ревизия 1.5
 
 **Связанная прошивка:** начиная с 0.6.0; конфигурация в `main` v0.9.1 использует два TB6612FNG.  
-**Статус:** распиновка GPIO ниже подтверждена текущими `hardware_config.h`, `app.cpp` и `battery_monitor.cpp`.
+**Статус:** распиновка GPIO ниже подтверждена текущими `hardware_config.h`, `lego_technic_esp32.ino` и `battery_monitor.cpp`.
 
 ## Состав
 
@@ -307,7 +307,7 @@ GPIO34 и коэффициент 0.2680 описаны для существую
 ## Связанные исходники и документация
 
 - [GPIO и PWM для аппаратуры 1.5](../lego_technic_esp32/hardware_config.h)
-- [Инициализация, OLED и сигналы ESP32](../lego_technic_esp32/app.cpp)
+- [Инициализация, OLED и сигналы ESP32](../lego_technic_esp32/lego_technic_esp32.ino)
 - [Измерение и калибровка батареи](../lego_technic_esp32/battery_monitor.cpp)
 - [Логика и архитектура проекта](project_logic.md)
 - [План предрелиза 0.10.0 / hardware 2.0](https://github.com/dsr987/lego-technic-esp32/blob/release/0.10.0-prerelease-fresh/docs/pre-release-0.10.0-plan.md)

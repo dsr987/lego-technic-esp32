@@ -7,7 +7,7 @@
 #include "steering_control.h"
 #include "preferences_manager.h"
 
-// ---------- Состояние, объявленное в app.cpp ----------
+// ---------- Состояние, объявленное в lego_technic_esp32.ino ----------
 
 extern Mode currentMode;
 extern unsigned long lastCmdMillis;

@@ -49,7 +49,7 @@
 
 ### Источники истины
 
-- Версия прошивки и текущий блок changelog: lego_technic_esp32/app.cpp.
+- Версия прошивки и текущий блок changelog: lego_technic_esp32/lego_technic_esp32.ino.
 - Логика применения метки, валидации и обработка списка уже учтённых PR: tools/release_automation.py.
 - Идемпотентное состояние: .github/release-automation/state.json.
 - Политика версионирования: [release-versioning.md](release-versioning.md).
@@ -72,7 +72,7 @@ release:none не повышает версию прошивки. После с�
 
 ## 5. Синхронизация Web GUI и технических файлов
 
-Исходный HTML/CSS/JavaScript веб-пульта хранится в lego_technic_esp32/web_page.cpp; index.html формируется из встроенного источника. При изменении GUI или ресурсов проверь, что сгенерированные представления актуальны. Версия в интерфейсе и README синхронизируется генераторами, а CHANGELOG.md получается из changelog в app.cpp.
+Исходный HTML/CSS/JavaScript веб-пульта хранится в lego_technic_esp32/web_page.cpp; index.html формируется из встроенного источника. При изменении GUI или ресурсов проверь, что сгенерированные представления актуальны. Версия в интерфейсе и README синхронизируется генераторами, а CHANGELOG.md получается из changelog в lego_technic_esp32.ino.
 
 Если CI сообщает, что сгенерированные файлы устарели:
 

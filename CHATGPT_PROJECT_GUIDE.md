@@ -6,13 +6,13 @@
 
 LEGO Technic ESP32 — прошивка на ESP32-WROOM-32 для управления моделью LEGO Technic через собственную Wi-Fi точку доступа и браузерный Web GUI. В проект входят управление DC-моторами, рулевой сервопривод, OLED SSD1306, мониторинг батареи, настройки NVS, WebSocket и OTA-обновление.
 
-Текущий фактический статус всегда проверяй в GitHub, а не считай этот файл заменой живому репозиторию. Сведения о версии и аппаратной архитектуре ниже являются ориентиром, а не живым состоянием: перед изменениями сверяй `main`, `lego_technic_esp32/app.cpp` и `lego_technic_esp32/hardware_config.h`. Открытые PR и отдельные feature/release-ветки не меняют архитектуру `main` до слияния.
+Текущий фактический статус всегда проверяй в GitHub, а не считай этот файл заменой живому репозиторию. Сведения о версии и аппаратной архитектуре ниже являются ориентиром, а не живым состоянием: перед изменениями сверяй `main`, `lego_technic_esp32/lego_technic_esp32.ino` и `lego_technic_esp32/hardware_config.h`. Открытые PR и отдельные feature/release-ветки не меняют архитектуру `main` до слияния.
 
 ## 2. Важные файлы
 
 | Назначение | Источник |
 |---|---|
-| Версия прошивки и текущий блок changelog | lego_technic_esp32/app.cpp |
+| Версия прошивки и текущий блок changelog | lego_technic_esp32/lego_technic_esp32.ino |
 | Назначения GPIO и PWM-каналов моторов | lego_technic_esp32/hardware_config.h |
 | Управление моторами и остановка | lego_technic_esp32/motor_control.h/.cpp |
 | HTML/CSS/JS Web GUI | lego_technic_esp32/web_page.cpp |

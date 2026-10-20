@@ -103,7 +103,7 @@ jobs:
                 esac
 
                 case "$file" in
-                  lego_technic_esp32/app.cpp|\
+                  lego_technic_esp32/lego_technic_esp32.ino|\
                   lego_technic_esp32/web_page.cpp|\
                   lego_technic_esp32/assets/*|\
                   tools/extract_html.py|\
@@ -154,14 +154,12 @@ jobs:
 
           if grep -q 'PAGE_HTML' lego_technic_esp32/web_page.cpp; then
             echo "file=lego_technic_esp32/web_page.cpp" >> "$GITHUB_OUTPUT"
-          elif grep -q 'PAGE_HTML' lego_technic_esp32/app.cpp; then
-            echo "file=lego_technic_esp32/app.cpp" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::PAGE_HTML not found in web_page.cpp or app.cpp"
+            echo "::error::PAGE_HTML not found in lego_technic_esp32/web_page.cpp"
             exit 1
           fi
 
-      - name: Sync GUI version from app.cpp
+      - name: Sync GUI version from lego_technic_esp32.ino
         if: ${{ steps.changes.outputs.generated == 'true' }}
         run: python3 tools/update_gui_version.py
 
@@ -176,7 +174,7 @@ jobs:
         if: ${{ steps.changes.outputs.generated == 'true' }}
         run: |
           python3 tools/extract_changelog.py \
-            lego_technic_esp32/app.cpp \
+            lego_technic_esp32/lego_technic_esp32.ino \
             CHANGELOG.md
 
       - name: Update README version

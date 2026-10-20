@@ -36,7 +36,7 @@ static bool wasAtRest = true;
 static unsigned long restStartMillis = 0;
 static bool firstStatusRun = true;
 
-// Состояние приложения объявлено в app.cpp
+// Состояние приложения объявлено в lego_technic_esp32.ino
 extern Mode currentMode;
 
 extern int motorAVal;
