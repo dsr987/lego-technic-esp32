@@ -1,10 +1,10 @@
 # История версий
 
-## 0.9.2 — 2026-10-20
-### Изменено
-- Move the main firmware entry point into the canonical Arduino sketch and remove obsolete source-layout dependencies. ([PR #65](https://github.com/dsr987/lego-technic-esp32/pull/65))
-- Fix source-path dependencies in build and release automation so version metadata, changelog generation, compilation, and release publication follow the canonical sketch.
-- Update regression checks, project auditing, and documentation to match the source layout.
+## 0.9.2 beta — 2026-10-20
+### Исправлено и изменено
+- Восстановлен основной код прошивки в `lego_technic_esp32.ino`. Причина падения компиляции найдена: имя каталога скетча совпадало с именем файла `.ino`; после исправления структуры временный обходной вариант с `app.cpp` больше не нужен.
+- Удалён устаревший `app.cpp` и связанные с ним зависимости и ссылки в сборке, автоматизации релизов, проверках и документации проекта.
+- Обновлены регрессионные проверки, аудит проекта и документация в соответствии с канонической структурой Arduino-скетча. ([PR #65](https://github.com/dsr987/lego-technic-esp32/pull/65))
 
 ## 0.9.1 — 2026-10-16
 ### Изменено
