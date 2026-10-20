@@ -4,7 +4,7 @@
 
 #include "preferences_manager.h"
 
-// Объект и состояние определяются в app.cpp
+// Объект и состояние определяются в lego_technic_esp32.ino
 extern Preferences prefs;
 
 extern bool reverseA;
