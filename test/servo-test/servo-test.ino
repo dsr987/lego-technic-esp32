@@ -141,12 +141,12 @@ void setup() {
   }, []() {
     HTTPUpload& upload = server.upload();
     if (upload.status == UPLOAD_FILE_START) {
-      Serial.printf("OTA upload start: %s\\n", upload.filename.c_str());
+      Serial.printf("OTA upload start: %s\n", upload.filename.c_str());
       if (!Update.begin(UPDATE_SIZE_UNKNOWN)) Update.printError(Serial);
     } else if (upload.status == UPLOAD_FILE_WRITE) {
       if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) Update.printError(Serial);
     } else if (upload.status == UPLOAD_FILE_END) {
-      if (Update.end(true)) Serial.printf("OTA upload complete: %u bytes\\n", upload.totalSize);
+      if (Update.end(true)) Serial.printf("OTA upload complete: %u bytes\n", upload.totalSize);
       else Update.printError(Serial);
     } else if (upload.status == UPLOAD_FILE_ABORTED) {
       Update.abort();
