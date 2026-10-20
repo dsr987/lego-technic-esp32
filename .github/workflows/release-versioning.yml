@@ -102,14 +102,14 @@ jobs:
           python3 tools/update_gui_version.py
           if grep -q 'PAGE_HTML' lego_technic_esp32/web_page.cpp; then
             html_source="lego_technic_esp32/web_page.cpp"
-          elif grep -q 'PAGE_HTML' lego_technic_esp32/app.cpp; then
-            html_source="lego_technic_esp32/app.cpp"
+          elif grep -q 'PAGE_HTML' lego_technic_esp32/lego_technic_esp32.ino; then
+            html_source="lego_technic_esp32/lego_technic_esp32.ino"
           else
-            echo "::error::PAGE_HTML not found in web_page.cpp or app.cpp"
+            echo "::error::PAGE_HTML not found in web_page.cpp or lego_technic_esp32.ino"
             exit 1
           fi
           python3 tools/extract_html.py "$html_source" index.html
-          python3 tools/extract_changelog.py lego_technic_esp32/app.cpp CHANGELOG.md
+          python3 tools/extract_changelog.py lego_technic_esp32/lego_technic_esp32.ino CHANGELOG.md
           python3 tools/update_readme_version.py
 
       - name: Create or update release metadata PR
@@ -125,7 +125,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add lego_technic_esp32/app.cpp lego_technic_esp32/web_page.cpp index.html CHANGELOG.md README.md .github/release-automation/state.json
+          git add lego_technic_esp32/lego_technic_esp32.ino lego_technic_esp32/web_page.cpp index.html CHANGELOG.md README.md .github/release-automation/state.json
 
           if git diff --cached --quiet; then
             echo "No metadata changes to commit."
