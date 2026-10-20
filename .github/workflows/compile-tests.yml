@@ -1,0 +1,107 @@
+name: Build ESP32 test sketches
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'test/**/*.ino'
+      - 'test/**/README.md'
+      - 'test/**/src/**'
+      - 'test/**/lib/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'test/**/*.ino'
+      - 'test/**/README.md'
+      - 'test/**/src/**'
+      - 'test/**/lib/**'
+
+permissions:
+  contents: write
+
+jobs:
+  compile:
+    name: Compile standalone test sketches
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - uses: arduino/setup-arduino-cli@v2
+
+      - name: Configure Arduino CLI
+        run: arduino-cli config init
+
+      - name: Install ESP32 core and libraries
+        run: |
+          arduino-cli core update-index
+          arduino-cli core install esp32:esp32
+          arduino-cli lib update-index
+          arduino-cli lib install "ESP32Servo"
+
+      - name: Compile test sketches
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          shopt -s nullglob
+          count=0
+          failed=0
+
+          while IFS= read -r -d '' ino; do
+            count=$((count + 1))
+            sketch_dir="$(dirname "$ino")"
+            ino_name="$(basename "$ino" .ino)"
+            dir_name="$(basename "$sketch_dir")"
+
+            echo "::group::Compile $ino"
+            if [[ "$ino_name" != "$dir_name" ]]; then
+              echo "::error file=$ino::Sketch file and directory names must match."
+              failed=$((failed + 1))
+              echo "::endgroup::"
+              continue
+            fi
+
+            output_dir="$GITHUB_WORKSPACE/$sketch_dir/build"
+            mkdir -p "$output_dir"
+            if arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir "$output_dir" "$sketch_dir"; then
+              compiled_bin="$output_dir/$ino_name.ino.bin"
+              if [[ ! -s "$compiled_bin" ]]; then
+                echo "::error file=$ino::Expected binary not found: $compiled_bin"
+                failed=$((failed + 1))
+              else
+                cp "$compiled_bin" "$sketch_dir/$ino_name.bin"
+                echo "Built $sketch_dir/$ino_name.bin"
+              fi
+            else
+              echo "::error file=$ino::Compilation failed."
+              failed=$((failed + 1))
+            fi
+            echo "::endgroup::"
+          done < <(find test -type f -name '*.ino' -not -path '*/build/*' -print0 | sort -z)
+
+          if [[ "$count" -eq 0 ]]; then
+            echo "No .ino sketches found under test/."
+            exit 0
+          fi
+          echo "Sketches: $count; failures: $failed"
+          [[ "$failed" -eq 0 ]]
+
+      - name: Commit updated OTA binaries
+        if: success() && github.event_name == 'push'
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          while IFS= read -r -d '' bin; do
+            git add -f -- "$bin"
+          done < <(find test -type f -name '*.bin' -print0 | sort -z)
+          if git diff --cached --quiet; then
+            echo "Test binaries unchanged; no commit needed."
+            exit 0
+          fi
+          git commit -m "Update ESP32 test binaries"
+          git push
