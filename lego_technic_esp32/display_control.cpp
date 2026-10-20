@@ -10,12 +10,12 @@
 #include "display_control.h"
 #include "display_assets.h"
 
-// Дисплей, WebSocket и признак успешной инициализации объявлены в app.cpp.
+// Дисплей, WebSocket и признак успешной инициализации объявлены в lego_technic_esp32.ino.
 extern Adafruit_SSD1306 display;
 extern AsyncWebSocket ws;
 extern bool oledAvailable;
 
-// Режим работы объявлен в app.cpp.
+// Режим работы объявлен в lego_technic_esp32.ino.
 extern Mode currentMode;
 
 // Состояние загрузочной анимации.
