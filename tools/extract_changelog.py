@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract a marked CHANGELOG block from app.cpp."""
+"""Extract a marked CHANGELOG block from lego_technic_esp32.ino."""
 
 import re
 import sys
@@ -110,7 +110,7 @@ def update_changelog(md_file, version, entries):
             if line in existing_entries:
                 continue
             incoming_pr_refs = set(re.findall(r"\[PR #([0-9]+)\]", line))
-            # CHANGELOG.md may contain expanded notes for a PR while app.cpp
+            # CHANGELOG.md may contain expanded notes for a PR while lego_technic_esp32.ino
             # contains only that PR's compact summary. Do not append a second,
             # less detailed summary when that PR is already represented.
             if incoming_pr_refs and incoming_pr_refs.issubset(existing_pr_refs):
@@ -200,7 +200,7 @@ if __name__ == "__main__":
     cpp_file = (
         sys.argv[1]
         if len(sys.argv) > 1
-        else "lego_technic_esp32/app.cpp"
+        else "lego_technic_esp32/lego_technic_esp32.ino"
     )
     md_file = sys.argv[2] if len(sys.argv) > 2 else "CHANGELOG.md"
 
