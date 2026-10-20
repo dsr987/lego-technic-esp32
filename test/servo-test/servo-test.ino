@@ -133,7 +133,23 @@ void setup() {
     moveServo(server.arg("deg").toInt());
     sendStatus();
   });
-  server.on("/update", HTTP_POST, []() {\n    server.sendHeader("Connection", "close");\n    server.send(Update.hasError() ? 500 : 200, "text/plain", Update.hasError() ? "OTA update failed" : "OTA update complete; rebooting");\n    delay(500);\n    if (!Update.hasError()) ESP.restart();\n  }, []() {\n    HTTPUpload& upload = server.upload();\n    if (upload.status == UPLOAD_FILE_START) {\n      Serial.printf("OTA upload start: %s\\n", upload.filename.c_str());\n      if (!Update.begin(UPDATE_SIZE_UNKNOWN)) Update.printError(Serial);\n    } else if (upload.status == UPLOAD_FILE_WRITE) {\n      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) Update.printError(Serial);\n    } else if (upload.status == UPLOAD_FILE_END) {\n      if (Update.end(true)) Serial.printf("OTA upload complete: %u bytes\\n", upload.totalSize);\n      else Update.printError(Serial);\n    } else if (upload.status == UPLOAD_FILE_ABORTED) {\n      Update.abort();\n    }\n  });\n  server.on("/range", HTTP_GET, []() {
+  server.on("/update", HTTP_POST, []() {
+    server.sendHeader("Connection", "close");
+    server.send(Update.hasError() ? 500 : 200, "text/plain", Update.hasError() ? "OTA update failed" : "OTA update complete; rebooting");
+    delay(500);
+    if (!Update.hasError()) ESP.restart();
+  }, []() {
+    HTTPUpload& upload = server.upload();
+    if (upload.status == UPLOAD_FILE_START) {
+      Serial.printf("OTA upload start: %s\\n", upload.filename.c_str());
+      if (!Update.begin(UPDATE_SIZE_UNKNOWN)) Update.printError(Serial);
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+      if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) Update.printError(Serial);
+    } else if (upload.status == UPLOAD_FILE_END) {\n      if (Update.end(true)) Serial.printf("OTA upload complete: %u bytes\\n", upload.totalSize);
+      else Update.printError(Serial);
+    } else if (upload.status == UPLOAD_FILE_ABORTED) {
+      Update.abort();\n    }
+  });\n  server.on("/range", HTTP_GET, []() {
     if (!server.hasArg("min") || !server.hasArg("max")) {
       server.send(400, "application/json", "{\"error\":\"missing pulse range\"}");
       return;
