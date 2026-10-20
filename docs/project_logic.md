@@ -1,6 +1,6 @@
 # LEGO Technic ESP32 — логика и техническая документация
 
-> **Версия:** `0.9.1`  
+> **Версия:** `0.9.2 beta`  
 > **Рабочая ветка:** `main`  
 > **Состояние:** программная архитектура и GUI обновлены; аппаратные сценарии требуют проверки на реальной модели.
 
@@ -9,7 +9,7 @@
 | Быстрые ссылки | |
 |---|---|
 | Презентация | [README](../README.md) |
-| Веб-интерфейс | [Демо GUI](https://dsr987.github.io/lego-technic-esp32/index.html?v=0.9.1) |
+| Веб-интерфейс | [Демо GUI](https://dsr987.github.io/lego-technic-esp32/index.html?v=0.9.2%20beta) |
 | История версий | [CHANGELOG](../CHANGELOG.md) |
 | Главный скетч и точка входа | [`lego_technic_esp32.ino`](../lego_technic_esp32/lego_technic_esp32.ino) |
 | HTML/CSS/JS интерфейса | [`web_page.cpp`](../lego_technic_esp32/web_page.cpp) |
