@@ -18,8 +18,8 @@ When a change is delivered through a PR, the PR targeting `main` should have exa
 
 | Label | Result while the project is in beta |
 | --- | --- |
-| release:patch | Increment patch: 0.9.1 to 0.9.2 (example only) |
-| release:minor | Increment minor and reset patch: 0.9.1 to 0.10.0 (example only) |
+| release:patch | Increment patch: 0.9.2 to 0.9.3 (example only) |
+| release:minor | Increment minor and reset patch: 0.9.2 to 0.10.0 (example only) |
 | release:stable | Promote 0.x.y to 1.0.0 when beta is explicitly over |
 | release:major | After 1.0.0, increment the major version and reset minor and patch |
 | release:none | No firmware-version bump for documentation or automation-only changes |
