@@ -1,29 +1,26 @@
-# Physical light control — GPIO5/GPIO15 implementation
+# Physical light control — prototype implementation
 
 ## Scope
 
-This branch implements WebSocket-controlled front/rear lights using GPIO5 and GPIO15 while leaving motor control, steering, OLED, battery monitoring and the GUI design unchanged.
+This branch adds WebSocket-controlled front/rear light states while aiming to leave motor control, steering, OLED, battery monitoring and the GUI design unchanged.
 
-- Front light: GPIO5 (LED_FRONT_PIN).
-- Rear light: GPIO15 (LED_REAR_PIN).
-- The current implementation assumes an active-low, high-impedance logic input to an external LED driver. Verify this polarity and electrical interface against the actual lighting circuit before connecting it.
-- ESP32 light states are volatile. The controller no longer reads or writes NVS keys ledF and ledR; both lights start logically OFF after reset.
-- GPIOs are not configured or written during setup(). The first GPIO write/configuration occurs only after the WebSocket receives an ON command for that light. An OFF command before the first ON leaves the pin untouched.
-- Once a pin has been activated, an OFF command drives the configured inactive level.
+The current GPIO-based implementation is a software prototype, not a finalized hardware design:
 
-## Critical hardware caveat
+- `LED_FRONT_PIN` and `LED_REAR_PIN` in `hardware_config.h` are temporary placeholders (currently GPIO5 and GPIO15).
+- The final pins and electrical interface have not been selected.
+- Possible implementations include direct ESP32 control where electrically appropriate, transistor/MOSFET switching, or PCA9685 outputs combined with suitable driver stages.
+- `LED_ACTIVE_LOW` is also a temporary assumption and must match the eventual driver circuit.
+- ESP32 light states are volatile. The controller no longer reads or writes NVS keys `ledF` and `ledR`; both lights start logically OFF after reset.
 
-GPIO5 and GPIO15 are strapping pins on the classic ESP32. Deferring pinMode() until a WebSocket ON command does not remove their hardware strap behavior during reset and boot. The attached circuit must not force an incompatible level at reset. Check the actual ESP32 module, board schematic, driver input impedance and pull resistors. If cold boot, reset, firmware upload or OTA recovery becomes unreliable, do not merge this branch; use the I²C-expander option instead.
+Do not treat the current pin numbers, polarity or output circuit as a hardware recommendation. Update the implementation after the lighting architecture is chosen.
 
-The LED load must not be powered directly from an ESP32 GPIO. Use suitable resistors for low-current indicator LEDs or a transistor/MOSFET driver for the actual light load, with a common ground where required.
+## Current firmware behavior
 
-## Firmware behavior
-
-1. WebSocket commands ledF: 1 / ledR: 1 lazily configure only the requested GPIO as OUTPUT and then assert its active level.
-2. WebSocket commands ledF: 0 / ledR: 0 drive the inactive level only if that GPIO was initialized earlier.
+1. WebSocket commands `ledF: 1` / `ledR: 1` lazily configure the corresponding placeholder GPIO as OUTPUT and assert its configured active level.
+2. WebSocket commands `ledF: 0` / `ledR: 0` drive the inactive level only if that GPIO was initialized earlier.
 3. The two channels are independent.
 4. No motor-control, servo, OLED or battery-monitor paths are intentionally changed.
-5. LED_ACTIVE_LOW in hardware_config.h defines the assumed output polarity; change it only after verifying the real driver circuit.
+5. Pin selection, polarity and driver-stage behavior remain provisional until the physical design is decided.
 
 ## Required verification
 
@@ -33,16 +30,15 @@ The LED load must not be powered directly from an ESP32 GPIO. Use suitable resis
 - Keep `python3 tools/run_regression_checks.py` as the single additional manual software regression check before release.
 - Review the diff for unrelated changes.
 
-### Bench / hardware tests before any merge
+### Hardware tests after the lighting architecture is selected
 
-1. Cold boot repeatedly with the LED driver physically connected and disconnected where safe.
-2. Verify reset, serial/programming recovery and OTA update behavior.
-3. Verify both lights remain OFF after boot even if they were ON before power was removed.
-4. Verify front ON/OFF, rear ON/OFF, and both ON/OFF independently.
-5. Check for unintended flashes during boot and reset.
-6. Drive all four motors, move the steering servo, refresh OLED telemetry and use the WebSocket GUI while toggling the lights.
-7. Watch for ESP32 resets, Wi-Fi/WebSocket disconnects, motor glitches or other changes in behavior.
+1. Confirm the final GPIO/expander assignments against the actual schematic.
+2. Verify voltage, current, polarity, and driver requirements for the selected light modules.
+3. Verify front and rear ON/OFF independently and together.
+4. Check for unintended flashes during startup, reset and firmware update.
+5. Drive all four motors, move the steering servo, refresh OLED telemetry and use the WebSocket GUI while toggling the lights.
+6. Watch for resets, Wi-Fi/WebSocket disconnects, motor glitches or other changes in behavior.
 
 ## Merge decision
 
-Do not merge this branch until the bench tests pass on the actual hardware. Any boot, programming, OTA or runtime issue involving GPIO5/GPIO15 is a stop condition. In that case, preserve the working branch and implement the lights through an I²C GPIO expander when that hardware is available.
+The current implementation is a provisional software prototype. Before treating it as hardware-ready, choose the lighting architecture and update the GPIO assignments, polarity, driver interface and relevant documentation, then run software regression and bench tests on the actual hardware.
