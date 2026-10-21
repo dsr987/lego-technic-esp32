@@ -313,8 +313,10 @@ void setup() {
    * });
    */
 
-  // 9. Запуск OTA-обновления и HTTP-сервера.
+  // 9. Настройка OTA и явный запуск HTTP-сервера.
+  // ElegantOTA регистрирует OTA-маршруты, но не заменяет server.begin().
   ElegantOTA.begin(&server, OTA_USERNAME, OTA_PASSWORD);
+  server.begin();
 
   // 10. Приводим моторы и руль в начальное состояние.
   stopAll();
