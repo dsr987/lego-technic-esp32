@@ -1,5 +1,9 @@
 # История версий
 
+## 0.9.5 — 2026-10-21
+### Изменено
+- Replace the malformed tank-mode OLED icon with a clearer tracked vehicle silhouette. ([PR #74](https://github.com/dsr987/lego-technic-esp32/pull/74))
+
 ## 0.9.4 — 2026-10-21
 ### Изменено
 - Fix the blank Web GUI by serving the large embedded HTML page directly from PROGMEM, avoiding a heap allocation that can fail on ESP32. ([PR #72](https://github.com/dsr987/lego-technic-esp32/pull/72))
