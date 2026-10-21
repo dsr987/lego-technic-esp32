@@ -283,7 +283,7 @@ void setup() {
 
   // Главная страница веб-интерфейса.
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
-    req->send(200, "text/html", PAGE_HTML);
+    req->send_P(200, "text/html", PAGE_HTML);
   });
 
   /*
