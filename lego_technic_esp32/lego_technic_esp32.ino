@@ -2,7 +2,7 @@
  * LEGO Technic ESP32
  * Main Arduino sketch: filename and containing directory must match.
  * Shared module implementations remain in their dedicated .cpp/.h files.
- * Версия разработки: 0.9.3
+ * Версия разработки: 0.9.4
  *
  * Текущий выпуск: калибровка измерения напряжения батареи.
  * В проекте также доступны обновлённый Web GUI и OLED Update 2.0.
@@ -24,9 +24,9 @@
  * - Рабочая панель OLED показывает режим, процент заряда и напряжение батареи, количество подключённых клиентов Wi-Fi и предупреждение о низком заряде.
  * - Если инициализация OLED не удалась, прошивка продолжает запуск без попыток выводить данные на недоступный дисплей.
  *
- * CHANGELOG_VERSION: 0.9.3
+ * CHANGELOG_VERSION: 0.9.4
  * CHANGELOG_START
- * - Start the AsyncWebServer explicitly after registering the HTTP and ElegantOTA routes. The SoftAP was available, but the main firmware never called `server.begin()`, leaving the Web GUI unreachable. ([PR #70](https://github.com/dsr987/lego-technic-esp32/pull/70))
+ * - Fix the blank Web GUI by serving the large embedded HTML page directly from PROGMEM, avoiding a heap allocation that can fail on ESP32. ([PR #72](https://github.com/dsr987/lego-technic-esp32/pull/72))
  * CHANGELOG_END
  *
  * тестовый запуск сборки
