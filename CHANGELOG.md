@@ -1,5 +1,9 @@
 # История версий
 
+## 0.9.3 — 2026-10-21
+### Изменено
+- Start the AsyncWebServer explicitly after registering the HTTP and ElegantOTA routes. The SoftAP was available, but the main firmware never called `server.begin()`, leaving the Web GUI unreachable. ([PR #70](https://github.com/dsr987/lego-technic-esp32/pull/70))
+
 ## 0.9.2 beta — 2026-10-20
 ### Исправлено и изменено
 - Восстановлен основной код прошивки в `lego_technic_esp32.ino`. Причина падения компиляции найдена: имя каталога скетча совпадало с именем файла `.ino`; после исправления структуры временный обходной вариант с `app.cpp` больше не нужен.
