@@ -1,5 +1,9 @@
 # История версий
 
+## 0.9.4 — 2026-10-21
+### Изменено
+- Fix the blank Web GUI by serving the large embedded HTML page directly from PROGMEM, avoiding a heap allocation that can fail on ESP32. ([PR #72](https://github.com/dsr987/lego-technic-esp32/pull/72))
+
 ## 0.9.3 — 2026-10-21
 ### Изменено
 - Start the AsyncWebServer explicitly after registering the HTTP and ElegantOTA routes. The SoftAP was available, but the main firmware never called `server.begin()`, leaving the Web GUI unreachable. ([PR #70](https://github.com/dsr987/lego-technic-esp32/pull/70))

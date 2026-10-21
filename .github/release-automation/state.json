@@ -32,15 +32,17 @@
     63,
     65,
     67,
-    70
+    70,
+    72
   ],
   "release_prs": [
     10,
     11,
     65,
-    70
+    70,
+    72
   ],
-  "last_processed_pr": 70,
+  "last_processed_pr": 72,
   "last_release_type": "patch",
-  "last_version": "0.9.3"
+  "last_version": "0.9.4"
 }
