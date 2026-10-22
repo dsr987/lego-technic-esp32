@@ -877,7 +877,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       </div>
       <div class="line">
         <span>Макс.°</span><span class="grow"></span>
-        <input class="num" id="maxdeg-input" type="number" min="5" max="90" value="45">
+        <input class="num" id="maxdeg-input" type="number" min="5" max="135" value="45">
       </div>
     </div>
     <div class="block">
@@ -1865,8 +1865,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   $('sbg').onclick=function(){ openS(false); };
   $('sheetBody').addEventListener('touchmove', function(e){ e.stopPropagation(); }, {passive:true});
 
-  $('trimM').onclick=function(){ vibrateClick(); trim=Math.max(-400,trim-50); $('val-trim').textContent=trim; txWS({trim:trim}); };
-  $('trimP').onclick=function(){ vibrateClick(); trim=Math.min(400,trim+50); $('val-trim').textContent=trim; txWS({trim:trim}); };
+  $('trimM').onclick=function(){ vibrateClick(); trim=Math.max(-250,trim-50); $('val-trim').textContent=trim; txWS({trim:trim}); };
+  $('trimP').onclick=function(){ vibrateClick(); trim=Math.min(250,trim+50); $('val-trim').textContent=trim; txWS({trim:trim}); };
   $('maxdeg-input').onchange=function(){ vibrateClick(); txWS({maxdeg: +this.value||45}); };
 
   var speedMs = 0, rpmShown = 0, moveDir = 0;
