@@ -500,7 +500,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="brand-info" id="brand-info">
         <div class="brand-title">LEGO TECHNIC ESP32</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-addr">192.168.4.1</span></div>
-        <div class="brand-ver">0.9.5 · beta</div>
+        <div class="brand-ver">0.9.6 · beta</div>
       </div>
       <div class="brand-monitor hidden" id="brand-monitor" aria-live="polite">
         <code id="telemetry">{"ch":"—","val":0}</code>
@@ -875,7 +875,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       </div>
       <div class="line">
         <span>Макс.°</span><span class="grow"></span>
-        <input class="num" id="maxdeg-input" type="number" min="5" max="90" value="45">
+        <input class="num" id="maxdeg-input" type="number" min="5" max="135" value="45">
       </div>
     </div>
     <div class="block">
@@ -1863,8 +1863,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   $('sbg').onclick=function(){ openS(false); };
   $('sheetBody').addEventListener('touchmove', function(e){ e.stopPropagation(); }, {passive:true});
 
-  $('trimM').onclick=function(){ vibrateClick(); trim=Math.max(-400,trim-50); $('val-trim').textContent=trim; txWS({trim:trim}); };
-  $('trimP').onclick=function(){ vibrateClick(); trim=Math.min(400,trim+50); $('val-trim').textContent=trim; txWS({trim:trim}); };
+  $('trimM').onclick=function(){ vibrateClick(); trim=Math.max(-250,trim-50); $('val-trim').textContent=trim; txWS({trim:trim}); };
+  $('trimP').onclick=function(){ vibrateClick(); trim=Math.min(250,trim+50); $('val-trim').textContent=trim; txWS({trim:trim}); };
   $('maxdeg-input').onchange=function(){ vibrateClick(); txWS({maxdeg: +this.value||45}); };
 
   var speedMs = 0, rpmShown = 0, moveDir = 0;
