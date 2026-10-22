@@ -12,6 +12,8 @@ extern int steerCenterUs;
 extern int steerMaxAngleDeg;
 
 // Преобразование градусов в микросекунды
+// Keep the existing 1000 us / 180-degree calibration scale.
+// A 135-degree command therefore spans 750 us from the calibrated center.
 static const float US_PER_DEGREE = 1000.0 / 180.0;
 
 
