@@ -34,7 +34,8 @@
     67,
     70,
     72,
-    74
+    74,
+    77
   ],
   "release_prs": [
     10,
@@ -42,9 +43,10 @@
     65,
     70,
     72,
-    74
+    74,
+    77
   ],
-  "last_processed_pr": 74,
+  "last_processed_pr": 77,
   "last_release_type": "patch",
-  "last_version": "0.9.5"
+  "last_version": "0.9.6"
 }

@@ -1,5 +1,9 @@
 # История версий
 
+## 0.9.6 — 2026-10-22
+### Изменено
+- Fix motor output dropping at exactly 100% slider command by avoiding the unsupported/unreliable 100% LEDC duty endpoint. ([PR #77](https://github.com/dsr987/lego-technic-esp32/pull/77))
+
 ## 0.9.5 — 2026-10-21
 ### Изменено
 - Replace the malformed tank-mode OLED icon with a clearer tracked vehicle silhouette. ([PR #74](https://github.com/dsr987/lego-technic-esp32/pull/74))
