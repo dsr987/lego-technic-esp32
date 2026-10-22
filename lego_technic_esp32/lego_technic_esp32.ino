@@ -250,7 +250,8 @@ void setup() {
 
   // 4. Инициализация рулевого сервопривода.
   steerServo.setPeriodHertz(50);
-  steerServo.attach(SERVO_PIN, 1000, 2000);
+  // Positional servo: allow the full calibrated pulse range for up to 270-degree steering.
+  steerServo.attach(SERVO_PIN, 500, 2500);
 
   // 5. Инициализация OLED-дисплея.
   Wire.begin(OLED_SDA, OLED_SCL);
