@@ -30,8 +30,9 @@ void loadPreferences() {
   ledFrontOn = prefs.getUChar("ledF", 0) != 0;
   ledRearOn  = prefs.getUChar("ledR", 0) != 0;
 
-  steerCenterUs = prefs.getInt("steer_c", 1500);
-  steerMaxAngleDeg = prefs.getInt("steer_a", 45);
+  // Clamp persisted calibration to the supported symmetric steering range.
+  steerCenterUs = constrain(prefs.getInt("steer_c", 1500), 1250, 1750);
+  steerMaxAngleDeg = constrain(prefs.getInt("steer_a", 45), 5, 135);
 }
 
 
