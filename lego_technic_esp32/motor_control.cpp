@@ -25,7 +25,9 @@ extern bool engineSimOn;
 
 static void setDCBridge(int in1, int in2, int pwmChannel, int val) {
   val = constrain(val, -100, 100);
-  int duty = map(abs(val), 0, 100, 0, 255);
+  // ESP32 LEDC can behave unexpectedly at the exact 100% duty endpoint (255 at 8-bit resolution).
+  // Cap PWM at 254: this is effectively full power but avoids the timer overflow edge case.
+  int duty = map(abs(val), 0, 100, 0, 254);
 
   if (val > 0) {
     digitalWrite(in1, HIGH);
