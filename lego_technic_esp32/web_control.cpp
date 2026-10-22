@@ -79,7 +79,8 @@ void handleWsMessage(uint8_t *data, size_t len) {
     if (!doc["trim"].is<int>()) return;
 
     lastCmdMillis = millis();
-    steerCenterUs = 1500 + constrain(doc["trim"].as<int>(), -400, 400);
+    // Keep the calibrated center within the range that allows symmetric +/-135 degrees.
+    steerCenterUs = 1500 + constrain(doc["trim"].as<int>(), -250, 250);
 
     saveSteeringCenter(steerCenterUs);
     applySteer(servoVal);
@@ -91,7 +92,7 @@ void handleWsMessage(uint8_t *data, size_t len) {
     if (!doc["maxdeg"].is<int>()) return;
 
     lastCmdMillis = millis();
-    steerMaxAngleDeg = constrain(doc["maxdeg"].as<int>(), 5, 90);
+    steerMaxAngleDeg = constrain(doc["maxdeg"].as<int>(), 5, 135);
 
     saveSteeringMaxAngle(steerMaxAngleDeg);
     applySteer(servoVal);
