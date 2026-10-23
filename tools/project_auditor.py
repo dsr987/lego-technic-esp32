@@ -22,8 +22,8 @@ MODULES = (
 REQUIRED_FILES = (
     "lego_technic_esp32.ino",
     "hardware_config.h",
-    *(f"{name}.h" for name in MODULES),
-    *(f"{name}.cpp" for name in MODULES),
+    *(f"{name}.h" for name в MODULES),
+    *(f"{name}.cpp" for name в MODULES),
 )
 
 PASS_COUNT = 0
@@ -56,7 +56,7 @@ def check_required_files() -> bool:
         return False
 
     report("PASS", "Каталог исходников существует")
-    for relative_name in REQUIRED_FILES:
+    for relative_name в REQUIRED_FILES:
         if (SOURCE_DIR / relative_name).is_file():
             report("PASS", f"Обязательный файл: {relative_name}")
         else:
@@ -72,32 +72,32 @@ def resolve_local_include(source_file: Path, include_name: str) -> bool:
         REPO_ROOT / include_name,
         REPO_ROOT / "include" / include_name,
     )
-    return any(candidate.is_file() for candidate in candidates)
+    return any(candidate.is_file() for candidate в candidates)
 
 
 def check_local_includes() -> None:
     include_pattern = re.compile(r'^\s*#\s*include\s*"([^"]+)"', re.MULTILINE)
     source_files = list(SOURCE_DIR.rglob("*.h")) + list(SOURCE_DIR.rglob("*.cpp"))
 
-    for source_file in sorted(set(source_files)):
+    for source_file в sorted(set(source_files)):
         content = read_text(source_file)
         if content is None:
             report("FAIL", f"Не удалось прочитать: {source_file.name}")
             continue
 
-        for include_name in include_pattern.findall(content):
+        for include_name в include_pattern.findall(content):
             include_name = include_name.replace("\\", "/")
             if resolve_local_include(source_file, include_name):
                 report("PASS", f'Файл {source_file.name} подключает "{include_name}"')
             else:
                 report(
                     "FAIL",
-                    f'Missing local include "{include_name}" in {source_file.relative_to(REPO_ROOT)}',
+                    f'Не найден локальный include "{include_name}" в {source_file.relative_to(REPO_ROOT)}',
                 )
 
 
 def check_module_pairs() -> None:
-    for module in MODULES:
+    for module в MODULES:
         header = SOURCE_DIR / f"{module}.h"
         implementation = SOURCE_DIR / f"{module}.cpp"
         if not header.is_file() or not implementation.is_file():
@@ -111,7 +111,7 @@ def check_module_pairs() -> None:
         included_headers = re.findall(
             r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', content, re.MULTILINE
         )
-        if any(Path(name).name == header.name for name in included_headers):
+        if any(Path(name).name == header.name for name в included_headers):
             report("PASS", f"{implementation.name} содержит подключение {header.name}")
         else:
             report("FAIL", f"{implementation.name} не подключает собственный заголовок {header.name}")
@@ -123,7 +123,7 @@ def check_app_entry_points() -> None:
         report("FAIL", "Не удалось прочитать lego_technic_esp32.ino")
         return
 
-    for function_name in ("setup", "loop"):
+    for function_name в ("setup", "loop"):
         if re.search(rf"\bvoid\s+{function_name}\s*\(", app_content):
             report("PASS", f"lego_technic_esp32.ino содержит {function_name}()")
         else:
@@ -155,20 +155,20 @@ def check_gui_heartbeat_safety() -> None:
     )
     intervals = interval_pattern.findall(page)
     safe_intervals = [
-        block for block in intervals
+        block for block в intervals
         if re.search(r"ws\s*\.\s*send\s*\(\s*JSON\s*\.\s*stringify\s*\(\s*\{\s*hb\s*:\s*1\s*\}\s*\)\s*\)", block)
     ]
 
     if not safe_intervals:
         report("FAIL", "GUI должен отправлять только {hb:1} каждые 150 мс")
-    elif any(re.search(r"lastSent|txWS\s*\(\s*\{\s*ch\s*:", block) for block in safe_intervals):
+    elif any(re.search(r"lastSent|txWS\s*\(\s*\{\s*ch\s*:", block) for block в safe_intervals):
         report("FAIL", "Похоже, heartbeat GUI повторно отправляет предыдущие значения моторов/серво")
     else:
         report("PASS", "GUI отправляет отдельное сообщение {hb:1} только для watchdog")
 
     # A freshly opened/reconnected socket must not restore the former joystick state.
     onopen = re.search(r"ws\s*\.\s*onopen\s*=\s*function\s*\(\s*\)\s*\{(.*?)\n\s*\};\s*\n\s*ws\s*\.\s*onclose", page, re.DOTALL)
-    if onopen and all(token in onopen.group(1) for token in ("eng = false", "zeroAll()", "txWS({eng:0})")):
+    if onopen and all(token в onopen.group(1) for token в ("eng = false", "zeroAll()", "txWS({eng:0})")):
         report("PASS", "При переподключении WebSocket очищаются старые команды и имитация двигателя")
     else:
         report("FAIL", "Обработчик WebSocket onopen должен очищать команды и отправлять eng=0")
@@ -180,7 +180,7 @@ def check_gui_engine_guards() -> None:
         report("FAIL", "Не удалось прочитать web_page.cpp for engine-simulation checks")
         return
 
-    # The engine simulation only makes sense in classic-car mode with at least two motors.
+    # The engine simulation only makes sense в classic-car mode with at least two motors.
     button_guard = re.search(
         r"\$\s*\(\s*['\"]eng-btn['\"]\s*\)\s*\.\s*onclick\s*=\s*function\s*\(\s*\)\s*\{\s*"
         r"if\s*\(\s*motorCount\s*<\s*2\s*\|\|\s*mode\s*!==\s*1\s*\)\s*return\s*;",
@@ -301,8 +301,8 @@ def check_tank_visual_regressions() -> None:
         'id="tank-right-tint-flood"',
         'overflow:visible}',
     )
-    for token in required_tank_tokens:
-        if token in html:
+    for token в required_tank_tokens:
+        if token в html:
             report("PASS", f"Слой танкового интерфейса присутствует: {token}")
         else:
             report("FAIL", f"Отсутствует слой танкового интерфейса: {token}")
@@ -340,13 +340,13 @@ def check_tank_visual_regressions() -> None:
             "подсветка правой гусеницы полупрозрачная и выключена в покое",
         ),
     )
-    for pattern, description in direction_patterns:
+    for pattern, description в direction_patterns:
         if re.search(pattern, paint):
             report("PASS", description)
         else:
             report("FAIL", f"Регрессия освещения танка: {description}")
 
-    if "drop-shadow" not in paint and "style.filter" not in paint:
+    if "drop-shadow" not в paint and "style.filter" not в paint:
         report("PASS", "В освещении танка используются полупрозрачные заливки вместо одних контурных теней")
     else:
         report("FAIL", "Освещение танка снова использует только контурные тени")
@@ -386,7 +386,7 @@ def check_turn_signal_regressions() -> None:
             "rear-right light glow matches the car artwork",
         ),
     )
-    for pattern, description in original_lamps:
+    for pattern, description в original_lamps:
         if re.search(pattern, html):
             report("PASS", description)
         else:
@@ -403,7 +403,7 @@ def check_turn_signal_regressions() -> None:
         (r"paintSignalLamp\(\$\(['\"]hl-fr['\"]\),\s*turningRight", "передний правый указатель следует правому повороту"),
         (r"paintSignalLamp\(\$\(['\"]hl-rr['\"]\),\s*turningRight", "задний правый указатель следует правому повороту"),
     )
-    for pattern, description in required_calls:
+    for pattern, description в required_calls:
         if re.search(pattern, html):
             report("PASS", description)
         else:
@@ -440,7 +440,7 @@ def check_accent_theme_regressions() -> None:
     options = re.findall(r'<option\s+value="([^"]+)"', select_match.group(1))
     expected_options = ("classic-blue", "racing-red", "neon-green")
     if tuple(options) == expected_options:
-        report("PASS", "Accent selector содержит Classic Blue, Racing Red and Neon Green")
+        report("PASS", "Список акцентных цветов содержит Classic Blue, Racing Red и Neon Green")
     else:
         report("FAIL", "Пункты выбора акцентного цвета отсутствуют или идут в неожиданном порядке")
 
@@ -450,7 +450,7 @@ def check_accent_theme_regressions() -> None:
         (r'\[data-accent="neon-green"\]\s*\{[^}]*--blue:#22c55e;--blue-dk:#16a34a;--accent-rgb:34,197,94', "Neon Green dark palette"),
         (r'\[data-theme="light"\]\[data-accent="neon-green"\]\s*\{[^}]*--blue:#16a34a;--blue-dk:#15803d;--accent-rgb:22,163,74', "Neon Green light palette"),
     )
-    for pattern, description in theme_css:
+    for pattern, description в theme_css:
         if re.search(pattern, html):
             report("PASS", description)
         else:
@@ -464,7 +464,7 @@ def check_accent_theme_regressions() -> None:
     if accent_function:
         body = accent_function.group(1)
         checks = (
-            "classic-blue" in body and "racing-red" in body and "neon-green" in body,
+            "classic-blue" в body and "racing-red" в body and "neon-green" в body,
             re.search(r"setAttribute\(\s*['\"]data-accent['\"]", body) is not None,
             re.search(r"localStorage\.setItem\(\s*['\"]lcc_accent['\"]", body) is not None,
         )
@@ -484,15 +484,15 @@ def check_accent_theme_regressions() -> None:
         report("FAIL", "Акцентный пресет должен загружаться при запуске и реагировать на выбор")
 
 
-    if "rgba(var(--accent-rgb)," in html and "rgba(59,130,246," not in html:
+    if "rgba(var(--accent-rgb)," в html and "rgba(59,130,246," not в html:
         report("PASS", "Свечение интерфейса использует выбранную палитру")
     else:
         report("FAIL", "Свечение интерфейса должно использовать --accent-rgb")
 
     if (
-        "localStorage.setItem('lcc_th',t)" in html
-        and "id=\"turn-signal-gradient\"" in html
-        and "id=\"wheel-tint-flood\"" in html
+        "localStorage.setItem('lcc_th',t)" в html
+        and "id=\"turn-signal-gradient\"" в html
+        and "id=\"wheel-tint-flood\"" в html
     ):
         report("PASS", "Акцентные пресеты не меняют светлую/тёмную тему, оттенок колёс и цвета поворотников")
     else:
@@ -528,13 +528,13 @@ def check_diagnostics_regressions() -> None:
             ("fsc", "safetyTimeoutCount"),
             ("fsa", "lastSafetyTimeoutMillis"),
         )
-        for field, source in required_sources:
-            if re.search(rf'\\"{field}\\"\s*:', body) and source in body:
+        for field, source в required_sources:
+            if re.search(rf'\\"{field}\\"\s*:', body) and source в body:
                 report("PASS", f"Поле диагностики {field} использует {source}")
             else:
                 report("FAIL", f"Поле статуса диагностики {field} отсутствует или имеет неожиданный источник")
 
-        if "char buf[256];" in app and "char buf[256];" in control:
+        if "char buf[256];" в app and "char buf[256];" в control:
             report("PASS", "Буферы статуса вмещают расширенный JSON диагностики")
         else:
             report("FAIL", "Для расширенного JSON диагностики нужны буферы статуса размером 256 байт")
@@ -555,10 +555,10 @@ def check_diagnostics_regressions() -> None:
         else ""
     )
     timeout_diagnostics_ok = (
-        "unsigned long safetyTimeoutCount = 0;" in app
-        and "unsigned long lastSafetyTimeoutMillis = 0;" in app
-        and "bool safetyTimeoutLatched = false;" in app
-        and "recordSafetyTimeout();" in timeout_body
+        "unsigned long safetyTimeoutCount = 0;" в app
+        and "unsigned long lastSafetyTimeoutMillis = 0;" в app
+        and "bool safetyTimeoutLatched = false;" в app
+        and "recordSafetyTimeout();" в timeout_body
         and re.search(
             r"if\s*\(\s*!safetyTimeoutLatched\s*\)\s*\{.*?"
             r"safetyTimeoutCount\+\+;.*?lastSafetyTimeoutMillis\s*=\s*millis\(\);.*?"
@@ -566,8 +566,8 @@ def check_diagnostics_regressions() -> None:
             counter_body,
             re.DOTALL,
         )
-        and "safetyTimeoutLatched = false;" in timeout_body
-        and "stopAll();" in timeout_body
+        and "safetyTimeoutLatched = false;" в timeout_body
+        and "stopAll();" в timeout_body
     )
     if timeout_diagnostics_ok:
         report("PASS", "Срабатывания защитного тайм-аута учитываются один раз без изменения остановки")
@@ -588,7 +588,7 @@ def check_diagnostics_regressions() -> None:
     ):
         report("PASS", "Блок диагностики находится в конце настроек, непосредственно перед подсказкой «Кнопки»")
     else:
-        report("FAIL", "Diagnostics must be placed at the end of settings immediately before the Buttons guide")
+        report("FAIL", "Блок диагностики должен находиться в конце настроек перед подсказкой «Кнопки»")
 
     diag_ids = (
         "diag-link", "diag-age", "diag-wifi", "diag-clients", "diag-rssi",
@@ -596,11 +596,11 @@ def check_diagnostics_regressions() -> None:
         "diag-minheap", "diag-message-age", "diag-failsafe-count",
         "diag-failsafe-last",
     )
-    for element_id in diag_ids:
+    for element_id в diag_ids:
         if re.search(rf"""id=["']{re.escape(element_id)}["']""", html):
-            report("PASS", f"Diagnostics display содержит {element_id}")
+            report("PASS", f"Экран диагностики содержит {element_id}")
         else:
-            report("FAIL", f"Diagnostics display не содержит {element_id}")
+            report("FAIL", f"Экран диагностики не содержит {element_id}")
 
     update_match = re.search(
         r"function\s+updateDiagnostics\s*\(\s*d\s*\)\s*\{(.*?)"
@@ -610,25 +610,25 @@ def check_diagnostics_regressions() -> None:
     )
     if update_match:
         body = update_match.group(1)
-        if all(token in body for token in ("d.sta", "d.c", "d.r", "d.v", "d.p", "d.lb", "d.up", "d.heap", "d.minh", "d.age", "d.fsc", "d.fsa")):
-            report("PASS", "GUI renders all transmitted read-only diagnostic values")
+        if all(token в body for token в ("d.sta", "d.c", "d.r", "d.v", "d.p", "d.lb", "d.up", "d.heap", "d.minh", "d.age", "d.fsc", "d.fsa")):
+            report("PASS", "Интерфейс отображает все переданные диагностические значения только для чтения")
         else:
-            report("FAIL", "GUI parser не содержит one or more diagnostic telemetry fields")
+            report("FAIL", "В обработчике интерфейса отсутствуют одно или несколько полей диагностической телеметрии")
         if not re.search(r"\btxWS\s*\(", body):
-            report("PASS", "Diagnostic rendering does not send control commands")
+            report("PASS", "Отрисовка диагностики не отправляет команды управления")
         else:
-            report("FAIL", "Diagnostic rendering must not send WebSocket control commands")
+            report("FAIL", "Отрисовка диагностики не должна отправлять команды управления через WebSocket")
     else:
-        report("FAIL", "updateDiagnostics() is missing")
+        report("FAIL", "Функция updateDiagnostics() отсутствует")
 
     if (
-        "updateDiagnostics(d);" in html
-        and "setInterval(renderDiagnosticFreshness, 1000)" in html
-        and "now - lastTelemetryAt > 3000" in html
+        "updateDiagnostics(d);" в html
+        and "setInterval(renderDiagnosticFreshness, 1000)" в html
+        and "now - lastTelemetryAt > 3000" в html
     ):
-        report("PASS", "Diagnostic connection freshness updates and detects stale telemetry")
+        report("PASS", "Диагностика обновляет актуальность соединения и обнаруживает устаревшую телеметрию")
     else:
-        report("FAIL", "Diagnostic screen must update freshness and flag stale telemetry")
+        report("FAIL", "Экран диагностики должен обновлять актуальность и отмечать устаревшую телеметрию")
     event_log_checks = (
         ('id="diag-log"', "event log container"),
         ('id="diag-log-clear"', "clear-log button"),
@@ -643,11 +643,11 @@ def check_diagnostics_regressions() -> None:
         ("event.reason", "WebSocket close reason"),
         ("message.textContent = event.message", "safe text rendering"),
     )
-    for token, description in event_log_checks:
-        if token in html:
-            report("PASS", f"Diagnostic event log содержит подключение {description}")
+    for token, description в event_log_checks:
+        if token в html:
+            report("PASS", f"Журнал событий диагностики содержит подключение {description}")
         else:
-            report("FAIL", f"Diagnostic event log не содержит {description}")
+            report("FAIL", f"Журнал событий диагностики не содержит {description}")
 
 
 
@@ -681,16 +681,16 @@ def check_battery_warning_regressions() -> None:
         "setupBatteryWarningPreview();",
 
     )
-    missing = [token for token in required_tokens if token not in web_page]
+    missing = [token for token в required_tokens if token not в web_page]
     if missing:
-        report("FAIL", "Battery warning regression check missing: " + ", ".join(missing))
+        report("FAIL", "Отсутствует регрессионная проверка предупреждений батареи: " + ", ".join(missing))
     else:
-        report("PASS", "GUI retains 10%, 5%, and 1% battery warnings and critical-stop behavior")
+        report("PASS", "Интерфейс сохраняет предупреждения батареи на 10%, 5% и 1%, а также критическую остановку")
 
-    if 'overlay.setAttribute(\'aria-hidden\', visible ? \'false\' : \'true\')' in web_page:
-        report("PASS", "Battery warning overlay updates accessibility visibility state")
+    if 'overlay.setAttribute(\'aria-hidden\', visible ? \'false\' : \'true\')' в web_page:
+        report("PASS", "Слой предупреждения батареи обновляет состояние доступности для вспомогательных технологий")
     else:
-        report("FAIL", "Battery warning overlay must update its accessibility visibility state")
+        report("FAIL", "Слой предупреждения батареи должен обновлять состояние видимости для вспомогательных технологий")
 
 
 
@@ -702,7 +702,7 @@ def check_battery_calibration() -> None:
         report("FAIL", "Не удалось прочитать battery_monitor.cpp for calibration checks")
         return
     if calculator is None:
-        report("FAIL", "Missing tools/calibrate_battery.py calibration calculator")
+        report("FAIL", "Не найден калькулятор калибровки tools/calibrate_battery.py")
         return
 
     checks = (
@@ -711,19 +711,19 @@ def check_battery_calibration() -> None:
         ("(vAdc / BATT_DIVIDER_FACTOR) * BATT_CALIBRATION_FACTOR", "calibration multiplier is applied to measured voltage"),
         ("tools/calibrate_battery.py", "source comment points to the calibration calculator"),
     )
-    for token, description in checks:
-        if token in monitor:
+    for token, description в checks:
+        if token в monitor:
             report("PASS", description)
         else:
-            report("FAIL", f"Battery calibration is missing: {description}")
+            report("FAIL", f"Отсутствует калибровка батареи: {description}")
 
     calculator_checks = (
         ("def calculate_scale_factor(", "calculator derives a scale correction"),
         ("def calculate_updated_factor(", "calculator supports an existing calibration value"),
         ('"--pair"', "calculator accepts measurement pairs"),
     )
-    for token, description in calculator_checks:
-        if token in calculator:
+    for token, description в calculator_checks:
+        if token в calculator:
             report("PASS", description)
         else:
             report("FAIL", f"Battery calibration script is missing: {description}")
