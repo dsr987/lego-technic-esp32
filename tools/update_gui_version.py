@@ -39,7 +39,7 @@ def main() -> int:
         text, count = pattern.subn(rf"\g<1>{version}\g<2>", text)
         if count != 1:
             print(
-                f"ERROR: Expected exactly one GUI version label in {path}, found {count}",
+                f"ОШИБКА: ожидалась ровно одна метка версии интерфейса в {path}, найдено: {count}",
                 file=sys.stderr,
             )
             return 1
