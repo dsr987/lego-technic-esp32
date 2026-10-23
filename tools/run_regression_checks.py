@@ -115,7 +115,7 @@ def install_and_compile_firmware() -> None:
         config_file = str(temp_path / "arduino-cli.yaml")
         build_dir = str(temp_path / "build")
 
-        # Use a temporary CLI config instead of overwriting the user's global config.
+        # Используем временную конфигурацию CLI вместо изменения глобальных настроек пользователя.
         run("arduino-cli", "--config-file", config_file, "config", "init", "--overwrite")
         run("arduino-cli", "--config-file", config_file, "config", "add", "board_manager.additional_urls", ESP32_INDEX)
         run("arduino-cli", "--config-file", config_file, "core", "update-index")
