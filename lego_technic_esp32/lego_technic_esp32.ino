@@ -402,7 +402,7 @@ void loop() {
 
     // Отправляем актуальный статус подключённым клиентам.
     if (ws.count() > 0) {
-      char buf[256];
+      char buf[384];
       buildStatus(buf, sizeof(buf));
       ws.textAll(buf);
     }
