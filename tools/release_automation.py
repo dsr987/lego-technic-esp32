@@ -38,14 +38,14 @@ def parse_release_type(raw_labels: str, body: str = "", allow_bootstrap_fallback
     unknown = [label for label in release_labels if label not in RELEASE_TYPES]
     if unknown:
         raise ReleaseMetadataError(
-            "Unknown release label(s): " + ", ".join(unknown) + ". "
+            "Неизвестная метка релиза(s): " + ", ".join(unknown) + ". "
             "Use one of: " + ", ".join(RELEASE_TYPES)
         )
     if len(release_labels) == 1:
         return RELEASE_TYPES[release_labels[0]]
     if len(release_labels) > 1:
         raise ReleaseMetadataError(
-            "A PR must have exactly one release label: " + ", ".join(RELEASE_TYPES)
+            "A PR должна быть ровно одна release label: " + ", ".join(RELEASE_TYPES)
         )
 
     # Только для первоначальной настройки: до первого успешного запуска в репозитории
@@ -56,7 +56,7 @@ def parse_release_type(raw_labels: str, body: str = "", allow_bootstrap_fallback
         if len(matches) == 1 and matches[0] in RELEASE_TYPES:
             return RELEASE_TYPES[matches[0]]
     raise ReleaseMetadataError(
-        "A PR must have exactly one release label: " + ", ".join(RELEASE_TYPES)
+        "A PR должна быть ровно одна release label: " + ", ".join(RELEASE_TYPES)
     )
 
 
@@ -189,7 +189,7 @@ def validate_pr() -> int:
                     "## Release metadata",
                     "",
                     f"- Current version: **{current}**",
-                    "- Changelog summary:",
+                    "- Сводка журнала изменений:",
                     *[f"  - {bullet}" for bullet in bullets],
                     f"- {message}",
                 ]
@@ -207,7 +207,7 @@ def validate_pr() -> int:
                 f"- Release type: **{release_type}**",
                 f"- Current version: **{current}**",
                 f"- Proposed version: **{next_version}**",
-                "- Changelog summary:",
+                "- Сводка журнала изменений:",
                 *[f"  - {bullet}" for bullet in bullets],
             ]
         )
@@ -324,8 +324,8 @@ def prepare_push(event_path: str) -> int:
             release_labels = [label.strip() for label in labels.split(",") if label.strip().startswith("release:")]
             if not release_labels:
                 print(
-                    f"PR #{number} has no release label; skipping version metadata automation. "
-                    "Use an explicit release:* label when a version or changelog update is intended."
+                    f"У PR №{number} нет метки релиза; автоматизация метаданных пропускается. "
+                    "Если требуется обновить версию или журнал изменений, укажи метку release:*."
                 )
                 write_step_output(process="false")
                 return 0
