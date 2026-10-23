@@ -368,9 +368,6 @@ void recordSafetyTimeout() {
 
 void loop() {
 
-  // Плавное перемещение сервопривода к последней целевой позиции.
-  updateSteering();
-
   // Базовый watchdog: без команд/heartbeat дольше 500 мс останавливаем управление.
   if (millis() - lastCmdMillis > CMD_TIMEOUT_MS) {
     if (motorAVal != 0 ||
