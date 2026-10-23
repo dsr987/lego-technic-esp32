@@ -146,7 +146,7 @@ def check_gui_heartbeat_safety() -> None:
     """Heartbeat должен поддерживать watchdog, не повторяя старые значения ползунков."""
     page = read_text(SOURCE_DIR / "web_page.cpp")
     if page is None:
-        report("FAIL", "Не удалось прочитать web_page.cpp for heartbeat regression checks")
+        report("FAIL", "Не удалось прочитать web_page.cpp для проверки heartbeat")
         return
 
     interval_pattern = re.compile(
@@ -177,7 +177,7 @@ def check_gui_heartbeat_safety() -> None:
 def check_gui_engine_guards() -> None:
     page = read_text(SOURCE_DIR / "web_page.cpp")
     if page is None:
-        report("FAIL", "Не удалось прочитать web_page.cpp for engine-simulation checks")
+        report("FAIL", "Не удалось прочитать web_page.cpp для проверки имитации двигателя")
         return
 
     # The engine simulation only makes sense в classic-car mode with at least two motors.
@@ -220,10 +220,10 @@ def check_firmware_heartbeat_and_watchdog() -> None:
     control = read_text(SOURCE_DIR / "web_control.cpp")
     app = read_text(SOURCE_DIR / "lego_technic_esp32.ino")
     if control is None:
-        report("FAIL", "Не удалось прочитать web_control.cpp for heartbeat regression checks")
+        report("FAIL", "Не удалось прочитать web_control.cpp для проверки heartbeat")
         return
     if app is None:
-        report("FAIL", "Не удалось прочитать lego_technic_esp32.ino for watchdog regression checks")
+        report("FAIL", "Не удалось прочитать lego_technic_esp32.ino для проверки watchdog")
         return
 
     heartbeat_branch = re.search(
@@ -365,7 +365,7 @@ def check_turn_signal_regressions() -> None:
     """Сохраняет передние и задние поворотники на четырёх исходных позициях фонарей."""
     html = read_text(REPO_ROOT / "index.html")
     if html is None:
-        report("FAIL", "Не удалось прочитать index.html for turn-signal regression checks")
+        report("FAIL", "Не удалось прочитать index.html для проверки поворотников")
         return
 
     original_lamps = (
@@ -425,7 +425,7 @@ def check_accent_theme_regressions() -> None:
     """Проверяет, что акцентные темы меняют только цвета интерфейса и сохраняются после перезагрузки."""
     html = read_text(REPO_ROOT / "index.html")
     if html is None:
-        report("FAIL", "Не удалось прочитать index.html for accent-theme checks")
+        report("FAIL", "Не удалось прочитать index.html для проверки акцентных тем")
         return
 
     select_match = re.search(
@@ -506,7 +506,7 @@ def check_diagnostics_regressions() -> None:
     control = read_text(SOURCE_DIR / "web_control.cpp")
     html = read_text(REPO_ROOT / "index.html")
     if app is None or control is None or html is None:
-        report("FAIL", "Не удалось прочитать lego_technic_esp32.ino, web_control.cpp or index.html for diagnostics checks")
+        report("FAIL", "Не удалось прочитать lego_technic_esp32.ino, web_control.cpp или index.html для проверки диагностики")
         return
 
     status_fields = ("sta", "up", "heap", "minh", "age", "lb", "fsc", "fsa")
