@@ -24,7 +24,7 @@ def extract_html(input_file: str, output_file: str) -> None:
 
     if declaration is None:
         raise SystemExit(
-            f"ERROR: PAGE_HTML raw string not found in {source_path}"
+            f"ОШИБКА: не найдена строка PAGE_HTML в {source_path}"
         )
 
     html_start = declaration.end()
