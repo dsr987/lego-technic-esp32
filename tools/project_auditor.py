@@ -33,7 +33,8 @@ WARN_COUNT = 0
 
 def report(status: str, message: str) -> None:
     global PASS_COUNT, FAIL_COUNT, WARN_COUNT
-    print(f"[{status}] {message}")
+    display_status = {"PASS": "УСПЕХ", "FAIL": "ОШИБКА", "WARN": "ВНИМАНИЕ"}.get(status, status)
+    print(f"[{display_status}] {message}")
     if status == "PASS":
         PASS_COUNT += 1
     elif status == "FAIL":
@@ -51,15 +52,15 @@ def read_text(path: Path) -> str | None:
 
 def check_required_files() -> bool:
     if not SOURCE_DIR.is_dir():
-        report("FAIL", f"Source directory not found: {SOURCE_DIR.relative_to(REPO_ROOT)}")
+        report("FAIL", f"Каталог исходников не найден: {SOURCE_DIR.relative_to(REPO_ROOT)}")
         return False
 
-    report("PASS", "Source directory exists")
+    report("PASS", "Каталог исходников существует")
     for relative_name in REQUIRED_FILES:
         if (SOURCE_DIR / relative_name).is_file():
-            report("PASS", f"Required file: {relative_name}")
+            report("PASS", f"Обязательный файл: {relative_name}")
         else:
-            report("FAIL", f"Missing required file: {relative_name}")
+            report("FAIL", f"Не найден обязательный файл: {relative_name}")
     return True
 
 
@@ -81,7 +82,7 @@ def check_local_includes() -> None:
     for source_file in sorted(set(source_files)):
         content = read_text(source_file)
         if content is None:
-            report("FAIL", f"Cannot read: {source_file.name}")
+            report("FAIL", f"Не удалось прочитать: {source_file.name}")
             continue
 
         for include_name in include_pattern.findall(content):
@@ -104,48 +105,48 @@ def check_module_pairs() -> None:
 
         content = read_text(implementation)
         if content is None:
-            report("FAIL", f"Cannot read {implementation.name}")
+            report("FAIL", f"Не удалось прочитать {implementation.name}")
             continue
 
         included_headers = re.findall(
             r'^\s*#\s*include\s*[<"]([^>"]+)[>"]', content, re.MULTILINE
         )
         if any(Path(name).name == header.name for name in included_headers):
-            report("PASS", f"{implementation.name} includes {header.name}")
+            report("PASS", f"{implementation.name} содержит подключение {header.name}")
         else:
-            report("FAIL", f"{implementation.name} does not include its own header {header.name}")
+            report("FAIL", f"{implementation.name} не подключает собственный заголовок {header.name}")
 
 
 def check_app_entry_points() -> None:
     app_content = read_text(SOURCE_DIR / "lego_technic_esp32.ino")
     if app_content is None:
-        report("FAIL", "Cannot read lego_technic_esp32.ino")
+        report("FAIL", "Не удалось прочитать lego_technic_esp32.ino")
         return
 
     for function_name in ("setup", "loop"):
         if re.search(rf"\bvoid\s+{function_name}\s*\(", app_content):
-            report("PASS", f"lego_technic_esp32.ino contains {function_name}()")
+            report("PASS", f"lego_technic_esp32.ino содержит {function_name}()")
         else:
-            report("FAIL", f"lego_technic_esp32.ino is missing {function_name}()")
+            report("FAIL", f"lego_technic_esp32.ino не содержит {function_name}()")
 
 
 def check_motor_safety_anchor() -> None:
     motor_content = read_text(SOURCE_DIR / "motor_control.cpp")
     if motor_content is None:
-        report("FAIL", "Cannot read motor_control.cpp")
+        report("FAIL", "Не удалось прочитать motor_control.cpp")
         return
 
     if re.search(r"\bvoid\s+stopAll\s*\(", motor_content):
-        report("PASS", "motor_control.cpp contains stopAll()")
+        report("PASS", "motor_control.cpp содержит stopAll()")
     else:
-        report("FAIL", "motor_control.cpp is missing void stopAll()")
+        report("FAIL", "motor_control.cpp не содержит void stopAll()")
 
 
 def check_gui_heartbeat_safety() -> None:
     """Heartbeat должен поддерживать watchdog, не повторяя старые значения ползунков."""
     page = read_text(SOURCE_DIR / "web_page.cpp")
     if page is None:
-        report("FAIL", "Cannot read web_page.cpp for heartbeat regression checks")
+        report("FAIL", "Не удалось прочитать web_page.cpp for heartbeat regression checks")
         return
 
     interval_pattern = re.compile(
@@ -159,24 +160,24 @@ def check_gui_heartbeat_safety() -> None:
     ]
 
     if not safe_intervals:
-        report("FAIL", "GUI heartbeat must send only {hb:1} every 150 ms")
+        report("FAIL", "GUI должен отправлять только {hb:1} каждые 150 мс")
     elif any(re.search(r"lastSent|txWS\s*\(\s*\{\s*ch\s*:", block) for block in safe_intervals):
-        report("FAIL", "GUI heartbeat appears to replay previous motor/servo values")
+        report("FAIL", "Похоже, heartbeat GUI повторно отправляет предыдущие значения моторов/серво")
     else:
-        report("PASS", "GUI heartbeat sends a watchdog-only {hb:1} message")
+        report("PASS", "GUI отправляет отдельное сообщение {hb:1} только для watchdog")
 
     # A freshly opened/reconnected socket must not restore the former joystick state.
     onopen = re.search(r"ws\s*\.\s*onopen\s*=\s*function\s*\(\s*\)\s*\{(.*?)\n\s*\};\s*\n\s*ws\s*\.\s*onclose", page, re.DOTALL)
     if onopen and all(token in onopen.group(1) for token in ("eng = false", "zeroAll()", "txWS({eng:0})")):
-        report("PASS", "WebSocket reconnect clears old controls and engine simulation")
+        report("PASS", "При переподключении WebSocket очищаются старые команды и имитация двигателя")
     else:
-        report("FAIL", "WebSocket onopen must clear controls and send eng=0")
+        report("FAIL", "Обработчик WebSocket onopen должен очищать команды и отправлять eng=0")
 
 
 def check_gui_engine_guards() -> None:
     page = read_text(SOURCE_DIR / "web_page.cpp")
     if page is None:
-        report("FAIL", "Cannot read web_page.cpp for engine-simulation checks")
+        report("FAIL", "Не удалось прочитать web_page.cpp for engine-simulation checks")
         return
 
     # The engine simulation only makes sense in classic-car mode with at least two motors.
@@ -186,9 +187,9 @@ def check_gui_engine_guards() -> None:
         page,
     )
     if button_guard:
-        report("PASS", "Engine button is guarded by motor count and classic-car mode")
+        report("PASS", "Кнопка двигателя учитывает число моторов и режим классического автомобиля")
     else:
-        report("FAIL", "Engine button must reject motorCount < 2 or mode !== 1")
+        report("FAIL", "Кнопка двигателя должна блокировать motorCount < 2 или mode !== 1")
 
     mode_guard = re.search(
         r"if\s*\(\s*m\s*!==\s*1\s*&&\s*eng\s*\)\s*\{"
@@ -197,9 +198,9 @@ def check_gui_engine_guards() -> None:
         re.DOTALL,
     )
     if mode_guard:
-        report("PASS", "Leaving classic-car mode disables engine simulation")
+        report("PASS", "При выходе из режима классического автомобиля имитация двигателя отключается")
     else:
-        report("FAIL", "switchMode() must send eng=0 when leaving classic-car mode")
+        report("FAIL", "switchMode() должна отправлять eng=0 при выходе из режима классического автомобиля")
 
     low_motor_guard = re.search(
         r"if\s*\(\s*motorCount\s*<\s*2\s*\)\s*\{"
@@ -210,19 +211,19 @@ def check_gui_engine_guards() -> None:
         re.DOTALL,
     )
     if low_motor_guard:
-        report("PASS", "Single-motor configuration disables engine simulation and zeros B")
+        report("PASS", "В конфигурации с одним мотором имитация двигателя отключена, канал B обнулён")
     else:
-        report("FAIL", "motorCount < 2 must disable engine simulation and zero motor B")
+        report("FAIL", "При motorCount < 2 имитация двигателя должна отключаться, а мотор B обнуляться")
 
 
 def check_firmware_heartbeat_and_watchdog() -> None:
     control = read_text(SOURCE_DIR / "web_control.cpp")
     app = read_text(SOURCE_DIR / "lego_technic_esp32.ino")
     if control is None:
-        report("FAIL", "Cannot read web_control.cpp for heartbeat regression checks")
+        report("FAIL", "Не удалось прочитать web_control.cpp for heartbeat regression checks")
         return
     if app is None:
-        report("FAIL", "Cannot read lego_technic_esp32.ino for watchdog regression checks")
+        report("FAIL", "Не удалось прочитать lego_technic_esp32.ino for watchdog regression checks")
         return
 
     heartbeat_branch = re.search(
@@ -241,11 +242,11 @@ def check_firmware_heartbeat_and_watchdog() -> None:
         )
         touches_outputs = re.search(r"\bapplyMotor[A-D]?\s*\(|\bapplySteer\s*\(|\bstopAll\s*\(", hb)
         if all(checks) and not touches_outputs:
-            report("PASS", "Firmware accepts only a standalone {hb:1} watchdog message")
+            report("PASS", "Прошивка принимает только отдельное сообщение watchdog {hb:1}")
         else:
-            report("FAIL", "Firmware heartbeat must validate {hb:1}, refresh timeout and return without driving outputs")
+            report("FAIL", "Heartbeat прошивки должен проверять {hb:1}, обновлять тайм-аут и завершаться без управления выходами")
     else:
-        report("FAIL", "web_control.cpp is missing the isolated heartbeat handler")
+        report("FAIL", "web_control.cpp не содержит the isolated heartbeat handler")
 
     timeout_ok = re.search(r"const\s+unsigned\s+long\s+CMD_TIMEOUT_MS\s*=\s*500\s*;", app)
     watchdog_ok = re.search(
@@ -255,9 +256,9 @@ def check_firmware_heartbeat_and_watchdog() -> None:
         re.DOTALL,
     )
     if timeout_ok and watchdog_ok:
-        report("PASS", "Firmware retains the 500 ms command-timeout motor stop")
+        report("PASS", "Прошивка сохраняет остановку моторов по тайм-ауту команды 500 мс")
     else:
-        report("FAIL", "Firmware must stop all outputs when the 500 ms command timeout expires")
+        report("FAIL", "Прошивка должна останавливать все выходы после тайм-аута команды 500 мс")
 
 
 
@@ -266,30 +267,30 @@ def check_tank_visual_regressions() -> None:
     html = read_text(REPO_ROOT / "index.html")
     page = read_text(SOURCE_DIR / "web_page.cpp")
     if html is None:
-        report("FAIL", "Cannot read index.html for tank visual regression checks")
+        report("FAIL", "Не удалось прочитать index.html for tank visual regression checks")
         return
     if page is None:
-        report("FAIL", "Cannot read web_page.cpp for tank visual regression checks")
+        report("FAIL", "Не удалось прочитать web_page.cpp for tank visual regression checks")
         return
 
     embedded_start = page.find("<!DOCTYPE html>")
     embedded_end = page.find(')HTML";', embedded_start)
     if embedded_start < 0 or embedded_end < 0:
-        report("FAIL", "Cannot locate embedded PAGE_HTML boundaries in web_page.cpp")
+        report("FAIL", "Не удалось найти границы встроенного PAGE_HTML в web_page.cpp")
     else:
         embedded_html = page[embedded_start:embedded_end]
         if embedded_html == html.lstrip():
-            report("PASS", "index.html exactly matches embedded PAGE_HTML")
+            report("PASS", "index.html полностью совпадает со встроенным PAGE_HTML")
         else:
-            report("FAIL", "index.html differs from embedded PAGE_HTML")
+            report("FAIL", "index.html отличается от встроенного PAGE_HTML")
 
     arrow_pattern = re.compile(
         r'track-direction-markers|id=["\']t-(?:left|right)-(?:f|r)["\']'
     )
     if not arrow_pattern.search(html):
-        report("PASS", "Tank direction arrows remain removed")
+        report("PASS", "Стрелки направления движения по-прежнему удалены")
     else:
-        report("FAIL", "Tank direction-arrow markup has returned")
+        report("FAIL", "В разметку вернулись стрелки направления движения")
 
     required_tank_tokens = (
         'id="t-left-glow"',
@@ -302,9 +303,9 @@ def check_tank_visual_regressions() -> None:
     )
     for token in required_tank_tokens:
         if token in html:
-            report("PASS", f"Tank visual layer present: {token}")
+            report("PASS", f"Слой танкового интерфейса присутствует: {token}")
         else:
-            report("FAIL", f"Tank visual layer missing: {token}")
+            report("FAIL", f"Отсутствует слой танкового интерфейса: {token}")
 
     paint_match = re.search(
         r"function\s+paintTank\s*\(\s*L\s*,\s*R\s*\)\s*\{(.*?)"
@@ -313,50 +314,50 @@ def check_tank_visual_regressions() -> None:
         re.DOTALL,
     )
     if not paint_match:
-        report("FAIL", "Cannot locate paintTank() for visual direction checks")
+        report("FAIL", "Не удалось найти paintTank() для проверки направлений движения")
         return
 
     paint = paint_match.group(1)
     direction_patterns = (
-        (r"leftForward\s*=\s*L\s*>\s*8", "left forward threshold"),
-        (r"leftReverse\s*=\s*L\s*<\s*-8", "left reverse threshold"),
-        (r"rightForward\s*=\s*R\s*>\s*8", "right forward threshold"),
-        (r"rightReverse\s*=\s*R\s*<\s*-8", "right reverse threshold"),
+        (r"leftForward\s*=\s*L\s*>\s*8", "порог движения левой гусеницы вперёд"),
+        (r"leftReverse\s*=\s*L\s*<\s*-8", "порог движения левой гусеницы назад"),
+        (r"rightForward\s*=\s*R\s*>\s*8", "порог движения правой гусеницы вперёд"),
+        (r"rightReverse\s*=\s*R\s*<\s*-8", "порог движения правой гусеницы назад"),
         (
             r"leftFlood\.setAttribute\(\s*['\"]flood-color['\"]\s*,\s*leftReverse\s*\?\s*red\s*:\s*green\s*\)",
-            "left track uses green forward and red reverse",
+            "левая гусеница зелёная при движении вперёд и красная при движении назад",
         ),
         (
             r"rightFlood\.setAttribute\(\s*['\"]flood-color['\"]\s*,\s*rightReverse\s*\?\s*red\s*:\s*green\s*\)",
-            "right track uses green forward and red reverse",
+            "правая гусеница зелёная при движении вперёд и красная при движении назад",
         ),
         (
             r"leftGlow\.setAttribute\(\s*['\"]opacity['\"]\s*,\s*\(leftForward\s*\|\|\s*leftReverse\)\s*\?\s*['\"]0\.58['\"]\s*:\s*['\"]0['\"]\s*\)",
-            "left track tint is translucent and off at rest",
+            "подсветка левой гусеницы полупрозрачная и выключена в покое",
         ),
         (
             r"rightGlow\.setAttribute\(\s*['\"]opacity['\"]\s*,\s*\(rightForward\s*\|\|\s*rightReverse\)\s*\?\s*['\"]0\.58['\"]\s*:\s*['\"]0['\"]\s*\)",
-            "right track tint is translucent and off at rest",
+            "подсветка правой гусеницы полупрозрачная и выключена в покое",
         ),
     )
     for pattern, description in direction_patterns:
         if re.search(pattern, paint):
             report("PASS", description)
         else:
-            report("FAIL", f"Tank lighting regression: {description}")
+            report("FAIL", f"Регрессия освещения танка: {description}")
 
     if "drop-shadow" not in paint and "style.filter" not in paint:
-        report("PASS", "Tank lighting uses translucent fills instead of contour-only shadows")
+        report("PASS", "В освещении танка используются полупрозрачные заливки вместо одних контурных теней")
     else:
-        report("FAIL", "Tank lighting reverted to contour-only shadow effects")
+        report("FAIL", "Освещение танка снова использует только контурные тени")
 
     left_track = html.find('<g id="t-left-group">')
     right_track = html.find('<g id="t-right-group">')
     chassis = html.find('<image id="crawler-body"')
     if 0 <= left_track < right_track < chassis:
-        report("PASS", "Both tank tracks are rendered beneath the crawler body")
+        report("PASS", "Обе гусеницы отрисовываются под корпусом краулера")
     else:
-        report("FAIL", "Tank layer order must be left track, right track, then crawler body")
+        report("FAIL", "Порядок слоёв танка должен быть таким: левая гусеница, правая гусеница, корпус краулера")
 
 
 
@@ -364,7 +365,7 @@ def check_turn_signal_regressions() -> None:
     """Сохраняет передние и задние поворотники на четырёх исходных позициях фонарей."""
     html = read_text(REPO_ROOT / "index.html")
     if html is None:
-        report("FAIL", "Cannot read index.html for turn-signal regression checks")
+        report("FAIL", "Не удалось прочитать index.html for turn-signal regression checks")
         return
 
     original_lamps = (
@@ -389,34 +390,34 @@ def check_turn_signal_regressions() -> None:
         if re.search(pattern, html):
             report("PASS", description)
         else:
-            report("FAIL", f"Turn-signal regression: {description}")
+            report("FAIL", f"Регрессия поворотников: {description}")
 
     if not re.search(r'id="turn-signal-(?:left|right)"', html):
-        report("PASS", "Turn signals reuse original headlight SVG elements")
+        report("PASS", "Поворотники используют исходные SVG-элементы фар")
     else:
-        report("FAIL", "Extra turn-signal overlays may misalign with the original lights")
+        report("FAIL", "Дополнительные слои поворотников могут сместиться относительно исходных фонарей")
 
     required_calls = (
-        (r"paintSignalLamp\(\$\(['\"]hl-fl['\"]\),\s*turningLeft", "left front indicator follows left turn"),
-        (r"paintSignalLamp\(\$\(['\"]hl-rl['\"]\),\s*turningLeft", "left rear indicator follows left turn"),
-        (r"paintSignalLamp\(\$\(['\"]hl-fr['\"]\),\s*turningRight", "right front indicator follows right turn"),
-        (r"paintSignalLamp\(\$\(['\"]hl-rr['\"]\),\s*turningRight", "right rear indicator follows right turn"),
+        (r"paintSignalLamp\(\$\(['\"]hl-fl['\"]\),\s*turningLeft", "передний левый указатель следует левому повороту"),
+        (r"paintSignalLamp\(\$\(['\"]hl-rl['\"]\),\s*turningLeft", "задний левый указатель следует левому повороту"),
+        (r"paintSignalLamp\(\$\(['\"]hl-fr['\"]\),\s*turningRight", "передний правый указатель следует правому повороту"),
+        (r"paintSignalLamp\(\$\(['\"]hl-rr['\"]\),\s*turningRight", "задний правый указатель следует правому повороту"),
     )
     for pattern, description in required_calls:
         if re.search(pattern, html):
             report("PASS", description)
         else:
-            report("FAIL", f"Turn-signal regression: {description}")
+            report("FAIL", f"Регрессия поворотников: {description}")
 
     if re.search(r"@keyframes\s+turnSignalBlink\s*\{0%,44%\s*\{\s*opacity:1\s*\}\s*45%,100%\s*\{\s*opacity:0\s*\}\}", html):
-        report("PASS", "Turn-signal blink timing remains unchanged")
+        report("PASS", "Период мигания поворотников не изменился")
     else:
-        report("FAIL", "Turn-signal blink animation or timing has changed")
+        report("FAIL", "Изменились анимация или период мигания поворотников")
 
     if re.search(r"function\s+paintLights\s*\(\s*\).*?paintTurnSignals\(\)\s*;", html, re.DOTALL):
-        report("PASS", "Light-button updates preserve turn-signal state")
+        report("PASS", "Обновление кнопок света сохраняет состояние поворотников")
     else:
-        report("FAIL", "paintLights() must reapply turn-signal state after headlight updates")
+        report("FAIL", "paintLights() должна повторно применять состояние поворотников после обновления фар")
 
 
 
@@ -424,7 +425,7 @@ def check_accent_theme_regressions() -> None:
     """Проверяет, что акцентные темы меняют только цвета интерфейса и сохраняются после перезагрузки."""
     html = read_text(REPO_ROOT / "index.html")
     if html is None:
-        report("FAIL", "Cannot read index.html for accent-theme checks")
+        report("FAIL", "Не удалось прочитать index.html for accent-theme checks")
         return
 
     select_match = re.search(
@@ -433,15 +434,15 @@ def check_accent_theme_regressions() -> None:
         re.DOTALL,
     )
     if not select_match:
-        report("FAIL", "Settings must contain the accent-select control")
+        report("FAIL", "В настройках должен быть элемент выбора акцентного цвета")
         return
 
     options = re.findall(r'<option\s+value="([^"]+)"', select_match.group(1))
     expected_options = ("classic-blue", "racing-red", "neon-green")
     if tuple(options) == expected_options:
-        report("PASS", "Accent selector contains Classic Blue, Racing Red and Neon Green")
+        report("PASS", "Accent selector содержит Classic Blue, Racing Red and Neon Green")
     else:
-        report("FAIL", "Accent selector options are missing or in an unexpected order")
+        report("FAIL", "Пункты выбора акцентного цвета отсутствуют или идут в неожиданном порядке")
 
     theme_css = (
         (r'\[data-accent="racing-red"\]\s*\{[^}]*--blue:#f43f5e;--blue-dk:#e11d48;--accent-rgb:244,63,94', "Racing Red dark palette"),
@@ -453,7 +454,7 @@ def check_accent_theme_regressions() -> None:
         if re.search(pattern, html):
             report("PASS", description)
         else:
-            report("FAIL", f"Missing accent color rule: {description}")
+            report("FAIL", f"Отсутствует правило акцентного цвета: {description}")
 
     accent_function = re.search(
         r"function\s+setAccent\s*\(\s*value\s*\)\s*\{(.*?)\n\s*\}",
@@ -468,34 +469,34 @@ def check_accent_theme_regressions() -> None:
             re.search(r"localStorage\.setItem\(\s*['\"]lcc_accent['\"]", body) is not None,
         )
         if all(checks):
-            report("PASS", "Accent selection is validated, applied and saved to localStorage")
+            report("PASS", "Выбор акцента проверяется, применяется и сохраняется в localStorage")
         else:
-            report("FAIL", "setAccent() must validate, apply and save the selected preset")
+            report("FAIL", "setAccent() должна проверять, применять и сохранять выбранный пресет")
     else:
-        report("FAIL", "setAccent() is missing")
+        report("FAIL", "Функция setAccent() отсутствует")
 
     if (
         re.search(r"setAccent\(localStorage\.getItem\(\s*['\"]lcc_accent['\"]\s*\)", html)
         and re.search(r"\$\(['\"]accent-select['\"]\)\.onchange\s*=\s*function", html)
     ):
-        report("PASS", "Saved accent preset is restored and the settings control responds to changes")
+        report("PASS", "Сохранённый акцентный пресет восстанавливается, элемент настроек реагирует на изменения")
     else:
-        report("FAIL", "Accent preset must load on startup and respond to selector changes")
+        report("FAIL", "Акцентный пресет должен загружаться при запуске и реагировать на выбор")
 
 
     if "rgba(var(--accent-rgb)," in html and "rgba(59,130,246," not in html:
-        report("PASS", "Accent-dependent interface glows use the selected palette")
+        report("PASS", "Свечение интерфейса использует выбранную палитру")
     else:
-        report("FAIL", "Accent-dependent interface glows must use --accent-rgb")
+        report("FAIL", "Свечение интерфейса должно использовать --accent-rgb")
 
     if (
         "localStorage.setItem('lcc_th',t)" in html
         and "id=\"turn-signal-gradient\"" in html
         and "id=\"wheel-tint-flood\"" in html
     ):
-        report("PASS", "Accent presets leave light/dark mode, wheel tint and turn-signal colors intact")
+        report("PASS", "Акцентные пресеты не меняют светлую/тёмную тему, оттенок колёс и цвета поворотников")
     else:
-        report("FAIL", "Accent presets must not replace existing theme mode or vehicle signal colors")
+        report("FAIL", "Акцентные пресеты не должны менять режим темы или цвета сигналов модели")
 
 
 
@@ -505,7 +506,7 @@ def check_diagnostics_regressions() -> None:
     control = read_text(SOURCE_DIR / "web_control.cpp")
     html = read_text(REPO_ROOT / "index.html")
     if app is None or control is None or html is None:
-        report("FAIL", "Cannot read lego_technic_esp32.ino, web_control.cpp or index.html for diagnostics checks")
+        report("FAIL", "Не удалось прочитать lego_technic_esp32.ino, web_control.cpp or index.html for diagnostics checks")
         return
 
     status_fields = ("sta", "up", "heap", "minh", "age", "lb", "fsc", "fsa")
@@ -529,16 +530,16 @@ def check_diagnostics_regressions() -> None:
         )
         for field, source in required_sources:
             if re.search(rf'\\"{field}\\"\s*:', body) and source in body:
-                report("PASS", f"Diagnostic field {field} uses {source}")
+                report("PASS", f"Поле диагностики {field} использует {source}")
             else:
-                report("FAIL", f"Diagnostic status field {field} missing or has an unexpected source")
+                report("FAIL", f"Поле статуса диагностики {field} отсутствует или имеет неожиданный источник")
 
         if "char buf[256];" in app and "char buf[256];" in control:
-            report("PASS", "Status buffers fit the extended diagnostic JSON")
+            report("PASS", "Буферы статуса вмещают расширенный JSON диагностики")
         else:
-            report("FAIL", "Extended diagnostic JSON requires 256-byte status buffers")
+            report("FAIL", "Для расширенного JSON диагностики нужны буферы статуса размером 256 байт")
     else:
-        report("FAIL", "Could not locate buildStatus() for diagnostic telemetry checks")
+        report("FAIL", "Не удалось найти buildStatus() для проверки диагностической телеметрии")
 
     timeout_loop = re.search(
         r"void\s+loop\s*\(\s*\)\s*\{(.*?)//\s*Обслуживание OTA",
@@ -569,9 +570,9 @@ def check_diagnostics_regressions() -> None:
         and "stopAll();" in timeout_body
     )
     if timeout_diagnostics_ok:
-        report("PASS", "Safety timeout activations are counted once without changing the stop action")
+        report("PASS", "Срабатывания защитного тайм-аута учитываются один раз без изменения остановки")
     else:
-        report("FAIL", "Safety timeout diagnostics must count the protected stop once and retain stopAll()")
+        report("FAIL", "Диагностика защитного тайм-аута должна учитывать остановку один раз и сохранять вызов stopAll()")
 
     diag_heading = html.find("<h3>Диагностика системы</h3>")
     buttons_heading = html.find("<h3>Кнопки</h3>")
@@ -585,7 +586,7 @@ def check_diagnostics_regressions() -> None:
         and len(re.findall(r'<div class="block">', html[diag_block_start:buttons_block_start])) == 1
         and html[diag_block_start:buttons_block_start].rstrip().endswith("</div>")
     ):
-        report("PASS", "Diagnostics block is last in settings, immediately before the Buttons guide")
+        report("PASS", "Блок диагностики находится в конце настроек, непосредственно перед подсказкой «Кнопки»")
     else:
         report("FAIL", "Diagnostics must be placed at the end of settings immediately before the Buttons guide")
 
@@ -597,9 +598,9 @@ def check_diagnostics_regressions() -> None:
     )
     for element_id in diag_ids:
         if re.search(rf"""id=["']{re.escape(element_id)}["']""", html):
-            report("PASS", f"Diagnostics display contains {element_id}")
+            report("PASS", f"Diagnostics display содержит {element_id}")
         else:
-            report("FAIL", f"Diagnostics display is missing {element_id}")
+            report("FAIL", f"Diagnostics display не содержит {element_id}")
 
     update_match = re.search(
         r"function\s+updateDiagnostics\s*\(\s*d\s*\)\s*\{(.*?)"
@@ -612,7 +613,7 @@ def check_diagnostics_regressions() -> None:
         if all(token in body for token in ("d.sta", "d.c", "d.r", "d.v", "d.p", "d.lb", "d.up", "d.heap", "d.minh", "d.age", "d.fsc", "d.fsa")):
             report("PASS", "GUI renders all transmitted read-only diagnostic values")
         else:
-            report("FAIL", "GUI parser is missing one or more diagnostic telemetry fields")
+            report("FAIL", "GUI parser не содержит one or more diagnostic telemetry fields")
         if not re.search(r"\btxWS\s*\(", body):
             report("PASS", "Diagnostic rendering does not send control commands")
         else:
@@ -644,9 +645,9 @@ def check_diagnostics_regressions() -> None:
     )
     for token, description in event_log_checks:
         if token in html:
-            report("PASS", f"Diagnostic event log includes {description}")
+            report("PASS", f"Diagnostic event log содержит подключение {description}")
         else:
-            report("FAIL", f"Diagnostic event log is missing {description}")
+            report("FAIL", f"Diagnostic event log не содержит {description}")
 
 
 
@@ -654,7 +655,7 @@ def check_diagnostics_regressions() -> None:
 def check_battery_warning_regressions() -> None:
     web_page = read_text(SOURCE_DIR / "web_page.cpp")
     if web_page is None:
-        report("FAIL", "Cannot read web_page.cpp for battery warning checks")
+        report("FAIL", "Не удалось прочитать web_page.cpp for battery warning checks")
         return
 
     required_tokens = (
@@ -698,7 +699,7 @@ def check_battery_calibration() -> None:
     monitor = read_text(SOURCE_DIR / "battery_monitor.cpp")
     calculator = read_text(SCRIPT_DIR / "calibrate_battery.py")
     if monitor is None:
-        report("FAIL", "Cannot read battery_monitor.cpp for calibration checks")
+        report("FAIL", "Не удалось прочитать battery_monitor.cpp for calibration checks")
         return
     if calculator is None:
         report("FAIL", "Missing tools/calibrate_battery.py calibration calculator")
