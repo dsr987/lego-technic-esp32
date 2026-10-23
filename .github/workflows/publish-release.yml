@@ -19,8 +19,8 @@ jobs:
     permissions:
       actions: read
       contents: write
-    # Successful main pushes may publish only when the firmware version changed.
-    # Bot-dispatched builds remain supported for an explicit release retry.
+    # После успешного push в main релиз публикуется только при изменении версии прошивки.
+    # Сборки, запущенные ботом, поддерживают явный повтор публикации релиза.
     if: ${{ github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'push' || (github.event.workflow_run.event == 'workflow_dispatch' && github.event.workflow_run.actor.login == 'github-actions[bot]')) }}
     runs-on: ubuntu-latest
 
@@ -42,9 +42,9 @@ jobs:
           artifact_dir="$RUNNER_TEMP/firmware-artifact"
           build_dir="$artifact_dir/build-output"
 
-          # The main workflow also uploads an artifact for site-only updates.
-          # Those artifacts do not contain build-output, so they must not create
-          # a new release containing an older firmware image.
+          # Основной workflow также загружает артефакт при обновлении только сайта.
+          # Такие артефакты не содержат результатов компиляции и не должны создавать
+          # новый релиз со старым образом прошивки.
           if [[ ! -d "$build_dir" ]]; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
             echo "::notice::В этом запуске прошивка не компилировалась; публикация релиза пропускается."
