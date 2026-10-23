@@ -11,22 +11,22 @@ if (Test-Path $extractDir) {
     Remove-Item -LiteralPath $extractDir -Recurse -Force
 }
 
-Write-Host "Downloading Arduino CLI from the official Arduino download server..."
+Write-Host "Загрузка Arduino CLI с официального сервера Arduino..."
 Invoke-WebRequest -Uri $url -OutFile $zipPath
 Expand-Archive -LiteralPath $zipPath -DestinationPath $extractDir -Force
 
 $cli = Get-ChildItem -LiteralPath $extractDir -Filter 'arduino-cli.exe' -File -Recurse |
     Select-Object -First 1
 if (-not $cli) {
-    throw 'arduino-cli.exe was not found in the downloaded archive.'
+    throw 'В загруженном архиве не найден arduino-cli.exe.'
 }
 
 Copy-Item -LiteralPath $cli.FullName -Destination $targetExe -Force
 Remove-Item -LiteralPath $zipPath -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $extractDir -Recurse -Force -ErrorAction SilentlyContinue
 
-Write-Host "Arduino CLI installed to: $targetExe"
+Write-Host "Arduino CLI установлен в: $targetExe"
 & $targetExe version
 if ($LASTEXITCODE -ne 0) {
-    throw 'Arduino CLI did not start successfully.'
+    throw 'Не удалось запустить Arduino CLI.'
 }
