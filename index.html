@@ -1166,15 +1166,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       zeroAll();
       txWS({eng:0});
     };
-    ws.onclose = function(event){ 
-      var closeMessage = 'Соединение с ESP32 потеряно';
-      if(event && Number.isFinite(Number(event.code))){
-        closeMessage += ' · WebSocket ' + Number(event.code);
-        closeMessage += event.wasClean ? ' (штатное закрытие)' : ' (нештатное закрытие)';
-        if(event.reason) closeMessage += ': ' + String(event.reason).slice(0,80);
-      }
-      addDiagnosticEvent(closeMessage, event && event.wasClean ? 'warn' : 'error');
-      renderDiagnosticFreshness();
+    ws.onclose = function(){ 
       $('ws-status').textContent='НЕТ СВЯЗИ'; 
       $('ws-status').style.color='var(--rose)'; 
       updateWifi(0);
@@ -1209,12 +1201,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   // Heartbeat поддерживает связь с прошивкой, но не повторяет команды моторов.
   // Иначе после тайм-аута или переподключения старое значение слайдера могло бы
   // неожиданно снова запустить мотор.
-  // Heartbeat отправляется реже, без лишней нагрузки на WebSocket.
-  // Серверный тайм-аут увеличен до 3 секунд для кратких задержек браузера.
+  // Базовый heartbeat каждые 150 мс поддерживает watchdog с тайм-аутом 500 мс.
   setInterval(function(){
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     ws.send(JSON.stringify({hb:1}));
-  }, 500);
+  }, 150);
 
   function addDiagnosticEvent(message, level){
     var now = new Date();
