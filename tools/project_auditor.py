@@ -237,7 +237,7 @@ def check_firmware_heartbeat_and_watchdog() -> None:
             re.search(r"doc\.size\(\)\s*!=\s*1", hb),
             re.search(r"doc\s*\[\s*['\"]hb['\"]\s*\]\s*\.\s*is<int>\(\)", hb),
             re.search(r"doc\s*\[\s*['\"]hb['\"]\s*\]\s*\.\s*as<int>\(\)\s*!=\s*1", hb),
-            re.search(r"lastCmdMillis\s*=\s*millis\(\)", hb),
+            re.search(r"lastHeartbeatMillis\s*=\s*messageMillis", hb) and re.search(r"heartbeatCount\+\+", hb),
             re.search(r"\breturn\s*;", hb),
         )
         touches_outputs = re.search(r"\bapplyMotor[A-D]?\s*\(|\bapplySteer\s*\(|\bstopAll\s*\(", hb)
@@ -250,7 +250,7 @@ def check_firmware_heartbeat_and_watchdog() -> None:
 
     timeout_ok = re.search(r"const\s+unsigned\s+long\s+CMD_TIMEOUT_MS\s*=\s*3000\s*;", app)
     watchdog_ok = re.search(
-        r"if\s*\(\s*millis\(\)\s*-\s*lastCmdMillis\s*>\s*CMD_TIMEOUT_MS\s*\)\s*\{"
+        r"if\s*\(\s*millis\(\)\s*-\s*lastWsActivityMillis\s*>\s*CMD_TIMEOUT_MS\s*\)\s*\{"
         r"(?:(?!\n\s*\}).)*?stopAll\s*\(\s*\)\s*;",
         app,
         re.DOTALL,
@@ -523,7 +523,13 @@ def check_diagnostics_regressions() -> None:
             ("up", "millis() / 1000UL"),
             ("heap", "ESP.getFreeHeap()"),
             ("minh", "ESP.getMinFreeHeap()"),
-            ("age", "millis() - lastCmdMillis"),
+            ("age", "millis() - lastWsActivityMillis"),
+            ("hba", "millis() - lastHeartbeatMillis"),
+            ("cage", "millis() - lastCmdMillis"),
+            ("hbc", "heartbeatCount"),
+            ("fsh", "safetyTimeoutHeartbeatAgeMs"),
+            ("fsa2", "safetyTimeoutActivityAgeMs"),
+            ("fscmd", "safetyTimeoutCommandAgeMs"),
             ("lb", "lowBattCount"),
             ("fsc", "safetyTimeoutCount"),
             ("fsa", "lastSafetyTimeoutMillis"),
@@ -534,10 +540,10 @@ def check_diagnostics_regressions() -> None:
             else:
                 report("FAIL", f"Поле статуса диагностики {field} отсутствует или имеет неожиданный источник")
 
-        if "char buf[256];" in app and "char buf[256];" in control:
+        if "char buf[384];" in app and "char buf[384];" in control:
             report("PASS", "Буферы статуса вмещают расширенный JSON диагностики")
         else:
-            report("FAIL", "Для расширенного JSON диагностики нужны буферы статуса размером 256 байт")
+            report("FAIL", "Для расширенного JSON диагностики нужны буферы статуса размером 384 байта")
     else:
         report("FAIL", "Не удалось найти buildStatus() для проверки диагностической телеметрии")
 
@@ -557,11 +563,14 @@ def check_diagnostics_regressions() -> None:
     timeout_diagnostics_ok = (
         "unsigned long safetyTimeoutCount = 0;" in app
         and "unsigned long lastSafetyTimeoutMillis = 0;" in app
+        and "unsigned long safetyTimeoutHeartbeatAgeMs = 0;" in app
+        and "unsigned long safetyTimeoutActivityAgeMs = 0;" in app
+        and "unsigned long safetyTimeoutCommandAgeMs = 0;" in app
         and "bool safetyTimeoutLatched = false;" in app
         and "recordSafetyTimeout();" in timeout_body
         and re.search(
             r"if\s*\(\s*!safetyTimeoutLatched\s*\)\s*\{.*?"
-            r"safetyTimeoutCount\+\+;.*?lastSafetyTimeoutMillis\s*=\s*millis\(\);.*?"
+            r"safetyTimeoutCount\+\+;.*?lastSafetyTimeoutMillis\s*=\s*now;.*?safetyTimeoutHeartbeatAgeMs\s*=\s*now\s*-\s*lastHeartbeatMillis;.*?"
             r"safetyTimeoutLatched\s*=\s*true;",
             counter_body,
             re.DOTALL,
@@ -637,7 +646,8 @@ def check_diagnostics_regressions() -> None:
         ("Телеметрия не обновляется более 3 секунд", "stale telemetry event"),
         ("Получение телеметрии восстановлено", "telemetry recovery event"),
         ("Состояние батареи: ", "battery state change event"),
-        ("Сработала защита по тайм-ауту на ESP32", "firmware safety-timeout event"),
+        ("Сработала защита (всего: ", "firmware safety-timeout event with timing details"),
+        ("возраст heartbeat ", "heartbeat age in timeout event"),
         ("event.code", "WebSocket close code"),
         ("event.wasClean", "WebSocket clean-close flag"),
         ("event.reason", "WebSocket close reason"),
