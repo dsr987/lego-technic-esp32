@@ -4,7 +4,7 @@
 #include <ESPAsyncWebServer.h>
 
 // Обработка входящих команд и событий WebSocket
-void handleWsMessage(uint8_t *data, size_t len);
+void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len);
 
 void onWsEvent(
   AsyncWebSocket *server,
