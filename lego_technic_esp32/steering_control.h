@@ -3,4 +3,3 @@
 
 // Управление рулевым сервоприводом
 void applySteer(int val);
-void updateSteering();
