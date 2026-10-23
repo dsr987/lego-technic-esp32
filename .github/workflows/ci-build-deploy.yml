@@ -62,8 +62,8 @@ jobs:
           workflow_changed=false
           bootstrap_changed=false
 
-          # Manual runs rebuild the main firmware and regenerate site files.
-          # The separate bootstrap image is opt-in because main is protected.
+          # Ручной запуск пересобирает основную прошивку и заново формирует файлы сайта.
+          # Сборка отдельного загрузочного образа запускается только по запросу, поскольку main защищена.
           if [[ "$EVENT_NAME" != "push" ]]; then
             firmware=true
             generated=true
@@ -75,7 +75,7 @@ jobs:
           else
             before="$EVENT_BEFORE"
             if [[ -z "$before" || "$before" =~ ^0+$ ]]; then
-              # First push to a branch: treat it as a full update.
+              # Первый push в ветку обрабатывается как полное обновление.
               firmware=true
               generated=true
               site=true
@@ -186,8 +186,8 @@ jobs:
         if: ${{ github.ref == 'refs/heads/main' && steps.changes.outputs.firmware != 'true' && steps.changes.outputs.workflow_changed != 'true' && github.event_name == 'push' }}
         shell: bash
         env:
-          # Reuse the canonical binary asset from the latest firmware release.
-          # The Pages copy may be absent or delayed while Pages is being deployed.
+          # Используем основной бинарный файл из последнего релиза прошивки.
+          # Копия Pages может отсутствовать или появиться с задержкой во время публикации сайта.
           FIRMWARE_URL: https://github.com/dsr987/lego-technic-esp32/releases/latest/download/lego_technic_esp32.ino.bin
         run: |
           set -uo pipefail
@@ -226,8 +226,8 @@ jobs:
             app_build=false
           fi
 
-          # Refresh the bootstrap image only when its own source changed or when
-          # explicitly requested. Never couple it to unrelated main firmware builds.
+          # Обновляем загрузочный образ только при изменении его исходников или при
+          # явном запросе. Не связываем его с посторонними сборками основной прошивки.
           if [[ "$BOOTSTRAP_CHANGED" == "true" || \
                 ( "$EVENT_NAME" == "workflow_dispatch" && "$BUILD_BOOTSTRAP_INPUT" == "true" ) ]]; then
             bootstrap_build=true
@@ -352,7 +352,7 @@ jobs:
           cp downloads/build_firmware_for_esp32.bin \
             "$RUNNER_TEMP/firmware-artifact/build_firmware_for_esp32.bin"
 
-          # Keep temporary build files outside the Pages document root.
+          # Храним временные файлы сборки вне корневого каталога GitHub Pages.
           if [[ -d "$RUNNER_TEMP/esp32-build" ]]; then
             mkdir -p "$RUNNER_TEMP/firmware-artifact/build-output"
             cp -a "$RUNNER_TEMP/esp32-build/." \
@@ -410,8 +410,8 @@ jobs:
             exit 1
           fi
 
-          # This is the application image only. The BAT script compiles/uploads
-          # the full sketch correctly for first-time USB provisioning.
+          # Это только образ приложения. BAT-скрипт правильно компилирует и загружает
+          # весь скетч при первоначальной прошивке через USB.
           mkdir -p firmware/bootstrap/prebuilt
           cp "${bootstrap_bins[0]}" firmware/bootstrap/prebuilt/esp32_ota_bootstrap.bin
 
