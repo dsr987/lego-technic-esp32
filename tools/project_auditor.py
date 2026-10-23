@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Structural and regression-safety checks for LEGO Technic ESP32."""
+"""Проверки структуры проекта и защиты от регрессий LEGO Technic ESP32."""
 
 from pathlib import Path
 import re
@@ -142,7 +142,7 @@ def check_motor_safety_anchor() -> None:
 
 
 def check_gui_heartbeat_safety() -> None:
-    """Heartbeat must keep the watchdog alive without replaying old slider values."""
+    """Heartbeat должен поддерживать watchdog, не повторяя старые значения ползунков."""
     page = read_text(SOURCE_DIR / "web_page.cpp")
     if page is None:
         report("FAIL", "Cannot read web_page.cpp for heartbeat regression checks")
@@ -262,7 +262,7 @@ def check_firmware_heartbeat_and_watchdog() -> None:
 
 
 def check_tank_visual_regressions() -> None:
-    """Protect the reviewed tank GUI from arrow, tint, layering and sync regressions."""
+    """Защищает проверенный танковый интерфейс от регрессий стрелок, оттенков, слоёв и синхронизации."""
     html = read_text(REPO_ROOT / "index.html")
     page = read_text(SOURCE_DIR / "web_page.cpp")
     if html is None:
@@ -361,7 +361,7 @@ def check_tank_visual_regressions() -> None:
 
 
 def check_turn_signal_regressions() -> None:
-    """Keep front/rear turn signals attached to the four original light positions."""
+    """Сохраняет передние и задние поворотники на четырёх исходных позициях фонарей."""
     html = read_text(REPO_ROOT / "index.html")
     if html is None:
         report("FAIL", "Cannot read index.html for turn-signal regression checks")
@@ -421,7 +421,7 @@ def check_turn_signal_regressions() -> None:
 
 
 def check_accent_theme_regressions() -> None:
-    """Ensure accent themes only personalize GUI colors and survive reloads."""
+    """Проверяет, что акцентные темы меняют только цвета интерфейса и сохраняются после перезагрузки."""
     html = read_text(REPO_ROOT / "index.html")
     if html is None:
         report("FAIL", "Cannot read index.html for accent-theme checks")
@@ -500,7 +500,7 @@ def check_accent_theme_regressions() -> None:
 
 
 def check_diagnostics_regressions() -> None:
-    """Validate read-only diagnostic telemetry and its GUI without control commands."""
+    """Проверяет диагностическую телеметрию только для чтения и её интерфейс без команд управления."""
     app = read_text(SOURCE_DIR / "lego_technic_esp32.ino")
     control = read_text(SOURCE_DIR / "web_control.cpp")
     html = read_text(REPO_ROOT / "index.html")
@@ -730,49 +730,49 @@ def check_battery_calibration() -> None:
 
 def main() -> int:
     print("=" * 64)
-    print("LEGO TECHNIC ESP32 — PROJECT AUDITOR")
+    print("LEGO TECHNIC ESP32 — АУДИТ ПРОЕКТА")
     print("=" * 64)
-    print(f"Repository: {REPO_ROOT}")
-    print(f"Source:     {SOURCE_DIR}")
+    print(f"Репозиторий: {REPO_ROOT}")
+    print(f"Исходники:  {SOURCE_DIR}")
     print()
 
     source_exists = check_required_files()
     if source_exists:
-        print("\n--- Local include checks ---")
+        print("\n--- Проверка локальных включений ---")
         check_local_includes()
-        print("\n--- Module checks ---")
+        print("\n--- Проверка модулей ---")
         check_module_pairs()
         check_battery_calibration()
-        print("\n--- Application checks ---")
+        print("\n--- Проверка приложения ---")
         check_app_entry_points()
         check_motor_safety_anchor()
-        print("\n--- Control-safety regression checks ---")
+        print("\n--- Регрессии безопасности управления ---")
         check_gui_heartbeat_safety()
         check_gui_engine_guards()
         check_firmware_heartbeat_and_watchdog()
-        print("\n--- GUI visual regression checks ---")
+        print("\n--- Визуальные регрессии интерфейса ---")
         check_tank_visual_regressions()
-        print("\n--- Turn-signal regression checks ---")
+        print("\n--- Регрессии поворотников ---")
         check_turn_signal_regressions()
-        print("\n--- Accent-theme regression checks ---")
+        print("\n--- Регрессии акцентных тем ---")
         check_accent_theme_regressions()
-        print("\n--- Read-only diagnostics regression checks ---")
+        print("\n--- Регрессии диагностик только для чтения ---")
         check_diagnostics_regressions()
         check_battery_warning_regressions()
 
     print()
     print("=" * 64)
-    print("AUDIT SUMMARY")
+    print("ИТОГИ АУДИТА")
     print("=" * 64)
-    print(f"PASS: {PASS_COUNT}")
-    print(f"FAIL: {FAIL_COUNT}")
-    print(f"WARN: {WARN_COUNT}")
+    print(f"УСПЕШНО: {PASS_COUNT}")
+    print(f"ОШИБОК: {FAIL_COUNT}")
+    print(f"ПРЕДУПРЕЖДЕНИЙ: {WARN_COUNT}")
 
     if FAIL_COUNT:
-        print("\nAudit failed. Fix the reported structural or safety-regression errors.")
+        print("\nАудит завершился с ошибками. Исправь указанные нарушения структуры или безопасности.")
         return 1
 
-    print("\nAudit passed.")
+    print("\nАудит пройден.")
     return 0
 
 
