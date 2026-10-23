@@ -70,7 +70,7 @@ def update_readme(version: str) -> None:
 
     if version_count == 0:
         raise ValueError(
-            "ERROR: Firmware version line not found in README.md"
+            "ОШИБКА: Firmware version line not found in README.md"
         )
 
     # Обновляем версию в ссылке на демо, сохраняя остальную ссылку.
@@ -86,25 +86,25 @@ def update_readme(version: str) -> None:
 
     if demo_count == 0:
         raise ValueError(
-            "ERROR: Demo URL with ?v= parameter not found in README.md"
+            "ОШИБКА: Demo URL with ?v= parameter not found in README.md"
         )
 
     README_PATH.write_text(readme, encoding="utf-8")
 
-    print(f"README.md updated successfully.")
-    print(f"Firmware version: {version}")
-    print(f"Version lines updated: {version_count}")
-    print(f"Demo URLs updated: {demo_count}")
+    print(f"README.md успешно обновлён.")
+    print(f"Версия прошивки: {version}")
+    print(f"Обновлено строк с версией: {version_count}")
+    print(f"Обновлено ссылок на демо: {demo_count}")
 
 
 def main() -> int:
     try:
         version = get_version()
-        print(f"Version found: {version}")
+        print(f"Найдена версия: {version}")
         update_readme(version)
         return 0
     except (OSError, ValueError) as error:
-        print(f"ERROR: {error}", file=sys.stderr)
+        print(f"ОШИБКА: {error}", file=sys.stderr)
         return 1
 
 

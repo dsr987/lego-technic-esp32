@@ -1,6 +1,6 @@
 
 #!/usr/bin/env python3
-"""Extract PAGE_HTML from a C++ source file into index.html."""
+"""Извлекает PAGE_HTML из файла C++ в index.html."""
 
 import re
 import sys
@@ -12,7 +12,7 @@ def extract_html(input_file: str, output_file: str) -> None:
     output_path = Path(output_file)
 
     if not source_path.is_file():
-        raise SystemExit(f"ERROR: Source file not found: {source_path}")
+        raise SystemExit(f"ОШИБКА: исходный файл не найден: {source_path}")
 
     content = source_path.read_text(encoding="utf-8")
 
@@ -24,7 +24,7 @@ def extract_html(input_file: str, output_file: str) -> None:
 
     if declaration is None:
         raise SystemExit(
-            f"ERROR: PAGE_HTML raw string not found in {source_path}"
+            f"ОШИБКА: не найдена строка PAGE_HTML в {source_path}"
         )
 
     html_start = declaration.end()
@@ -38,18 +38,18 @@ def extract_html(input_file: str, output_file: str) -> None:
     html = content[html_start:html_end]
 
     if not html.strip():
-        raise SystemExit("ERROR: Extracted HTML is empty")
+        raise SystemExit("ОШИБКА: извлечённый HTML пуст")
 
     if not re.search(r"<!DOCTYPE\s+html|<html\b", html, re.IGNORECASE):
-        raise SystemExit("ERROR: Extracted content does not look like HTML")
+        raise SystemExit("ОШИБКА: извлечённое содержимое не похоже на HTML")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html, encoding="utf-8", newline="\n")
 
-    print(f"OK: Extracted HTML from {source_path}")
-    print(f"Output: {output_path}")
-    print(f"Characters: {len(html)}")
-    print(f"Lines: {html.count(chr(10)) + 1}")
+    print(f"ГОТОВО: HTML извлечён из {source_path}")
+    print(f"Результат: {output_path}")
+    print(f"Символов: {len(html)}")
+    print(f"Строк: {html.count(chr(10)) + 1}")
 
 
 if __name__ == "__main__":

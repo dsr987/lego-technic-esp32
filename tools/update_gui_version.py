@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synchronize the web GUI header version with CHANGELOG_VERSION in lego_technic_esp32.ino."""
+"""Синхронизирует версию в заголовке веб-интерфейса с CHANGELOG_VERSION в lego_technic_esp32.ino."""
 
 import re
 import sys
@@ -19,7 +19,7 @@ def main() -> int:
         re.MULTILINE,
     )
     if not version_match:
-        print(f"ERROR: CHANGELOG_VERSION not found in {MAIN_SKETCH}", file=sys.stderr)
+        print(f"ОШИБКА: CHANGELOG_VERSION не найден в {MAIN_SKETCH}", file=sys.stderr)
         return 1
 
     version = version_match.group(1)
@@ -32,24 +32,24 @@ def main() -> int:
             # embedded source is required to exist at this point.
             if path == INDEX_HTML:
                 continue
-            print(f"ERROR: Required GUI source not found: {path}", file=sys.stderr)
+            print(f"ОШИБКА: не найден обязательный исходник интерфейса: {path}", file=sys.stderr)
             return 1
 
         text = path.read_text(encoding="utf-8-sig")
         text, count = pattern.subn(rf"\g<1>{version}\g<2>", text)
         if count != 1:
             print(
-                f"ERROR: Expected exactly one GUI version label in {path}, found {count}",
+                f"ОШИБКА: ожидалась ровно одна метка версии интерфейса в {path}, найдено: {count}",
                 file=sys.stderr,
             )
             return 1
 
         path.write_text(text, encoding="utf-8")
-        print(f"Updated GUI version to {version}: {path.relative_to(ROOT)}")
+        print(f"Версия интерфейса обновлена до {version}: {path.relative_to(ROOT)}")
         updated += count
 
     if updated == 0:
-        print("ERROR: No GUI version labels were updated", file=sys.stderr)
+        print("ОШИБКА: ни одна метка версии интерфейса не обновлена", file=sys.stderr)
         return 1
 
     return 0

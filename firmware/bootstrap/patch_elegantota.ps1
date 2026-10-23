@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 $header = Join-Path $Sketchbook 'libraries\ElegantOTA\src\ElegantOTA.h'
 
 if (-not (Test-Path -LiteralPath $header)) {
-    throw "ElegantOTA.h was not found at '$header'. The library installation may have failed."
+    throw "Файл ElegantOTA.h не найден по пути '$header'. Возможно, библиотека установлена с ошибкой."
 }
 
 $content = Get-Content -LiteralPath $header -Raw
@@ -16,13 +16,13 @@ $updated = [regex]::Replace($content, $pattern, '${1}1${2}')
 
 if ($updated -ne $content) {
     Set-Content -LiteralPath $header -Value $updated -NoNewline -Encoding utf8
-    Write-Host 'Enabled ELEGANTOTA_USE_ASYNC_WEBSERVER=1.'
+    Write-Host 'Включён параметр ELEGANTOTA_USE_ASYNC_WEBSERVER=1.'
     exit 0
 }
 
 if ($content -match '(?m)^\s*#\s*define\s+ELEGANTOTA_USE_ASYNC_WEBSERVER\s+1\b') {
-    Write-Host 'ElegantOTA async mode was already enabled.'
+    Write-Host 'Асинхронный режим ElegantOTA уже включён.'
     exit 0
 }
 
-throw 'Could not locate the expected ELEGANTOTA_USE_ASYNC_WEBSERVER macro. Refusing to continue with unknown library configuration.'
+throw 'Не найден ожидаемый макрос ELEGANTOTA_USE_ASYNC_WEBSERVER. Работа остановлена: конфигурация библиотеки неизвестна.'

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract a marked CHANGELOG block from lego_technic_esp32.ino."""
+"""Извлекает помеченный блок CHANGELOG из lego_technic_esp32.ino."""
 
 import re
 import sys
@@ -28,7 +28,7 @@ def extract_changelog(cpp_file):
     path = Path(cpp_file)
 
     if not path.is_file():
-        raise SystemExit(f"ERROR: File not found: {path}")
+        raise SystemExit(f"ОШИБКА: файл не найден: {path}")
 
     version = None
     started = False
@@ -54,16 +54,16 @@ def extract_changelog(cpp_file):
             entries.append(line)
 
     if not version:
-        raise SystemExit("ERROR: CHANGELOG_VERSION marker not found")
+        raise SystemExit("ОШИБКА: маркер CHANGELOG_VERSION не найден")
 
     if not started:
-        raise SystemExit("ERROR: CHANGELOG_START marker not found")
+        raise SystemExit("ОШИБКА: маркер CHANGELOG_START не найден")
 
     if not ended:
-        raise SystemExit("ERROR: CHANGELOG_END marker not found")
+        raise SystemExit("ОШИБКА: маркер CHANGELOG_END не найден")
 
     if not entries:
-        raise SystemExit(f"ERROR: No entries found for version {version}")
+        raise SystemExit(f"ОШИБКА: для версии не найдены записи: {version}")
 
     return version, "\n".join(entries)
 
@@ -118,12 +118,12 @@ def update_changelog(md_file, version, entries):
             missing_entries.append(line)
 
         if not missing_entries:
-            print(f"OK: Version {version} already contains all changelog entries; no changes.")
+            print(f"ГОТОВО: версия {version} уже содержит все записи журнала изменений; правки не нужны.")
             return
 
         section_heading = re.search(r"^##\s+[^\n]+", section_text, re.MULTILINE)
         if section_heading is None:
-            raise SystemExit(f"ERROR: Could not locate heading for version {version}")
+            raise SystemExit(f"ОШИБКА: не удалось найти заголовок версии: {version}")
 
         changed_heading = re.search(
             r"^###\s+Изменено\s*$",
@@ -170,7 +170,7 @@ def update_changelog(md_file, version, entries):
 
         content = content[:section_start] + section_text + content[section_end:]
         path.write_text(content, encoding="utf-8", newline="\n")
-        print(f"OK: Updated CHANGELOG version {version} with {len(missing_entries)} new changelog entries.")
+        print(f"ГОТОВО: раздел CHANGELOG версии {version} обновлён, добавлено записей: {len(missing_entries)}.")
         return
 
     section = (
@@ -193,7 +193,7 @@ def update_changelog(md_file, version, entries):
         content = "# История версий\n\n" + section + content
 
     path.write_text(content, encoding="utf-8", newline="\n")
-    print(f"OK: Added CHANGELOG version {version}")
+    print(f"ГОТОВО: добавлен раздел CHANGELOG для версии {version}")
 
 
 if __name__ == "__main__":
@@ -205,6 +205,6 @@ if __name__ == "__main__":
     md_file = sys.argv[2] if len(sys.argv) > 2 else "CHANGELOG.md"
 
     version, entries = extract_changelog(cpp_file)
-    print(f"Version: {version}")
+    print(f"Версия: {version}")
     print(entries)
     update_changelog(md_file, version, entries)

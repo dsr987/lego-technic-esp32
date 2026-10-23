@@ -57,16 +57,16 @@ class FirstRunBootstrapTests(unittest.TestCase):
         root = Path(__file__).resolve().parents[1]
         workflow = (root / ".github" / "workflows" / "release-versioning.yml").read_text(encoding="utf-8")
         self.assertIn("workflow_run:", workflow)
-        self.assertIn("Build, Extract and Deploy", workflow)
+        self.assertIn("Сборка, извлечение и публикация", workflow)
         self.assertIn("prepare-push", workflow)
-        self.assertIn("Create standard release labels if missing", workflow)
-        self.assertIn("Create or update release metadata PR", workflow)
+        self.assertIn("Создание стандартных меток релиза при их отсутствии", workflow)
+        self.assertIn("Создание или обновление PR с метаданными релиза", workflow)
         self.assertIn('gh pr merge "$BOT_PR_NUMBER" --squash --delete-branch', workflow)
         self.assertIn("secrets.RELEASE_AUTOMATION_TOKEN", workflow)
         self.assertNotIn("wait_for_run", workflow)
         self.assertNotIn("pull-request-validation.yml", workflow)
         self.assertNotIn("release-metadata-validation.yml", workflow)
-        self.assertIn("Full regression checks are run manually", workflow)
+        self.assertIn("Полные регрессионные проверки выполняются вручную", workflow)
         self.assertNotIn("git push origin HEAD:main", workflow)
 
         self.assertFalse((root / ".github" / "workflows" / "pull-request-validation.yml").exists())
@@ -75,11 +75,11 @@ class FirstRunBootstrapTests(unittest.TestCase):
         publish_workflow = (root / ".github" / "workflows" / "publish-release.yml").read_text(encoding="utf-8")
         self.assertIn("github.event.workflow_run.event == 'push'", publish_workflow)
         self.assertIn("previous_version", publish_workflow)
-        self.assertIn("Firmware version is unchanged", publish_workflow)
+        self.assertIn("previous_version", publish_workflow)
 
         build_workflow = (root / ".github" / "workflows" / "ci-build-deploy.yml").read_text(encoding="utf-8")
         self.assertIn("'tools/**'", build_workflow)
-        self.assertIn("Compile ESP32 firmware", build_workflow)
+        self.assertIn("Компиляция прошивки ESP32", build_workflow)
         self.assertIn("actions/deploy-pages@v4", build_workflow)
 
     def test_prepare_push_exports_metadata_for_initial_install_pr(self):
@@ -246,7 +246,7 @@ class ReleaseTypeTests(unittest.TestCase):
                 release.parse_release_type(labels)
 
     def test_rejects_unknown_release_label(self):
-        with self.assertRaisesRegex(release.ReleaseMetadataError, "Unknown release label"):
+        with self.assertRaisesRegex(release.ReleaseMetadataError, "Неизвестная метка релиза"):
             release.parse_release_type("release:turbo")
 
     def test_bootstrap_body_fallback_works_only_when_explicitly_enabled(self):

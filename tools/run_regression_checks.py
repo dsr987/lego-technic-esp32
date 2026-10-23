@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the complete LEGO Technic ESP32 regression suite manually.
+"""Вручную запускает полный набор регрессионных проверок LEGO Technic ESP32.
 
 This script is intentionally not called by GitHub Actions. Run it from the
 repository root before preparing an official firmware release:
@@ -43,7 +43,7 @@ def run(
     check: bool = True,
     capture_output: bool = False,
 ) -> subprocess.CompletedProcess[str]:
-    print("\n[RUN] " + " ".join(args), flush=True)
+    print("\n[ЗАПУСК] " + " ".join(args), flush=True)
     result = subprocess.run(
         args,
         cwd=ROOT,
@@ -102,7 +102,7 @@ def check_generated_files() -> None:
                 "Generated files are out of sync with their sources. The diff above shows "
                 "the required updates; original tracked files have been restored."
             )
-        print("[PASS] Generated GUI, changelog and README are current.")
+        print("[УСПЕХ] Сгенерированные интерфейс, журнал изменений и README актуальны.")
     finally:
         for path, content in snapshots.items():
             path.write_bytes(content)
@@ -115,7 +115,7 @@ def install_and_compile_firmware() -> None:
         config_file = str(temp_path / "arduino-cli.yaml")
         build_dir = str(temp_path / "build")
 
-        # Use a temporary CLI config instead of overwriting the user's global config.
+        # Используем временную конфигурацию CLI вместо изменения глобальных настроек пользователя.
         run("arduino-cli", "--config-file", config_file, "config", "init", "--overwrite")
         run("arduino-cli", "--config-file", config_file, "config", "add", "board_manager.additional_urls", ESP32_INDEX)
         run("arduino-cli", "--config-file", config_file, "core", "update-index")
@@ -145,9 +145,9 @@ def main() -> int:
         require_clean_tree()
 
         print("=" * 72)
-        print("LEGO TECHNIC ESP32 — MANUAL REGRESSION SUITE")
+        print("LEGO TECHNIC ESP32 — РУЧНЫЕ РЕГРЕССИОННЫЕ ПРОВЕРКИ")
         print("=" * 72)
-        print("These checks are intentionally not run by GitHub Actions.")
+        print("Эти проверки намеренно не запускаются в GitHub Actions.")
 
         python_files = (
             "tools/embed_web_gui_assets.py",
@@ -173,7 +173,7 @@ def main() -> int:
             run(
                 "ruby",
                 "-e",
-                'require "yaml"; ARGV.each { |path| YAML.parse_file(path); puts "PASS: YAML syntax #{path}" }',
+                'require "yaml"; ARGV.each { |path| YAML.parse_file(path); puts "УСПЕХ: синтаксис YAML #{path}" }',
                 ".github/workflows/ci-build-deploy.yml",
                 ".github/workflows/pull-request-validation.yml",
                 ".github/workflows/release-versioning.yml",
@@ -181,17 +181,17 @@ def main() -> int:
                 ".github/workflows/publish-release.yml",
             )
         else:
-            print("[WARN] Ruby not found; workflow YAML syntax check was skipped.")
+            print("[ПРЕДУПРЕЖДЕНИЕ] Ruby не найден; проверка синтаксиса YAML-файлов workflow пропущена.")
 
         check_generated_files()
         install_and_compile_firmware()
         print("\n" + "=" * 72)
-        print("ALL MANUAL REGRESSION CHECKS PASSED")
-        print("This does not replace physical hardware testing.")
+        print("ВСЕ РУЧНЫЕ РЕГРЕССИОННЫЕ ПРОВЕРКИ ПРОЙДЕНЫ")
+        print("Это не заменяет испытания на реальном оборудовании.")
         print("=" * 72)
         return 0
     except (RuntimeError, subprocess.CalledProcessError, OSError) as exc:
-        print(f"\n[FAIL] {exc}", file=sys.stderr)
+        print(f"\n[ОШИБКА] {exc}", file=sys.stderr)
         return 1
 
 

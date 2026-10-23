@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Embed WebP assets into the self-contained Web GUI SVG."""
+"""Встраивает изображения WebP в автономный веб-интерфейс."""
 
 import base64
 import binascii
@@ -24,19 +24,19 @@ def read_webp(path: Path) -> str:
             decoded = base64.b64decode(payload, validate=True)
         except (ValueError, binascii.Error) as exc:
             raise SystemExit(
-                f"ERROR: invalid base64 asset: {path.relative_to(ROOT)}: {exc}"
+                f"ОШИБКА: некорректный ресурс base64: {path.relative_to(ROOT)}: {exc}"
             ) from exc
     else:
         decoded = path.read_bytes()
         payload = base64.b64encode(decoded).decode("ascii")
 
     if len(decoded) < 12 or decoded[:4] != b"RIFF" or decoded[8:12] != b"WEBP":
-        raise SystemExit(f"ERROR: asset is not a WebP image: {path.relative_to(ROOT)}")
+        raise SystemExit(f"ОШИБКА: ресурс не является изображением WebP: {path.relative_to(ROOT)}")
 
     declared_size = int.from_bytes(decoded[4:8], "little") + 8
     if declared_size != len(decoded):
         raise SystemExit(
-            f"ERROR: WebP size mismatch in {path.relative_to(ROOT)}: "
+            f"ОШИБКА: размер WebP не совпадает с ожидаемым: {path.relative_to(ROOT)}: "
             f"header={declared_size}, actual={len(decoded)}"
         )
 
@@ -55,14 +55,14 @@ def main() -> int:
         content, count = pattern.subn(rf"\g<1>{payload}\g<2>", content)
         if count != 1:
             raise SystemExit(
-                f"ERROR: expected exactly one embedded image for {element_id}, found {count}"
+                f"ОШИБКА: ожидалось ровно одно встроенное изображение для {element_id}, найдено: {count}"
             )
 
     if content != original:
         PAGE.write_text(content, encoding="utf-8", newline="\n")
-        print("OK: embedded WebP image assets")
+        print("ГОТОВО: изображения WebP встроены")
     else:
-        print("OK: Web GUI image assets are already up to date")
+        print("ГОТОВО: изображения веб-интерфейса уже актуальны")
 
     return 0
 
