@@ -256,7 +256,7 @@ void onWsEvent(
   size_t len
 ) {
   if (type == WS_EVT_CONNECT) {
-    char buf[256];
+    char buf[384];
     buildStatus(buf, sizeof(buf));
     client->text(buf);
   } else if (type == WS_EVT_DATA) {
