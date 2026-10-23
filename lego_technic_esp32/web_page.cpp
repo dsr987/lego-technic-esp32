@@ -1201,7 +1201,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
           if(typeof d.lr !== 'undefined') { led.R = !!d.lr; updateLedUI('R'); }
           if(typeof d.es !== 'undefined') { eng = !!d.es; updateEngUI(); applyEngGate(); }
           if(typeof d.tr !== 'undefined') { trim = d.tr; $('val-trim').textContent = trim+'°'; }
-          if(typeof d.md !== 'undefined') { $('maxdeg-input').value = d.md; }
+          // Не перезаписываем поле во время ввода: статус приходит каждую секунду.
+          if(typeof d.md !== 'undefined' && document.activeElement !== $('maxdeg-input')) { $('maxdeg-input').value = d.md; }
         }
       }catch(err){}
     };
@@ -1210,10 +1211,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   // Heartbeat поддерживает связь с прошивкой, но не повторяет команды моторов.
   // Иначе после тайм-аута или переподключения старое значение слайдера могло бы
   // неожиданно снова запустить мотор.
+  // Heartbeat отправляется реже, без лишней нагрузки на WebSocket.
+  // Серверный тайм-аут увеличен до 3 секунд для кратких задержек браузера.
   setInterval(function(){
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     ws.send(JSON.stringify({hb:1}));
-  }, 150);
+  }, 500);
 
   function addDiagnosticEvent(message, level){
     var now = new Date();
@@ -1875,6 +1878,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   $('trimM').onclick=function(){ vibrateClick(); trim=Math.max(-45,trim-1); $('val-trim').textContent=trim+'°'; txWS({trim:trim}); };
   $('trimP').onclick=function(){ vibrateClick(); trim=Math.min(45,trim+1); $('val-trim').textContent=trim+'°'; txWS({trim:trim}); };
   $('maxdeg-input').onchange=function(){ vibrateClick(); var deg=Math.max(5,Math.min(135,Number(this.value)||45)); this.value=deg; txWS({maxdeg:deg}); };
+  $('maxdeg-input').onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); this.blur(); } };
   var resetPending = false;
   $('reset-settings-btn').onclick=function(){
     if(!window.confirm('Сбросить все настройки устройства и интерфейса? Действие нельзя отменить.')) return;
