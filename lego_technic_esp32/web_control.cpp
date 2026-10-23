@@ -11,7 +11,7 @@
 // ---------- Состояние, объявленное в lego_technic_esp32.ino ----------
 
 extern Mode currentMode;
-extern unsigned long lastCmdMillis;
+extern volatile unsigned long lastCmdMillis;
 extern Preferences prefs;
 
 extern int motorAVal;
