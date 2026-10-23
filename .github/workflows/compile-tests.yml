@@ -1,4 +1,4 @@
-name: Build ESP32 test sketches
+name: Сборка тестовых скетчей ESP32
 
 on:
   push:
@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   compile:
-    name: Compile standalone test sketches
+    name: Компиляция отдельных тестовых скетчей
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,17 +38,17 @@ jobs:
 
       - uses: arduino/setup-arduino-cli@v2
 
-      - name: Configure Arduino CLI
+      - name: Настройка Arduino CLI
         run: arduino-cli config init
 
-      - name: Install ESP32 core and libraries
+      - name: Установка ядра ESP32 и библиотек
         run: |
           arduino-cli core update-index
           arduino-cli core install esp32:esp32@2.0.9
           arduino-cli lib update-index
           arduino-cli lib install "ESP32Servo"
 
-      - name: Compile test sketches
+      - name: Компиляция тестовых скетчей
         shell: bash
         run: |
           set -Eeuo pipefail
@@ -63,7 +63,7 @@ jobs:
 
             echo "::group::Compile $ino"
             if [[ "$ino_name" != "$dir_name" ]]; then
-              echo "::error file=$ino::Sketch file and directory names must match."
+              echo "::error file=$ino::Имя файла скетча должно совпадать с именем каталога."
               failed=$((failed + 1))
               echo "::endgroup::"
               continue
@@ -76,27 +76,27 @@ jobs:
             if arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir "$output_dir" "$sketch_dir"; then
               compiled_bin="$output_dir/$ino_name.ino.bin"
               if [[ ! -s "$compiled_bin" ]]; then
-                echo "::error file=$ino::Expected binary not found: $compiled_bin"
+                echo "::error file=$ino::Не найден ожидаемый бинарный файл: $compiled_bin"
                 failed=$((failed + 1))
               else
                 cp "$compiled_bin" "$sketch_dir/$ino_name.bin"
-                echo "Built $sketch_dir/$ino_name.bin"
+                echo "Собран файл: $sketch_dir/$ino_name.bin"
               fi
             else
-              echo "::error file=$ino::Compilation failed."
+              echo "::error file=$ino::Ошибка компиляции."
               failed=$((failed + 1))
             fi
             echo "::endgroup::"
           done < <(find test -type f -name '*.ino' -not -path '*/build/*' -print0 | sort -z)
 
           if [[ "$count" -eq 0 ]]; then
-            echo "No .ino sketches found under test/."
+            echo "В каталоге test/ не найдены скетчи .ino."
             exit 0
           fi
-          echo "Sketches: $count; failures: $failed"
+          echo "Скетчей: $count; ошибок: $failed"
           [[ "$failed" -eq 0 ]]
 
-      - name: Commit updated OTA binaries
+      - name: Фиксация обновлённых бинарных файлов OTA
         if: success() && github.event_name == 'push'
         shell: bash
         run: |
@@ -111,7 +111,7 @@ jobs:
           done < <(find test -type f -name '*.bin' -not -path '*/build/*' -print0 | sort -z)
 
           if git diff --cached --quiet; then
-            echo "Test binaries unchanged; no commit needed."
+            echo "Тестовые бинарные файлы не изменились, коммит не требуется."
             exit 0
           fi
 
