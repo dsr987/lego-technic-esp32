@@ -19,16 +19,45 @@ static const float US_PER_DEGREE = 1000.0 / 180.0;
 
 // ---------- Управление рулевым сервоприводом ----------
 
+static int targetPulseUs = 1500;
+static int currentPulseUs = 1500;
+static bool pulseInitialized = false;
+static unsigned long lastPulseUpdateMs = 0;
+
 void applySteer(int val) {
-  servoVal = val;
+  servoVal = constrain(val, -100, 100);
+  targetPulseUs = steerCenterUs +
+      (int)((servoVal / 100.0) * steerMaxAngleDeg * US_PER_DEGREE);
+  targetPulseUs = constrain(targetPulseUs, 500, 2500);
 
-  int us = steerCenterUs +
-           (int)((val / 100.0) *
-                 steerMaxAngleDeg *
-                 US_PER_DEGREE);
+  if (!pulseInitialized) {
+    currentPulseUs = steerCenterUs;
+    pulseInitialized = true;
+    steerServo.writeMicroseconds(currentPulseUs);
+  }
+}
 
-  us = constrain(us, 500, 2500);
+// Вызывать из loop(): ограничиваем шаг без delay() и блокировки WebSocket.
+void updateSteering() {
+  if (!pulseInitialized) {
+    currentPulseUs = steerCenterUs;
+    targetPulseUs = steerCenterUs;
+    pulseInitialized = true;
+    steerServo.writeMicroseconds(currentPulseUs);
+    lastPulseUpdateMs = millis();
+    return;
+  }
 
-  steerServo.writeMicroseconds(us);
+  const unsigned long now = millis();
+  if (now - lastPulseUpdateMs < 20) return;
+  lastPulseUpdateMs = now;
+
+  const int maxStepUs = 20;
+  if (currentPulseUs < targetPulseUs) {
+    currentPulseUs = min(currentPulseUs + maxStepUs, targetPulseUs);
+  } else if (currentPulseUs > targetPulseUs) {
+    currentPulseUs = max(currentPulseUs - maxStepUs, targetPulseUs);
+  }
+  steerServo.writeMicroseconds(currentPulseUs);
 }
  

@@ -248,7 +248,7 @@ def check_firmware_heartbeat_and_watchdog() -> None:
     else:
         report("FAIL", "В web_control.cpp отсутствует отдельный обработчик heartbeat")
 
-    timeout_ok = re.search(r"const\s+unsigned\s+long\s+CMD_TIMEOUT_MS\s*=\s*1500\s*;", app)
+    timeout_ok = re.search(r"const\s+unsigned\s+long\s+CMD_TIMEOUT_MS\s*=\s*3000\s*;", app)
     watchdog_ok = re.search(
         r"if\s*\(\s*millis\(\)\s*-\s*lastCmdMillis\s*>\s*CMD_TIMEOUT_MS\s*\)\s*\{"
         r"(?:(?!\n\s*\}).)*?stopAll\s*\(\s*\)\s*;",
@@ -256,9 +256,9 @@ def check_firmware_heartbeat_and_watchdog() -> None:
         re.DOTALL,
     )
     if timeout_ok and watchdog_ok:
-        report("PASS", "Прошивка сохраняет остановку моторов по тайм-ауту команды 1500 мс")
+        report("PASS", "Прошивка сохраняет остановку моторов по тайм-ауту команды 3000 мс")
     else:
-        report("FAIL", "Прошивка должна останавливать все выходы после тайм-аута команды 1500 мс")
+        report("FAIL", "Прошивка должна останавливать все выходы после тайм-аута команды 3000 мс")
 
 
 

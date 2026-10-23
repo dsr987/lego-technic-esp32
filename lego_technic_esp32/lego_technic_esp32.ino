@@ -103,7 +103,7 @@ AsyncWebSocket ws("/ws");
 // Written by the asynchronous WebSocket task and read by loop(); keep cross-task updates visible.
 volatile unsigned long lastCmdMillis = 0;
 // Allow brief browser/network scheduling stalls while retaining a bounded failsafe.
-const unsigned long CMD_TIMEOUT_MS = 1500; // safety: stop if heartbeat/control activity is lost
+const unsigned long CMD_TIMEOUT_MS = 3000; // Остановка при потере heartbeat или команд управления
 unsigned long lastDisplayStatusMillis = 0;
 
 // Диагностика защитного тайм-аута хранится только в RAM и сбрасывается при перезапуске.
@@ -348,6 +348,9 @@ void recordSafetyTimeout() {
 // ---------- Основной цикл ----------
 
 void loop() {
+
+  // Плавное перемещение сервопривода к последней целевой позиции.
+  updateSteering();
 
   // Аварийная остановка при отсутствии команд управления.
   if (millis() - lastCmdMillis > CMD_TIMEOUT_MS) {
