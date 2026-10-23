@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate pull-request release metadata and apply it to the canonical lego_technic_esp32.ino changelog."""
+"""Проверяет метаданные релиза в PR и применяет их к основному журналу изменений в lego_technic_esp32.ino."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ CHANGELOG_BLOCK_PATTERN = re.compile(
 
 
 class ReleaseMetadataError(ValueError):
-    """Raised when release metadata is incomplete or inconsistent."""
+    """Возникает, если метаданные релиза неполные или противоречат друг другу."""
 
 
 def parse_release_type(raw_labels: str, body: str = "", allow_bootstrap_fallback: bool = False) -> str:
@@ -183,7 +183,7 @@ def validate_pr() -> int:
 
         if release_type == "none":
             message = "Release type is none. This PR will not bump firmware version or changelog."
-            print(f"OK: {message}")
+            print(f"ГОТОВО: {message}")
             append_step_summary(
                 [
                     "## Release metadata",
@@ -197,7 +197,7 @@ def validate_pr() -> int:
             return 0
 
         next_version = format_version(bump_version(version, release_type))  # type: ignore[arg-type]
-        print(f"OK: release:{release_type}; proposed version {current} -> {next_version}")
+        print(f"ГОТОВО: тип релиза: {release_type}; предлагаемая версия {current} -> {next_version}")
         for bullet in bullets:
             print(f"- {bullet}")
         append_step_summary(
@@ -213,7 +213,7 @@ def validate_pr() -> int:
         )
         return 0
     except (OSError, ReleaseMetadataError) as error:
-        print(f"ERROR: {error}", file=sys.stderr)
+        print(f"ОШИБКА: {error}", file=sys.stderr)
         append_step_summary(["## Release metadata validation", "", f"**Failed:** {error}"])
         return 1
 
@@ -267,7 +267,7 @@ def update_app_text(
 
 
 def write_env_value(name: str, value: str) -> None:
-    """Write a value to GITHUB_ENV without interpreting multiline PR text."""
+    """Записывает значение в GITHUB_ENV, не интерпретируя многострочный текст PR."""
     env_path = os.environ.get("GITHUB_ENV")
     if not env_path:
         raise ReleaseMetadataError("GITHUB_ENV is required for push-event metadata")
@@ -277,7 +277,7 @@ def write_env_value(name: str, value: str) -> None:
 
 
 def prepare_push(event_path: str) -> int:
-    """Resolve the merged PR associated with a main push and export its metadata."""
+    """Находит слитый PR, связанный с push в main, и экспортирует его метаданные."""
     try:
         try:
             pulls = json.loads(Path(event_path).read_text(encoding="utf-8"))
@@ -299,7 +299,7 @@ def prepare_push(event_path: str) -> int:
             )
         ]
         if not candidates:
-            print("No merged PR for main is associated with this push; release processing skipped.")
+            print("С этим push в main не связан слитый PR; обработка релиза пропущена.")
             write_step_output(process="false")
             return 0
         if len(candidates) != 1:
@@ -342,10 +342,10 @@ def prepare_push(event_path: str) -> int:
         write_env_value("PR_LABELS", labels)
         write_env_value("PR_BODY", body)
         write_step_output(process="true", release_type=release_type)
-        print(f"Resolved merged PR #{number} for commit metadata processing.")
+        print(f"Для обработки метаданных найден слитый PR №{number}.")
         return 0
     except (OSError, ReleaseMetadataError, ValueError) as error:
-        print(f"ERROR: {error}", file=sys.stderr)
+        print(f"ОШИБКА: {error}", file=sys.stderr)
         append_step_summary(["## Release metadata preparation", "", f"**Failed:** {error}"])
         return 1
 
@@ -362,14 +362,14 @@ def apply_release() -> int:
         release_processed = {int(value) for value in state.get("release_prs", [])}
         if pr_number in processed:
             if pr_number in release_processed:
-                print(f"Release PR #{pr_number} was already processed; allow build/deploy retry.")
+                print(f"PR релиза №{pr_number} уже обработан; повтор сборки/публикации разрешён.")
                 write_step_output(
                     release="true",
                     changed="false",
                     version=str(state.get("last_version", "")),
                 )
             else:
-                print(f"Non-release PR #{pr_number} was already processed; no version bump needed.")
+                print(f"Нерелизный PR №{pr_number} уже обработан; повышать версию не требуется.")
                 write_step_output(release="false", changed="false", version="")
             return 0
 
@@ -392,7 +392,7 @@ def apply_release() -> int:
             state["last_processed_pr"] = pr_number
             state["last_release_type"] = "none"
             write_state(state)
-            print("Release type is none; no firmware-version or changelog update is needed.")
+            print("Тип релиза — none; обновлять версию прошивки и журнал изменений не требуется.")
             write_step_output(release="false", changed="true", version="")
             return 0
 
@@ -414,7 +414,7 @@ def apply_release() -> int:
         state["last_version"] = new_version
         write_state(state)
 
-        print(f"Updated lego_technic_esp32.ino: {old_version} -> {new_version} from PR #{pr_number}.")
+        print(f"В lego_technic_esp32.ino обновлена версия: {old_version} -> {new_version} по PR №{pr_number}.")
         for bullet in bullets:
             print(f"- {bullet}")
         append_step_summary(
@@ -429,14 +429,14 @@ def apply_release() -> int:
         write_step_output(release="true", changed="true", version=new_version)
         return 0
     except (OSError, ReleaseMetadataError, ValueError) as error:
-        print(f"ERROR: {error}", file=sys.stderr)
+        print(f"ОШИБКА: {error}", file=sys.stderr)
         append_step_summary(["## Firmware release metadata", "", f"**Failed:** {error}"])
         return 1
 
 
 def main() -> int:
     if len(sys.argv) not in {2, 3}:
-        print("Usage: release_automation.py {validate-pr|apply|prepare-push [associated-prs.json]}", file=sys.stderr)
+        print("Использование: release_automation.py {validate-pr|apply|prepare-push [associated-prs.json]}", file=sys.stderr)
         return 2
     if sys.argv[1] == "validate-pr" and len(sys.argv) == 2:
         return validate_pr()
@@ -444,7 +444,7 @@ def main() -> int:
         return apply_release()
     if sys.argv[1] == "prepare-push" and len(sys.argv) == 3:
         return prepare_push(sys.argv[2])
-    print("Usage: release_automation.py {validate-pr|apply|prepare-push [associated-prs.json]}", file=sys.stderr)
+    print("Использование: release_automation.py {validate-pr|apply|prepare-push [associated-prs.json]}", file=sys.stderr)
     return 2
 
 
