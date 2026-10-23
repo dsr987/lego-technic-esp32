@@ -19,7 +19,7 @@ on:
       - 'test/**/src/**'
       - 'test/**/lib/**'
 
-# Newer source changes supersede older builds. Prevent parallel pushes to main.
+# Более новые исходники заменяют старые сборки. Не допускаем параллельные запуски для main.
 concurrency:
   group: compile-test-sketches-${{ github.ref }}
   cancel-in-progress: true
@@ -69,8 +69,8 @@ jobs:
               continue
             fi
 
-            # Keep compiler intermediates outside the repository. Only the OTA
-            # application binary is copied back into the sketch directory.
+            # Храним промежуточные файлы компилятора вне репозитория. В каталог скетча
+            # копируется только бинарный файл приложения OTA.
             output_dir="$RUNNER_TEMP/test-sketch-build/$ino_name"
             mkdir -p "$output_dir"
             if arduino-cli compile --fqbn esp32:esp32:esp32 --output-dir "$output_dir" "$sketch_dir"; then
@@ -104,8 +104,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # Commit only the intended application BINs, never bootloader,
-          # partition-table, merged or other intermediate images.
+          # Фиксируем только целевые BIN-файлы приложения, но не загрузчик,
+          # таблицу разделов, объединённые образы и другие промежуточные файлы.
           while IFS= read -r -d '' bin; do
             git add -f -- "$bin"
           done < <(find test -type f -name '*.bin' -not -path '*/build/*' -print0 | sort -z)
@@ -117,6 +117,6 @@ jobs:
 
           git commit -m "Update ESP32 test binaries"
 
-          # Rebase on any unrelated commits that landed while compiling.
+          # Перебазируемся на посторонние коммиты, появившиеся во время компиляции.
           git pull --rebase origin "$GITHUB_REF_NAME"
           git push origin "HEAD:$GITHUB_REF_NAME"
