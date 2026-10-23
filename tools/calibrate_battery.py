@@ -91,28 +91,28 @@ def main() -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
-    print(f"Measurement pairs: {len(args.pair)}")
-    print(f"Correction multiplier for current readings: {correction:.8f}")
-    print(f"Current firmware calibration factor:       {args.current_factor:.8f}")
-    print(f"Recommended BATT_CALIBRATION_FACTOR:        {updated_factor:.8f}")
+    print(f"Пар измерений: {len(args.pair)}")
+    print(f"Поправочный коэффициент для текущих показаний: {correction:.8f}")
+    print(f"Текущий коэффициент калибровки прошивки: {args.current_factor:.8f}")
+    print(f"Рекомендуемый BATT_CALIBRATION_FACTOR:     {updated_factor:.8f}")
     print()
-    print("Paste this value into battery_monitor.cpp:")
+    print("Вставь это значение в battery_monitor.cpp:")
     print(f"static const float BATT_CALIBRATION_FACTOR = {updated_factor:.8f}f;")
     print()
-    print("Per-reading comparison after applying the correction:")
+    print("Сравнение каждого измерения после коррекции:")
     for index, (controller_v, multimeter_v) in enumerate(args.pair, start=1):
         corrected_v = controller_v * correction
         error_v = corrected_v - multimeter_v
         error_pct = error_v / multimeter_v * 100.0
         print(
-            f"  {index}: display={controller_v:.3f} V, meter={multimeter_v:.3f} V, "
-            f"corrected={corrected_v:.3f} V, residual={error_v:+.3f} V ({error_pct:+.2f}%)"
+            f"  {index}: на дисплее={controller_v:.3f} V, мультиметр={multimeter_v:.3f} V, "
+            f"после коррекции={corrected_v:.3f} V, остаток={error_v:+.3f} V ({error_pct:+.2f}%)"
         )
 
     print()
     print(
-        "Note: this corrects a multiplicative scale error. If residuals vary a lot "
-        "between readings, inspect the divider, wiring, ADC range, and measurement method."
+        "Примечание: это исправляет мультипликативную ошибку масштаба. Если остатки сильно различаются "
+        "между измерениями, проверь делитель напряжения, проводку, диапазон АЦП и метод измерения."
     )
     return 0
 
