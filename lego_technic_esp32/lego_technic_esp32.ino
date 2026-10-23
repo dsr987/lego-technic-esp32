@@ -101,7 +101,8 @@ AsyncWebSocket ws("/ws");
 // Если команды управления не поступают в течение
 // указанного времени, моторы должны быть остановлены.
 unsigned long lastCmdMillis = 0;
-const unsigned long CMD_TIMEOUT_MS = 500; // safety: стоп, если нет команд
+// Allow brief browser/network scheduling stalls while retaining a bounded failsafe.
+const unsigned long CMD_TIMEOUT_MS = 1500; // safety: stop if heartbeat/control activity is lost
 unsigned long lastDisplayStatusMillis = 0;
 
 // Диагностика защитного тайм-аута хранится только в RAM и сбрасывается при перезапуске.
@@ -160,6 +161,11 @@ void applyLeds() {
 // Статус GUI: батарея, Wi-Fi, режим, количество WS-клиентов, конфигурация
 // и read-only диагностика ресурсов/активности ESP32.
 void buildStatus(char *buf, size_t n) {
+  const int trimOffsetUs = steerCenterUs - 1500;
+  const int steerTrimDegrees = trimOffsetUs >= 0
+      ? (trimOffsetUs * 180 + 500) / 1000
+      : (trimOffsetUs * 180 - 500) / 1000;
+
   snprintf(
     buf,
     n,
@@ -190,7 +196,7 @@ void buildStatus(char *buf, size_t n) {
     ledFrontOn ? 1 : 0,
     ledRearOn ? 1 : 0,
     engineSimOn ? 1 : 0,
-    steerCenterUs - 1500,
+    steerTrimDegrees,
     steerMaxAngleDeg
   );
 }
