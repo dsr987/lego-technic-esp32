@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Embed WebP assets into the self-contained Web GUI SVG."""
+"""Встраивает изображения WebP в автономный веб-интерфейс."""
 
 import base64
 import binascii
@@ -31,7 +31,7 @@ def read_webp(path: Path) -> str:
         payload = base64.b64encode(decoded).decode("ascii")
 
     if len(decoded) < 12 or decoded[:4] != b"RIFF" or decoded[8:12] != b"WEBP":
-        raise SystemExit(f"ERROR: asset is not a WebP image: {path.relative_to(ROOT)}")
+        raise SystemExit(f"ОШИБКА: ресурс не является изображением WebP: {path.relative_to(ROOT)}")
 
     declared_size = int.from_bytes(decoded[4:8], "little") + 8
     if declared_size != len(decoded):
@@ -60,9 +60,9 @@ def main() -> int:
 
     if content != original:
         PAGE.write_text(content, encoding="utf-8", newline="\n")
-        print("OK: embedded WebP image assets")
+        print("ГОТОВО: изображения WebP встроены")
     else:
-        print("OK: Web GUI image assets are already up to date")
+        print("ГОТОВО: изображения веб-интерфейса уже актуальны")
 
     return 0
 
