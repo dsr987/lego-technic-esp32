@@ -48,9 +48,9 @@ def parse_release_type(raw_labels: str, body: str = "", allow_bootstrap_fallback
             "A PR must have exactly one release label: " + ", ".join(RELEASE_TYPES)
         )
 
-    # One-time bootstrap only: there are no release labels in the repository
-    # until the first successful run provisions them. Once initialized, labels
-    # are mandatory and the body fallback is no longer accepted.
+    # Только для первоначальной настройки: до первого успешного запуска в репозитории
+    # нет меток релиза. После инициализации метки
+    # обязательны, а резервное чтение типа релиза из описания больше не используется.
     if allow_bootstrap_fallback:
         matches = re.findall(r"(?im)^Release type:[ \t]*(release:[a-z]+)[ \t]*$", body)
         if len(matches) == 1 and matches[0] in RELEASE_TYPES:
@@ -292,8 +292,8 @@ def prepare_push(event_path: str) -> int:
             and pr.get("number")
             and pr.get("merged_at")
             and (pr.get("base") or {}).get("ref") == "main"
-            # The bot's metadata PR only updates idempotency state and must not
-            # recursively generate another metadata PR after it is merged.
+            # PR бота с метаданными обновляет только состояние идемпотентности и не должен
+            # после слияния запускать создание ещё одного PR с метаданными.
             and not str(((pr.get("head") or {}).get("ref") or "")).startswith(
                 "automation/release-metadata-pr-"
             )
@@ -383,7 +383,7 @@ def apply_release() -> int:
         bullets = extract_changelog_bullets(body)
         validate_summary(bullets)
 
-        # Mark label enforcement as initialized only when a PR is successfully processed.
+        # Считаем проверку обязательных меток инициализированной только после успешной обработки PR.
         state["labels_initialized"] = True
 
         if release_type == "none":
