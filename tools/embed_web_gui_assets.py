@@ -24,7 +24,7 @@ def read_webp(path: Path) -> str:
             decoded = base64.b64decode(payload, validate=True)
         except (ValueError, binascii.Error) as exc:
             raise SystemExit(
-                f"ERROR: invalid base64 asset: {path.relative_to(ROOT)}: {exc}"
+                f"ОШИБКА: некорректный ресурс base64: {path.relative_to(ROOT)}: {exc}"
             ) from exc
     else:
         decoded = path.read_bytes()
@@ -36,7 +36,7 @@ def read_webp(path: Path) -> str:
     declared_size = int.from_bytes(decoded[4:8], "little") + 8
     if declared_size != len(decoded):
         raise SystemExit(
-            f"ERROR: WebP size mismatch in {path.relative_to(ROOT)}: "
+            f"ОШИБКА: размер WebP не совпадает с ожидаемым: {path.relative_to(ROOT)}: "
             f"header={declared_size}, actual={len(decoded)}"
         )
 
@@ -55,7 +55,7 @@ def main() -> int:
         content, count = pattern.subn(rf"\g<1>{payload}\g<2>", content)
         if count != 1:
             raise SystemExit(
-                f"ERROR: expected exactly one embedded image for {element_id}, found {count}"
+                f"ОШИБКА: ожидалось ровно одно встроенное изображение для {element_id}, найдено: {count}"
             )
 
     if content != original:
