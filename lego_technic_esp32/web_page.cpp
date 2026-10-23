@@ -1289,7 +1289,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       if(diagnosticFailsafeCount === null && failsafeCount > 0){
         addDiagnosticEvent('На ESP32 с запуска зафиксировано срабатываний защиты: ' + failsafeCount, 'warn');
       } else if(diagnosticFailsafeCount !== null && failsafeCount > diagnosticFailsafeCount){
-        addDiagnosticEvent('Сработала защита по тайм-ауту на ESP32 (всего: ' + failsafeCount + ')', 'error');
+        addDiagnosticEvent('Сработала защита (всего: ' + failsafeCount + '): возраст heartbeat ' + Number(d.fsh || 0) + ' мс, WS-активности ' + Number(d.fsa2 || 0) + ' мс, команды ' + Number(d.fscmd || 0) + ' мс; heartbeat принято: ' + Number(d.hbc || 0), 'error');
       } else if(diagnosticFailsafeCount !== null && failsafeCount < diagnosticFailsafeCount){
         addDiagnosticEvent('Счётчик защиты на ESP32 сброшен (возможен перезапуск)', 'warn');
       }
