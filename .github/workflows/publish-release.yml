@@ -1,4 +1,4 @@
-name: Publish Firmware Release
+name: Публикация релиза прошивки
 
 on:
   workflow_run:
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   publish:
-    name: Publish freshly compiled ESP32 firmware
+    name: Публикация свежесобранной прошивки ESP32
     permissions:
       actions: read
       contents: write
@@ -25,7 +25,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download firmware artifact from the completed build
+      - name: Загрузка артефакта прошивки из завершённой сборки
         uses: actions/download-artifact@v4
         with:
           name: esp32-firmware-main-${{ github.event.workflow_run.run_number }}
@@ -33,7 +33,7 @@ jobs:
           github-token: ${{ secrets.GH_RELEASE_TOKEN || github.token }}
           path: ${{ runner.temp }}/firmware-artifact
 
-      - name: Find freshly compiled firmware and calculate checksum
+      - name: Поиск свежесобранной прошивки и вычисление контрольной суммы
         id: compiled
         shell: bash
         run: |
@@ -47,7 +47,7 @@ jobs:
           # a new release containing an older firmware image.
           if [[ ! -d "$build_dir" ]]; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::This run did not compile firmware; release publication is skipped."
+            echo "::notice::В этом запуске прошивка не компилировалась; публикация релиза пропускается."
             exit 0
           fi
 
@@ -57,12 +57,12 @@ jobs:
 
           if [[ "${#binaries[@]}" -eq 0 ]]; then
             echo "publish=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No compiled *.ino.bin found; release publication is skipped."
+            echo "::notice::Не найден скомпилированный файл *.ino.bin; публикация релиза пропускается."
             exit 0
           fi
 
           if [[ "${#binaries[@]}" -ne 1 ]]; then
-            echo "::error::Expected one compiled *.ino.bin; found ${#binaries[@]}."
+            echo "::error::Ожидался один скомпилированный файл *.ino.bin, найдено: ${#binaries[@]}."
             printf '%s\n' "${binaries[@]}"
             exit 1
           fi
@@ -77,17 +77,17 @@ jobs:
           )
 
           echo "publish=true" >> "$GITHUB_OUTPUT"
-          echo "Compiled firmware SHA-256:"
+          echo "SHA-256 скомпилированной прошивки:"
           cat "$artifact_dir/lego_technic_esp32.ino.bin.sha256"
 
-      - name: Check out the source commit
+      - name: Получение исходного коммита
         if: ${{ steps.compiled.outputs.publish == 'true' }}
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
 
-      - name: Ensure this is the newest firmware source on main
+      - name: Проверка актуальности исходников прошивки в main
         if: ${{ steps.compiled.outputs.publish == 'true' }}
         id: latest_source
         shell: bash
@@ -100,18 +100,18 @@ jobs:
 
           if git diff --quiet "$SOURCE_SHA" origin/main -- lego_technic_esp32; then
             echo "current=true" >> "$GITHUB_OUTPUT"
-            echo "This build matches the current firmware source on main."
+            echo "Эта сборка соответствует текущим исходникам прошивки в main."
           else
             result=$?
             if [[ "$result" -ne 1 ]]; then
-              echo "::error::Could not compare this build with the current main firmware source."
+              echo "::error::Не удалось сравнить эту сборку с текущими исходниками прошивки в main."
               exit "$result"
             fi
             echo "current=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::A newer firmware source is already on main; skipping this older release."
+            echo "::notice::В main уже есть более новые исходники прошивки; публикация устаревшего релиза пропускается."
           fi
 
-      - name: Read firmware version and decide whether to publish
+      - name: Чтение версии прошивки и принятие решения о публикации
         if: ${{ steps.compiled.outputs.publish == 'true' && steps.latest_source.outputs.current == 'true' }}
         id: version
         shell: bash
@@ -124,7 +124,7 @@ jobs:
 
           version="$(sed -n 's/^[[:space:]]*\*[[:space:]]*Версия разработки:[[:space:]]*//p' lego_technic_esp32/lego_technic_esp32.ino | head -n 1 | tr -d '\r')"
           if [[ -z "$version" ]]; then
-            echo "::error::Could not read firmware version from lego_technic_esp32.ino."
+            echo "::error::Не удалось прочитать версию прошивки из lego_technic_esp32.ino."
             exit 1
           fi
 
@@ -134,24 +134,24 @@ jobs:
             previous_version="$(printf '%s\n' "$previous_sketch" | sed -n 's/^[[:space:]]*\*[[:space:]]*Версия разработки:[[:space:]]*//p' | head -n 1 | tr -d '\r')"
 
             if [[ -z "$previous_version" ]]; then
-              echo "::notice::The parent commit has no firmware version marker; treating this as the first release from the canonical sketch."
+              echo "::notice::В родительском коммите нет маркера версии прошивки; этот выпуск считается первым для основного скетча."
             elif [[ "$version" == "$previous_version" ]]; then
               latest_release_name="$(gh release list --limit 1 --json name --jq '.[0].name // ""')"
               latest_release_version="$(printf '%s\n' "$latest_release_name" | sed -nE 's/.* — ([0-9]+\.[0-9]+\.[0-9]+)( \(build [0-9]+\))?$/\1/p')"
 
               if [[ "$latest_release_version" == "$version" ]]; then
                 publish=false
-                echo "::notice::Firmware version $version is already the latest published release; skipping duplicate publication."
+                echo "::notice::Версия прошивки $version уже является последним опубликованным релизом; повторная публикация пропускается."
               else
-                echo "::notice::Firmware source version is unchanged from its parent, but latest published release is '$latest_release_name'; publishing the missing release."
+                echo "::notice::Версия исходников не изменилась относительно родительского коммита, но последний релиз — '$latest_release_name'; публикуется отсутствующий релиз."
               fi
             fi
           fi
 
           echo "value=$version" >> "$GITHUB_OUTPUT"
           echo "publish=$publish" >> "$GITHUB_OUTPUT"
-          echo "Firmware version: $version"
-      - name: Publish firmware as a GitHub Release
+          echo "Версия прошивки: $version"
+      - name: Публикация прошивки как GitHub Release
         if: ${{ steps.compiled.outputs.publish == 'true' && steps.latest_source.outputs.current == 'true' && steps.version.outputs.publish == 'true' }}
         uses: softprops/action-gh-release@v3
         with:
