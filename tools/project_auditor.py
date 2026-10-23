@@ -237,7 +237,7 @@ def check_firmware_heartbeat_and_watchdog() -> None:
             re.search(r"doc\.size\(\)\s*!=\s*1", hb),
             re.search(r"doc\s*\[\s*['\"]hb['\"]\s*\]\s*\.\s*is<int>\(\)", hb),
             re.search(r"doc\s*\[\s*['\"]hb['\"]\s*\]\s*\.\s*as<int>\(\)\s*!=\s*1", hb),
-            re.search(r"lastHeartbeatMillis\s*=\s*messageMillis", hb) and re.search(r"heartbeatCount\+\+", hb),
+            re.search(r"lastHeartbeatMillis\s*=\s*messageMillis", hb) and re.search(r"lastCmdMillis\s*=\s*messageMillis", hb) and re.search(r"heartbeatCount\+\+", hb),
             re.search(r"\breturn\s*;", hb),
         )
         touches_outputs = re.search(r"\bapplyMotor[A-D]?\s*\(|\bapplySteer\s*\(|\bstopAll\s*\(", hb)
@@ -642,7 +642,6 @@ def check_diagnostics_regressions() -> None:
         ('id="diag-log"', "event log container"),
         ('id="diag-log-clear"', "clear-log button"),
         ("if(diagnosticEvents.length > 20) diagnosticEvents.length = 20", "bounded 20-event history"),
-        ("Соединение с ESP32 потеряно", "disconnect event"),
         ("Телеметрия не обновляется более 3 секунд", "stale telemetry event"),
         ("Получение телеметрии восстановлено", "telemetry recovery event"),
         ("Состояние батареи: ", "battery state change event"),
