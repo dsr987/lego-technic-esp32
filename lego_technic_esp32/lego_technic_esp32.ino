@@ -2,7 +2,7 @@
  * LEGO Technic ESP32
  * Main Arduino sketch: filename and containing directory must match.
  * Shared module implementations remain in their dedicated .cpp/.h files.
- * Версия разработки: 0.9.6
+ * Версия разработки: 0.9.7
  *
  * Текущий выпуск: калибровка измерения напряжения батареи.
  * В проекте также доступны обновлённый Web GUI и OLED Update 2.0.
@@ -24,9 +24,9 @@
  * - Рабочая панель OLED показывает режим, процент заряда и напряжение батареи, количество подключённых клиентов Wi-Fi и предупреждение о низком заряде.
  * - Если инициализация OLED не удалась, прошивка продолжает запуск без попыток выводить данные на недоступный дисплей.
  *
- * CHANGELOG_VERSION: 0.9.6
+ * CHANGELOG_VERSION: 0.9.7
  * CHANGELOG_START
- * - Fix motor output dropping at exactly 100% slider command by avoiding the unsupported/unreliable 100% LEDC duty endpoint. ([PR #77](https://github.com/dsr987/lego-technic-esp32/pull/77))
+ * - Fix false watchdog stops during steady input, make steering calibration understandable in degrees, and add a complete settings reset control. ([PR #79](https://github.com/dsr987/lego-technic-esp32/pull/79))
  * CHANGELOG_END
  *
  * тестовый запуск сборки
