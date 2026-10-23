@@ -1,4 +1,4 @@
-![Build, Extract and Deploy](https://github.com/dsr987/lego-technic-esp32/actions/workflows/ci-build-deploy.yml/badge.svg)
+![Сборка, извлечение и публикация](https://github.com/dsr987/lego-technic-esp32/actions/workflows/ci-build-deploy.yml/badge.svg)
 
 ![LEGO Technic ESP32 — историческая аппаратная ревизия 1.0](docs/hardware_1.0_banner.png)
 
