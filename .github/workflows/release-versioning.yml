@@ -1,8 +1,8 @@
 name: Автоматизация версионирования релиза
 
 on:
-  # Only process the merged source PR after the main build pipeline completes.
-  # Metadata writes are made on an automation branch and merged through a checked PR.
+  # Обрабатываем слитый исходный PR только после завершения сборки main.
+  # Метаданные записываются в автоматическую ветку и сливаются через PR.
   workflow_run:
     workflows:
       - Build, Extract and Deploy
@@ -133,8 +133,8 @@ jobs:
 
           git diff --cached --check
           git commit -m "chore: prepare release metadata for PR #${RELEASE_SOURCE_PR}"
-          # actions/checkout configures an Authorization extraheader for GITHUB_TOKEN.
-          # Remove it before adding the PAT header, otherwise Git sends two Authorization headers.
+          # actions/checkout настраивает заголовок Authorization для GITHUB_TOKEN.
+          # Удаляем его перед добавлением заголовка PAT, иначе Git отправит два заголовка Authorization.
           git config --local --unset-all http.https://github.com/.extraheader || true
           auth_header="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth_header}" \
@@ -146,21 +146,21 @@ jobs:
             body="$(cat <<EOF
           Release type: release:none
 
-          ## Summary
-          - Apply release metadata for merged source PR #${RELEASE_SOURCE_PR}.
-          - Synchronize generated GUI, README and changelog files before merging.
+          ## Кратко
+          - Применить метаданные релиза для слитого исходного PR №${RELEASE_SOURCE_PR}.
+          - Синхронизировать сгенерированные интерфейс, README и журнал изменений перед слиянием.
 
           ## Changelog
-          - Synchronize version metadata and generated project files for source PR #${RELEASE_SOURCE_PR}.
+          - Синхронизировать метаданные версии и сгенерированные файлы для исходного PR №${RELEASE_SOURCE_PR}.
 
-          ## Regression checks
-          - Full regression checks are run manually with `python tools/run_regression_checks.py` before an official firmware release.
+          ## Регрессионные проверки
+          - Перед официальным выпуском прошивки вручную запусти полные регрессионные проверки: `python tools/run_regression_checks.py`.
           EOF
           )"
             gh pr create \
               --base main \
               --head "${BOT_BRANCH}" \
-              --title "chore: update release metadata after PR #${RELEASE_SOURCE_PR}" \
+              --title "chore: обновить метаданные релиза после PR №${RELEASE_SOURCE_PR}" \
               --label release:none \
               --body "$body" >/dev/null
             bot_pr="$(gh pr list --state open --base main --head "${BOT_BRANCH}" --json number --jq '.[0].number // empty')"
