@@ -100,7 +100,8 @@ AsyncWebSocket ws("/ws");
 
 // Если команды управления не поступают в течение
 // указанного времени, моторы должны быть остановлены.
-unsigned long lastCmdMillis = 0;
+// Written by the asynchronous WebSocket task and read by loop(); keep cross-task updates visible.
+volatile unsigned long lastCmdMillis = 0;
 // Allow brief browser/network scheduling stalls while retaining a bounded failsafe.
 const unsigned long CMD_TIMEOUT_MS = 1500; // safety: stop if heartbeat/control activity is lost
 unsigned long lastDisplayStatusMillis = 0;
