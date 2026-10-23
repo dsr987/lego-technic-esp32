@@ -88,7 +88,7 @@ def check_local_includes() -> None:
         for include_name in include_pattern.findall(content):
             include_name = include_name.replace("\\", "/")
             if resolve_local_include(source_file, include_name):
-                report("PASS", f'Include "{include_name}" in {source_file.name}')
+                report("PASS", f'Файл {source_file.name} подключает "{include_name}"')
             else:
                 report(
                     "FAIL",
@@ -246,7 +246,7 @@ def check_firmware_heartbeat_and_watchdog() -> None:
         else:
             report("FAIL", "Heartbeat прошивки должен проверять {hb:1}, обновлять тайм-аут и завершаться без управления выходами")
     else:
-        report("FAIL", "web_control.cpp не содержит the isolated heartbeat handler")
+        report("FAIL", "В web_control.cpp отсутствует отдельный обработчик heartbeat")
 
     timeout_ok = re.search(r"const\s+unsigned\s+long\s+CMD_TIMEOUT_MS\s*=\s*500\s*;", app)
     watchdog_ok = re.search(
@@ -256,9 +256,9 @@ def check_firmware_heartbeat_and_watchdog() -> None:
         re.DOTALL,
     )
     if timeout_ok and watchdog_ok:
-        report("PASS", "Прошивка сохраняет остановку моторов по тайм-ауту команды 500 мс")
+        report("PASS", "Прошивка сохраняет остановку моторов по тайм-ауту команды 1500 мс")
     else:
-        report("FAIL", "Прошивка должна останавливать все выходы после тайм-аута команды 500 мс")
+        report("FAIL", "Прошивка должна останавливать все выходы после тайм-аута команды 1500 мс")
 
 
 
@@ -267,10 +267,10 @@ def check_tank_visual_regressions() -> None:
     html = read_text(REPO_ROOT / "index.html")
     page = read_text(SOURCE_DIR / "web_page.cpp")
     if html is None:
-        report("FAIL", "Не удалось прочитать index.html for tank visual regression checks")
+        report("FAIL", "Не удалось прочитать index.html для проверки внешнего вида танка")
         return
     if page is None:
-        report("FAIL", "Не удалось прочитать web_page.cpp for tank visual regression checks")
+        report("FAIL", "Не удалось прочитать web_page.cpp для проверки внешнего вида танка")
         return
 
     embedded_start = page.find("<!DOCTYPE html>")
