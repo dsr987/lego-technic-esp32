@@ -1,4 +1,4 @@
-name: Release Version Automation
+name: Автоматизация версионирования релиза
 
 on:
   # Only process the merged source PR after the main build pipeline completes.
@@ -23,26 +23,26 @@ concurrency:
 
 jobs:
   release-metadata:
-    name: Resolve merged PR and update version metadata
+    name: Поиск слитого PR и обновление метаданных версии
     if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' }}
     runs-on: ubuntu-latest
     env:
       PUSH_SHA: ${{ github.event.workflow_run.head_sha }}
 
     steps:
-      - name: Checkout trusted main
+      - name: Получение доверенной ветки main
         uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Set up Python
+      - name: Настройка Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Resolve PR associated with the completed main push
+      - name: Поиск PR, связанного с завершённым push в main
         id: resolve
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -53,7 +53,7 @@ jobs:
             > "${RUNNER_TEMP}/associated-prs.json"
           python3 tools/release_automation.py prepare-push "${RUNNER_TEMP}/associated-prs.json"
 
-      - name: Create standard release labels if missing
+      - name: Создание стандартных меток релиза при их отсутствии
         if: ${{ steps.resolve.outputs.process == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -65,9 +65,9 @@ jobs:
             if ! gh api --paginate "repos/${GITHUB_REPOSITORY}/labels?per_page=100" --jq '.[].name' | grep -Fx "${name}" >/dev/null; then
               gh api --method POST "repos/${GITHUB_REPOSITORY}/labels" \
                 -f "name=${name}" -f "color=${color}" -f "description=${description}" >/dev/null
-              echo "Created label: ${name}"
+              echo "Создана метка: ${name}"
             else
-              echo "Label already exists: ${name}"
+              echo "Метка уже существует: ${name}"
             fi
           }
           ensure_label "release:patch" "0E8A16" "Patch release: backward-compatible fixes"
@@ -76,7 +76,7 @@ jobs:
           ensure_label "release:stable" "5319E7" "Promote beta 0.x to stable v1.0.0"
           ensure_label "release:none" "C5DEF5" "No firmware release; documentation or automation only"
 
-      - name: Create release metadata branch
+      - name: Создание ветки метаданных релиза
         id: branch
         if: ${{ steps.resolve.outputs.process == 'true' }}
         shell: bash
@@ -86,14 +86,14 @@ jobs:
           git fetch --no-tags origin main
           git checkout -B "$branch" origin/main
           echo "name=$branch" >> "$GITHUB_OUTPUT"
-          echo "Created working branch: $branch"
+          echo "Создана рабочая ветка: $branch"
 
-      - name: Apply release metadata
+      - name: Применение метаданных релиза
         id: update
         if: ${{ steps.resolve.outputs.process == 'true' }}
         run: python3 tools/release_automation.py apply
 
-      - name: Regenerate derived project files
+      - name: Перегенерация производных файлов проекта
         if: ${{ steps.resolve.outputs.process == 'true' && steps.update.outputs.changed == 'true' }}
         shell: bash
         run: |
@@ -103,14 +103,14 @@ jobs:
           if grep -q 'PAGE_HTML' lego_technic_esp32/web_page.cpp; then
             html_source="lego_technic_esp32/web_page.cpp"
           else
-            echo "::error::PAGE_HTML not found in lego_technic_esp32/web_page.cpp"
+            echo "::error::Не найден PAGE_HTML в lego_technic_esp32/web_page.cpp"
             exit 1
           fi
           python3 tools/extract_html.py "$html_source" index.html
           python3 tools/extract_changelog.py lego_technic_esp32/lego_technic_esp32.ino CHANGELOG.md
           python3 tools/update_readme_version.py
 
-      - name: Create or update release metadata PR
+      - name: Создание или обновление PR с метаданными релиза
         id: metadata_pr
         if: ${{ steps.resolve.outputs.process == 'true' && steps.update.outputs.changed == 'true' }}
         env:
@@ -126,7 +126,7 @@ jobs:
           git add lego_technic_esp32/lego_technic_esp32.ino lego_technic_esp32/web_page.cpp index.html CHANGELOG.md README.md .github/release-automation/state.json
 
           if git diff --cached --quiet; then
-            echo "No metadata changes to commit."
+            echo "Нет изменений метаданных для коммита."
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -167,7 +167,7 @@ jobs:
           fi
 
           if [[ -z "$bot_pr" ]]; then
-            echo "::error::Could not resolve the release metadata PR number."
+            echo "::error::Не удалось определить номер PR с метаданными релиза."
             exit 1
           fi
 
@@ -175,9 +175,9 @@ jobs:
           echo "number=$bot_pr" >> "$GITHUB_OUTPUT"
           echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
           echo "changed=true" >> "$GITHUB_OUTPUT"
-          echo "Created or updated metadata PR #$bot_pr for source PR #${RELEASE_SOURCE_PR}."
+          echo "Создан или обновлён PR с метаданными №$bot_pr для исходного PR №${RELEASE_SOURCE_PR}."
 
-      - name: Merge release metadata PR
+      - name: Слияние PR с метаданными релиза
         if: ${{ steps.metadata_pr.outputs.changed == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
@@ -186,5 +186,5 @@ jobs:
         run: |
           set -euo pipefail
           gh pr merge "$BOT_PR_NUMBER" --squash --delete-branch
-          echo "Merged release metadata PR #$BOT_PR_NUMBER."
+          echo "Выполнено слияние PR с метаданными релиза №$BOT_PR_NUMBER."
 
