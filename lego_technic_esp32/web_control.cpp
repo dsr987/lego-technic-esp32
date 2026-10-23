@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
+#include <Preferences.h>
 
 #include "motor_control.h"
 #include "web_control.h"
@@ -11,6 +12,7 @@
 
 extern Mode currentMode;
 extern unsigned long lastCmdMillis;
+extern Preferences prefs;
 
 extern int motorAVal;
 extern int motorBVal;
@@ -37,10 +39,27 @@ extern void buildStatus(char *buf, size_t n);
 
 // ---------- Обработка входящих команд WebSocket ----------
 
-void handleWsMessage(uint8_t *data, size_t len) {
+void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
   StaticJsonDocument<256> doc;
 
   if (deserializeJson(doc, data, len) != DeserializationError::Ok) {
+    return;
+  }
+
+  // Reset persistent ESP32 settings and restore safe defaults.
+  if (doc.containsKey("reset")) {
+    if (doc.size() != 1 || !doc["reset"].is<int>() || doc["reset"].as<int>() != 1) {
+      return;
+    }
+
+    prefs.clear();
+    loadPreferences(); // Defaults: center 1500 us, max angle 45 deg, reversals/lights off.
+    engineSimOn = false;
+    stopAll();
+    applyLeds();
+    lastCmdMillis = millis();
+
+    if (client) client->text("{\"reset\":1}");
     return;
   }
 
@@ -80,7 +99,10 @@ void handleWsMessage(uint8_t *data, size_t len) {
 
     lastCmdMillis = millis();
     // Keep the calibrated center within the range that allows symmetric +/-135 degrees.
-    steerCenterUs = 1500 + constrain(doc["trim"].as<int>(), -250, 250);
+    // trim is expressed in degrees relative to neutral (0 degrees).
+    const int trimDegrees = constrain(doc["trim"].as<int>(), -45, 45);
+    const int trimOffsetUs = (trimDegrees * 1000 + (trimDegrees >= 0 ? 90 : -90)) / 180;
+    steerCenterUs = 1500 + trimOffsetUs;
 
     saveSteeringCenter(steerCenterUs);
     applySteer(servoVal);
@@ -228,6 +250,6 @@ void onWsEvent(
     buildStatus(buf, sizeof(buf));
     client->text(buf);
   } else if (type == WS_EVT_DATA) {
-    handleWsMessage(data, len);
+    handleWsMessage(client, data, len);
   }
 }
