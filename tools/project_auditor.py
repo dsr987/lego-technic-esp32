@@ -731,49 +731,49 @@ def check_battery_calibration() -> None:
 
 def main() -> int:
     print("=" * 64)
-    print("LEGO TECHNIC ESP32 — PROJECT AUDITOR")
+    print("LEGO TECHNIC ESP32 — АУДИТ ПРОЕКТА")
     print("=" * 64)
-    print(f"Repository: {REPO_ROOT}")
-    print(f"Source:     {SOURCE_DIR}")
+    print(f"Репозиторий: {REPO_ROOT}")
+    print(f"Исходники:  {SOURCE_DIR}")
     print()
 
     source_exists = check_required_files()
     if source_exists:
-        print("\n--- Local include checks ---")
+        print("\n--- Проверка локальных подключений ---")
         check_local_includes()
-        print("\n--- Module checks ---")
+        print("\n--- Проверка модулей ---")
         check_module_pairs()
         check_battery_calibration()
-        print("\n--- Application checks ---")
+        print("\n--- Проверка приложения ---")
         check_app_entry_points()
         check_motor_safety_anchor()
-        print("\n--- Control-safety regression checks ---")
+        print("\n--- Регрессионные проверки безопасности управления ---")
         check_gui_heartbeat_safety()
         check_gui_engine_guards()
         check_firmware_heartbeat_and_watchdog()
-        print("\n--- GUI visual regression checks ---")
+        print("\n--- Проверка визуальных регрессий интерфейса ---")
         check_tank_visual_regressions()
-        print("\n--- Turn-signal regression checks ---")
+        print("\n--- Проверка регрессий поворотников ---")
         check_turn_signal_regressions()
-        print("\n--- Accent-theme regression checks ---")
+        print("\n--- Проверка регрессий акцентных тем ---")
         check_accent_theme_regressions()
-        print("\n--- Read-only diagnostics regression checks ---")
+        print("\n--- Проверка диагностики только для чтения ---")
         check_diagnostics_regressions()
         check_battery_warning_regressions()
 
     print()
     print("=" * 64)
-    print("AUDIT SUMMARY")
+    print("ИТОГИ АУДИТА")
     print("=" * 64)
-    print(f"PASS: {PASS_COUNT}")
-    print(f"FAIL: {FAIL_COUNT}")
-    print(f"WARN: {WARN_COUNT}")
+    print(f"УСПЕШНО: {PASS_COUNT}")
+    print(f"ОШИБОК: {FAIL_COUNT}")
+    print(f"ПРЕДУПРЕЖДЕНИЙ: {WARN_COUNT}")
 
     if FAIL_COUNT:
-        print("\nAudit failed. Fix the reported structural or safety-regression errors.")
+        print("\nАудит завершился с ошибками. Исправь указанные нарушения структуры или безопасности.")
         return 1
 
-    print("\nAudit passed.")
+    print("\nАудит пройден.")
     return 0
 
 
