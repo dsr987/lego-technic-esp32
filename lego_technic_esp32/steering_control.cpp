@@ -30,34 +30,19 @@ void applySteer(int val) {
       (int)((servoVal / 100.0) * steerMaxAngleDeg * US_PER_DEGREE);
   targetPulseUs = constrain(targetPulseUs, 500, 2500);
 
-  if (!pulseInitialized) {
-    currentPulseUs = steerCenterUs;
-    pulseInitialized = true;
-    steerServo.writeMicroseconds(currentPulseUs);
-  }
+  currentPulseUs = targetPulseUs;
+  pulseInitialized = true;
+  steerServo.writeMicroseconds(currentPulseUs);
 }
 
-// Вызывать из loop(): ограничиваем шаг без delay() и блокировки WebSocket.
+// Немедленно передаём целевой импульс: скорость движения определяет сам сервопривод.
 void updateSteering() {
+  // Совместимость с существующим интерфейсом модуля; программной рампы больше нет.
   if (!pulseInitialized) {
     currentPulseUs = steerCenterUs;
     targetPulseUs = steerCenterUs;
     pulseInitialized = true;
     steerServo.writeMicroseconds(currentPulseUs);
-    lastPulseUpdateMs = millis();
-    return;
   }
-
-  const unsigned long now = millis();
-  if (now - lastPulseUpdateMs < 20) return;
-  lastPulseUpdateMs = now;
-
-  const int maxStepUs = 20;
-  if (currentPulseUs < targetPulseUs) {
-    currentPulseUs = min(currentPulseUs + maxStepUs, targetPulseUs);
-  } else if (currentPulseUs > targetPulseUs) {
-    currentPulseUs = max(currentPulseUs - maxStepUs, targetPulseUs);
-  }
-  steerServo.writeMicroseconds(currentPulseUs);
 }
  
