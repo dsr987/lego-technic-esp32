@@ -248,7 +248,7 @@ def check_firmware_heartbeat_and_watchdog() -> None:
     else:
         report("FAIL", "В web_control.cpp отсутствует отдельный обработчик heartbeat")
 
-    timeout_ok = re.search(r"const\s+unsigned\s+long\s+CMD_TIMEOUT_MS\s*=\s*1500\s*;", app)
+    timeout_ok = re.search(r"const\s+unsigned\s+long\s+CMD_TIMEOUT_MS\\s*=\\s*3000\\s*;", app)
     watchdog_ok = re.search(
         r"if\s*\(\s*millis\(\)\s*-\s*lastCmdMillis\s*>\s*CMD_TIMEOUT_MS\s*\)\s*\{"
         r"(?:(?!\n\s*\}).)*?stopAll\s*\(\s*\)\s*;",
