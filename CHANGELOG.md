@@ -1,5 +1,9 @@
 # История версий
 
+## 0.9.8 — 2026-10-23
+### Изменено
+- Исправить ложные срабатывания watchdog, ввод максимального угла руля и рывки при смене направления. ([PR #83](https://github.com/dsr987/lego-technic-esp32/pull/83))
+
 ## 0.9.7 — 2026-10-23
 ### Изменено
 - Fix false watchdog stops during steady input, make steering calibration understandable in degrees, and add a complete settings reset control. ([PR #79](https://github.com/dsr987/lego-technic-esp32/pull/79))
