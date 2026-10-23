@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit tests for the battery calibration calculator."""
+"""Модульные тесты калькулятора калибровки батареи."""
 
 import argparse
 import unittest
