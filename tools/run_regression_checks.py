@@ -173,7 +173,7 @@ def main() -> int:
             run(
                 "ruby",
                 "-e",
-                'require "yaml"; ARGV.each { |path| YAML.parse_file(path); puts "PASS: YAML syntax #{path}" }',
+                'require "yaml"; ARGV.each { |path| YAML.parse_file(path); puts "УСПЕХ: синтаксис YAML #{path}" }',
                 ".github/workflows/ci-build-deploy.yml",
                 ".github/workflows/pull-request-validation.yml",
                 ".github/workflows/release-versioning.yml",
