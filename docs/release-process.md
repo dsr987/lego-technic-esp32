@@ -1,46 +1,45 @@
-# Release version automation
+# Автоматизация метаданных релиза
 
-The release metadata process uses merged pull request labels and a changelog summary as inputs when a change is delivered through a PR. The canonical source for the firmware version and current release notes remains `lego_technic_esp32/lego_technic_esp32.ino`. The build workflow regenerates derived files such as `CHANGELOG.md`, `README.md`, and `index.html`, then builds firmware and deploys GitHub Pages according to its current path filters. Treat this document as a description of the post-merge flow, not a list of mandatory pre-merge checks.
+Автоматизация метаданных использует метку слитого PR и краткую сводку журнала изменений, если изменение проходит через PR. Основным источником версии прошивки и текущих заметок о выпуске остаётся `lego_technic_esp32/lego_technic_esp32.ino`. Workflow сборки обновляет производные файлы, включая `CHANGELOG.md`, `README.md` и `index.html`, затем собирает прошивку и публикует GitHub Pages с учётом действующих фильтров путей. Этот документ описывает процесс после слияния, а не список обязательных проверок перед слиянием.
 
+## Разрешения токена GitHub Release
 
-## GitHub Release token permissions
+Задаче публикации требуется разрешение токена репозитория `contents: write`, чтобы создать релиз и загрузить файлы прошивки. Это разрешение явно задано в workflow. Если политика репозитория или организации запрещает встроенному `GITHUB_TOKEN` создавать релизы, настрой секрет Actions `GH_RELEASE_TOKEN` и используй токен, ограниченный этим репозиторием, со следующими разрешениями:
 
-The publishing job requires the repository token to have `contents: write` permission to create a release and upload firmware assets. The workflow declares this permission explicitly. If repository or organization policy still prevents the built-in `GITHUB_TOKEN` from creating releases, configure a repository Actions secret named `GH_RELEASE_TOKEN` and use a token limited to this repository with:
+- **Contents:** чтение и запись
+- **Actions:** только чтение, для загрузки артефакта завершённой сборки
 
-- **Contents:** Read and write
-- **Actions:** Read-only, for downloading the completed build artifact
+Предпочтителен персональный токен с детальными разрешениями. Workflow использует этот секрет, если он задан, иначе применяет встроенный токен. Не добавляй токен в исходники, YAML-файлы workflow или описания PR.
 
-A fine-grained personal access token is preferred. The workflow uses this secret when present and otherwise falls back to the built-in token. Do not put the token in source files, workflow YAML, or PR descriptions.
+## Обязательная метка PR
 
-## Required PR label
+Если изменение проходит через PR, у PR, направленного в `main`, должна быть ровно одна распознанная метка релиза. После успешного запуска «Сборка, извлечение и публикация» для push в `main` файл `release-versioning.yml` находит связанный с коммитом слитый PR и применяет метаданные релиза. Это автоматизация после слияния, а не отдельная проверка до слияния. В текущем `main` нет файлов `pull-request-validation.yml` и `release-metadata-validation.yml`; не описывай их как действующие проверки.
 
-When a change is delivered through a PR, the PR targeting `main` should have exactly one recognized release label. After a successful `Build, Extract and Deploy` run for a push to `main`, `release-versioning.yml` resolves the merged PR associated with that commit and applies the release metadata. This is post-merge automation, not a separate pre-merge validation workflow. The current `main` does not contain `pull-request-validation.yml` or `release-metadata-validation.yml`; do not describe those files as active checks.
-
-| Label | Result while the project is in beta |
+| Метка | Результат, пока проект находится в beta |
 | --- | --- |
-| release:patch | Increment patch: 0.9.2 to 0.9.3 (example only) |
-| release:minor | Increment minor and reset patch: 0.9.2 to 0.10.0 (example only) |
-| release:stable | Promote 0.x.y to 1.0.0 when beta is explicitly over |
-| release:major | After 1.0.0, increment the major version and reset minor and patch |
-| release:none | No firmware-version bump for documentation or automation-only changes |
+| `release:patch` | Увеличить PATCH: 0.9.2 → 0.9.3 (только пример) |
+| `release:minor` | Увеличить MINOR и сбросить PATCH: 0.9.2 → 0.10.0 (только пример) |
+| `release:stable` | Перевести 0.x.y в 1.0.0 при явном завершении beta |
+| `release:major` | После 1.0.0 увеличить MAJOR и сбросить MINOR и PATCH |
+| `release:none` | Не менять версию прошивки для изменений только документации или автоматики |
 
-Do not use release:major to leave beta. Use release:stable for the first stable release. The post-merge workflow resolves the merged PR and uses its release label and changelog summary. The current `main` does not contain a separate `release-metadata-validation.yml` or `pull-request-validation.yml`; do not treat this document as proof of a pre-merge required check. Confirm the actual workflow and repository settings before relying on a gate.
+Не используй `release:major`, чтобы завершить beta. Для первого стабильного выпуска применяется `release:stable`. Workflow после слияния определяет исходный PR и использует его метку релиза и сводку журнала изменений. В текущем `main` нет отдельного `release-metadata-validation.yml` или `pull-request-validation.yml`; не считай этот документ подтверждением обязательной проверки до слияния. Перед тем как полагаться на какое-либо ограничение, проверь действующие workflow и настройки репозитория.
 
-## Changelog summary
+## Сводка журнала изменений
 
-For every release label, including release:none, add one heading named Changelog (level 2) to the PR description with at least one concise bullet. This is the required PR summary; do not manually copy it to CHANGELOG.md, README.md, index.html, or lego_technic_esp32.ino. For release:none, the summary is kept in the PR record and does not produce a firmware changelog/version update.
+Для каждой метки релиза, включая `release:none`, добавляй в описание PR заголовок второго уровня с точным названием `Changelog` и хотя бы одним кратким пунктом. Это обязательная сводка PR. Не копируй её вручную в `CHANGELOG.md`, `README.md`, `index.html` или `lego_technic_esp32.ino`. Для `release:none` сводка остаётся в записи PR и не обновляет версию прошивки или её журнал изменений.
 
-Example:
+Пример:
 
     ## Changelog
-    - Restore the three battery-warning levels in the web interface.
-    - Add a safe offline preview mode for checking warning thresholds.
+    - Восстановлены три уровня предупреждения о разряде батареи в веб-интерфейсе.
+    - Добавлен безопасный автономный режим предварительного просмотра порогов предупреждений.
 
-## What happens after merge
+## Что происходит после слияния
 
-1. After the successful Build, Extract and Deploy run for a main push, the release workflow asks GitHub for pull requests associated with that run's exact commit. If no merged PR targeting main is associated with it, release processing is skipped. The workflow checks out trusted main and never checks out a PR head branch.
-2. It ensures the release labels exist, calculates the next version, replaces the current CHANGELOG block in lego_technic_esp32.ino, updates the version header, and records processed PR numbers in .github/release-automation/state.json so retries cannot bump the version twice.
-3. The workflow coordinates with the completed build and regenerates derived files when the version metadata changes. Check `.github/workflows/release-versioning.yml` for the exact current sequence and conditions.
-4. A new build may be explicitly dispatched by the automation after a version bump because pushes made with `GITHUB_TOKEN` do not automatically start ordinary push workflows. The build workflow regenerates derived files, compiles firmware when needed, and deploys the site according to its path filters.
+1. После успешного запуска «Сборка, извлечение и публикация» для push в `main` автоматика запрашивает у GitHub PR, связанные с точным коммитом этого запуска. Если слитый PR, направленный в `main`, не найден, обработка релиза пропускается. Workflow использует доверенную ветку `main` и не переключается на ветку PR.
+2. Автоматика проверяет наличие меток релиза, вычисляет следующую версию, заменяет текущий блок CHANGELOG в `lego_technic_esp32.ino`, обновляет заголовок версии и записывает обработанные номера PR в `.github/release-automation/state.json`, чтобы повторный запуск не повысил версию дважды.
+3. Workflow координирует завершённую сборку и обновляет производные файлы, если изменились метаданные версии. Точную последовательность и условия смотри в актуальном `.github/workflows/release-versioning.yml`.
+4. После повышения версии автоматика может отдельно запустить новую сборку: push-коммиты, созданные с помощью `GITHUB_TOKEN`, не запускают обычные push-workflow автоматически. Workflow сборки обновляет производные файлы, при необходимости компилирует прошивку и публикует сайт согласно фильтрам путей.
 
-The version is advanced only after merge, so parallel feature branches do not independently hard-code competing versions. Physical hardware validation remains separate from automated compilation and tests.
+Версия повышается только после слияния, поэтому параллельные функциональные ветки не задают конкурирующие версии независимо друг от друга. Испытания на физическом оборудовании остаются отдельными от автоматической компиляции и программных проверок.
