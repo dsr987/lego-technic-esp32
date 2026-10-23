@@ -246,7 +246,7 @@ class ReleaseTypeTests(unittest.TestCase):
                 release.parse_release_type(labels)
 
     def test_rejects_unknown_release_label(self):
-        with self.assertRaisesRegex(release.ReleaseMetadataError, "Unknown release label"):
+        with self.assertRaisesRegex(release.ReleaseMetadataError, "Неизвестная метка релиза"):
             release.parse_release_type("release:turbo")
 
     def test_bootstrap_body_fallback_works_only_when_explicitly_enabled(self):
