@@ -3,7 +3,7 @@ name: Публикация релиза прошивки
 on:
   workflow_run:
     workflows:
-      - Build, Extract and Deploy
+      - Сборка, извлечение и публикация
     types:
       - completed
     branches:
