@@ -61,7 +61,7 @@ jobs:
             ino_name="$(basename "$ino" .ino)"
             dir_name="$(basename "$sketch_dir")"
 
-            echo "::group::Compile $ino"
+            echo "::group::Компиляция $ino"
             if [[ "$ino_name" != "$dir_name" ]]; then
               echo "::error file=$ino::Имя файла скетча должно совпадать с именем каталога."
               failed=$((failed + 1))
