@@ -12,6 +12,9 @@
 
 extern Mode currentMode;
 extern volatile unsigned long lastCmdMillis;
+extern volatile unsigned long lastWsActivityMillis;
+extern volatile unsigned long lastHeartbeatMillis;
+extern volatile unsigned long heartbeatCount;
 extern Preferences prefs;
 
 extern int motorAVal;
@@ -46,6 +49,12 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     return;
   }
 
+  // Любое корректно разобранное сообщение подтверждает активность WebSocket.
+  // Отдельно учитываем heartbeat и команды управления, чтобы отличать потерю связи
+  // от отсутствия движения ползунков и видеть возраст каждого типа активности.
+  const unsigned long messageMillis = millis();
+  lastWsActivityMillis = messageMillis;
+
   // Reset persistent ESP32 settings and restore safe defaults.
   if (doc.containsKey("reset")) {
     if (doc.size() != 1 || !doc["reset"].is<int>() || doc["reset"].as<int>() != 1) {
@@ -72,7 +81,8 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
       return;
     }
 
-    lastCmdMillis = millis();
+    lastHeartbeatMillis = messageMillis;
+    heartbeatCount++;
     return;
   }
 
