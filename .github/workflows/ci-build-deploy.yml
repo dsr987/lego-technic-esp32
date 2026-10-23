@@ -1,4 +1,4 @@
-name: Build, Extract and Deploy
+name: Сборка, извлечение и публикация
 
 on:
   push:
@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       build_bootstrap:
-        description: "Compile and verify the OTA bootstrap image (only needed for bootstrap changes)"
+        description: "Скомпилировать и проверить загрузочный образ OTA (только при изменении загрузчика)"
         required: false
         type: boolean
         default: false
@@ -36,17 +36,17 @@ concurrency:
 
 jobs:
   build-and-package:
-    name: Generate files and build ESP32
+    name: Генерация файлов и сборка ESP32
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Получение репозитория
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref_name }}
           fetch-depth: 0
 
-      - name: Detect changed files
+      - name: Определение изменённых файлов
         id: changes
         shell: bash
         env:
@@ -83,7 +83,7 @@ jobs:
               bootstrap_changed=true
             else
               changed_files="$(git diff --name-only "$before" "$GITHUB_SHA")"
-              echo "Changed files:"
+              echo "Изменённые файлы:"
               printf '%s\n' "$changed_files"
 
               while IFS= read -r file; do
@@ -136,16 +136,16 @@ jobs:
             echo "bootstrap_changed=$bootstrap_changed"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Set up Python
+      - name: Настройка Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Embed Web GUI image assets
+      - name: Встраивание изображений веб-интерфейса
         if: ${{ steps.changes.outputs.generated == 'true' }}
         run: python3 tools/embed_web_gui_assets.py
 
-      - name: Select HTML source
+      - name: Выбор источника HTML
         id: html_source
         if: ${{ steps.changes.outputs.generated == 'true' }}
         shell: bash
@@ -155,33 +155,33 @@ jobs:
           if grep -q 'PAGE_HTML' lego_technic_esp32/web_page.cpp; then
             echo "file=lego_technic_esp32/web_page.cpp" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::PAGE_HTML not found in lego_technic_esp32/web_page.cpp"
+            echo "::error::Не найден PAGE_HTML в lego_technic_esp32/web_page.cpp"
             exit 1
           fi
 
-      - name: Sync GUI version from lego_technic_esp32.ino
+      - name: Синхронизация версии интерфейса с lego_technic_esp32.ino
         if: ${{ steps.changes.outputs.generated == 'true' }}
         run: python3 tools/update_gui_version.py
 
-      - name: Extract GUI HTML
+      - name: Извлечение HTML веб-интерфейса
         if: ${{ steps.changes.outputs.generated == 'true' }}
         run: |
           python3 tools/extract_html.py \
             "${{ steps.html_source.outputs.file }}" \
             index.html
 
-      - name: Extract CHANGELOG
+      - name: Извлечение журнала изменений
         if: ${{ steps.changes.outputs.generated == 'true' }}
         run: |
           python3 tools/extract_changelog.py \
             lego_technic_esp32/lego_technic_esp32.ino \
             CHANGELOG.md
 
-      - name: Update README version
+      - name: Обновление версии в README
         if: ${{ steps.changes.outputs.generated == 'true' }}
         run: python3 tools/update_readme_version.py
 
-      - name: Check for existing published firmware
+      - name: Проверка наличия опубликованной прошивки
         id: existing_firmware
         if: ${{ github.ref == 'refs/heads/main' && steps.changes.outputs.firmware != 'true' && steps.changes.outputs.workflow_changed != 'true' && github.event_name == 'push' }}
         shell: bash
@@ -196,14 +196,14 @@ jobs:
               --output "$RUNNER_TEMP/current-firmware.bin" \
               && test -s "$RUNNER_TEMP/current-firmware.bin"; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "Existing published firmware found; compilation can be skipped."
+            echo "Найдена опубликованная прошивка, повторная компиляция не требуется."
           else
             rm -f "$RUNNER_TEMP/current-firmware.bin"
             echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No published firmware available; performing the initial build."
+            echo "::notice::Опубликованной прошивки нет, выполняется первая сборка."
           fi
 
-      - name: Decide which firmware targets need compilation
+      - name: Определение целей компиляции
         id: build_decision
         shell: bash
         env:
@@ -247,11 +247,11 @@ jobs:
             echo "toolchain=$toolchain"
           } >> "$GITHUB_OUTPUT"
 
-          echo "Build main firmware: $app_build"
-          echo "Build OTA bootstrap: $bootstrap_build"
-          echo "Install/build toolchain: $toolchain"
+          echo "Собирать основную прошивку: $app_build"
+          echo "Собирать загрузчик OTA: $bootstrap_build"
+          echo "Устанавливать/собирать инструментарий: $toolchain"
 
-      - name: Install pyserial for esptool
+      - name: Установка pySerial для esptool
         if: ${{ steps.build_decision.outputs.toolchain == 'true' }}
         shell: bash
         run: |
@@ -260,11 +260,11 @@ jobs:
           python -c "import serial; print('pySerial available:', serial.__version__)"
           python3 -c "import serial; print('python3 can import pySerial:', serial.__version__)"
 
-      - name: Install arduino-cli
+      - name: Установка arduino-cli
         if: ${{ steps.build_decision.outputs.toolchain == 'true' }}
         uses: arduino/setup-arduino-cli@v2
 
-      - name: Configure ESP32 board index
+      - name: Настройка индекса плат ESP32
         if: ${{ steps.build_decision.outputs.toolchain == 'true' }}
         shell: bash
         run: |
@@ -273,7 +273,7 @@ jobs:
           arduino-cli config add board_manager.additional_urls \
             https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
 
-      - name: Install ESP32 Core 2.0.9
+      - name: Установка ядра ESP32 2.0.9
         if: ${{ steps.build_decision.outputs.toolchain == 'true' }}
         shell: bash
         run: |
@@ -281,7 +281,7 @@ jobs:
           arduino-cli core update-index
           arduino-cli core install esp32:esp32@2.0.9
 
-      - name: Install firmware libraries
+      - name: Установка библиотек прошивки
         if: ${{ steps.build_decision.outputs.toolchain == 'true' }}
         shell: bash
         run: |
@@ -296,7 +296,7 @@ jobs:
             "ESP32Servo" \
             "ElegantOTA@3.1.0"
 
-      - name: Compile ESP32 firmware
+      - name: Компиляция прошивки ESP32
         if: ${{ steps.build_decision.outputs.app_build == 'true' }}
         shell: bash
         run: |
@@ -310,7 +310,7 @@ jobs:
             --output-dir "$RUNNER_TEMP/esp32-build" \
             lego_technic_esp32
 
-      - name: Prepare newly compiled firmware
+      - name: Подготовка свежесобранной прошивки
         if: ${{ steps.build_decision.outputs.app_build == 'true' }}
         shell: bash
         run: |
@@ -321,7 +321,7 @@ jobs:
           )
 
           if [[ "${#firmware_bins[@]}" -ne 1 ]]; then
-            echo "::error::Expected exactly one *.ino.bin file; found ${#firmware_bins[@]}."
+            echo "::error::Ожидался ровно один файл *.ino.bin, найдено: ${#firmware_bins[@]}."
             find "$RUNNER_TEMP/esp32-build" -maxdepth 1 -type f -printf '%f\n' || true
             exit 1
           fi
@@ -331,7 +331,7 @@ jobs:
           test -s downloads/build_firmware_for_esp32.bin
           sha256sum downloads/build_firmware_for_esp32.bin
 
-      - name: Reuse published firmware when compilation is skipped
+      - name: Использование опубликованной прошивки без повторной компиляции
         if: ${{ github.ref == 'refs/heads/main' && steps.build_decision.outputs.app_build == 'false' }}
         shell: bash
         run: |
@@ -339,9 +339,9 @@ jobs:
           mkdir -p downloads
           cp "$RUNNER_TEMP/current-firmware.bin" downloads/build_firmware_for_esp32.bin
           test -s downloads/build_firmware_for_esp32.bin
-          echo "Reusing existing firmware for this site-only update."
+          echo "Для обновления только сайта используется существующая прошивка."
 
-      - name: Stage firmware artifact
+      - name: Подготовка артефакта прошивки
         if: ${{ steps.build_decision.outputs.app_build == 'true' || github.ref == 'refs/heads/main' }}
         shell: bash
         run: |
@@ -365,7 +365,7 @@ jobs:
           For initial USB flashing, use the matching bootloader, partition table and application files with their correct flash offsets. Do not assume the application-only BIN is a complete flash image.
           EOF
 
-      - name: Prepare safe artifact name
+      - name: Подготовка безопасного имени артефакта
         id: artifact_name
         shell: bash
         run: |
@@ -377,9 +377,9 @@ jobs:
           fi
           echo "branch=${safe_branch}" >> "$GITHUB_OUTPUT"
           echo "name=esp32-firmware-${safe_branch}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
-          echo "Safe artifact branch: ${safe_branch}"
+          echo "Безопасное имя ветки для артефакта: ${safe_branch}"
 
-      - name: Compile OTA bootstrap firmware
+      - name: Компиляция загрузочной прошивки OTA
         if: ${{ steps.build_decision.outputs.bootstrap_build == 'true' }}
         shell: bash
         run: |
@@ -393,7 +393,7 @@ jobs:
             --output-dir "$RUNNER_TEMP/bootstrap-build" \
             firmware/bootstrap/LEGO_Technic_ESP32_Bootstrap
 
-      - name: Prepare OTA bootstrap artifact and prebuilt binary
+      - name: Подготовка артефакта загрузчика OTA и готового бинарного файла
         if: ${{ steps.build_decision.outputs.bootstrap_build == 'true' }}
         shell: bash
         run: |
@@ -405,7 +405,7 @@ jobs:
           )
 
           if [[ "${#bootstrap_bins[@]}" -ne 1 ]]; then
-            echo "::error::Expected exactly one bootstrap *.ino.bin file; found ${#bootstrap_bins[@]}."
+            echo "::error::Ожидался ровно один файл загрузчика *.ino.bin, найдено: ${#bootstrap_bins[@]}."
             find "$RUNNER_TEMP/bootstrap-build" -maxdepth 1 -type f -printf '%f\n' || true
             exit 1
           fi
@@ -432,7 +432,7 @@ jobs:
           This bootstrap uses the project's current Wi-Fi AP and OTA credentials; see README.md before distributing the firmware.
           EOF
 
-      - name: Commit prebuilt OTA bootstrap binary
+      - name: Проверка готового бинарного файла загрузчика OTA
         if: ${{ steps.build_decision.outputs.bootstrap_build == 'true' }}
         shell: bash
         run: |
@@ -442,7 +442,7 @@ jobs:
           git add firmware/bootstrap/prebuilt/esp32_ota_bootstrap.bin
 
           if git diff --cached --quiet; then
-            echo "Prebuilt bootstrap binary is unchanged."
+            echo "Готовый бинарный файл загрузчика не изменился."
           elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
             echo "::error::The generated OTA bootstrap binary differs from the committed prebuilt image. Update firmware/bootstrap/prebuilt/esp32_ota_bootstrap.bin in a source PR; this workflow must not push directly to protected main."
             exit 1
@@ -451,7 +451,7 @@ jobs:
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
-      - name: Upload OTA bootstrap artifact
+      - name: Загрузка артефакта загрузчика OTA
         if: ${{ steps.build_decision.outputs.bootstrap_build == 'true' }}
         uses: actions/upload-artifact@v4
         with:
@@ -461,7 +461,7 @@ jobs:
           retention-days: 14
           compression-level: 6
 
-      - name: Upload firmware artifact
+      - name: Загрузка артефакта прошивки
         if: ${{ steps.build_decision.outputs.app_build == 'true' || github.ref == 'refs/heads/main' }}
         uses: actions/upload-artifact@v4
         with:
@@ -471,7 +471,7 @@ jobs:
           retention-days: 14
           compression-level: 6
 
-      - name: Commit generated project files
+      - name: Проверка сгенерированных файлов проекта
         if: ${{ steps.changes.outputs.generated == 'true' }}
         shell: bash
         run: |
@@ -481,7 +481,7 @@ jobs:
           git add lego_technic_esp32/web_page.cpp index.html CHANGELOG.md README.md
 
           if git diff --cached --quiet; then
-            echo "Generated files have no changes."
+            echo "Сгенерированные файлы не изменились."
           elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
             echo "::error::Generated files are out of sync with the source. Regenerate and commit web_page.cpp, index.html, CHANGELOG.md and README.md in the source PR; this workflow must not push directly to protected main."
             exit 1
@@ -490,11 +490,11 @@ jobs:
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
-      - name: Configure GitHub Pages
+      - name: Настройка GitHub Pages
         if: ${{ github.ref == 'refs/heads/main' }}
         uses: actions/configure-pages@v5
 
-      - name: Upload Pages artifact
+      - name: Загрузка артефакта GitHub Pages
         if: ${{ github.ref == 'refs/heads/main' }}
         uses: actions/upload-pages-artifact@v3
         with:
@@ -511,6 +511,6 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
-      - name: Deploy site and firmware
+      - name: Публикация сайта и прошивки
         id: deployment
         uses: actions/deploy-pages@v4
