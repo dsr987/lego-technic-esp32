@@ -22,6 +22,7 @@ static const float US_PER_DEGREE = 1000.0 / 180.0;
 static int targetPulseUs = 1500;
 static int currentPulseUs = 1500;
 static bool pulseInitialized = false;
+static unsigned long lastPulseUpdateMs = 0;
 
 void applySteer(int val) {
   servoVal = constrain(val, -100, 100);
@@ -43,8 +44,13 @@ void updateSteering() {
     targetPulseUs = steerCenterUs;
     pulseInitialized = true;
     steerServo.writeMicroseconds(currentPulseUs);
+    lastPulseUpdateMs = millis();
     return;
   }
+
+  const unsigned long now = millis();
+  if (now - lastPulseUpdateMs < 20) return;
+  lastPulseUpdateMs = now;
 
   const int maxStepUs = 20;
   if (currentPulseUs < targetPulseUs) {
