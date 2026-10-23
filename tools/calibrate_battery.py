@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Calculate the battery voltage calibration multiplier from multimeter readings.
+"""Рассчитывает коэффициент калибровки напряжения батареи по показаниям мультиметра.
 
-Pass one or more pairs as --pair CONTROLLER_V,MULTIMETER_V.
-The controller value must be the voltage currently shown by the firmware.
-The script fits a multiplicative correction through the origin, which is suitable
-for correcting a scale error. It cannot remove ADC non-linearity or an offset error.
+Передай одну или несколько пар через --pair ПОКАЗАНИЕ_КОНТРОЛЛЕРА,ПОКАЗАНИЕ_МУЛЬТИМЕТРА.
+Значение контроллера должно совпадать с напряжением, которое сейчас показывает прошивка.
+Скрипт вычисляет мультипликативную поправку через начало координат, подходящую для
+исправления ошибки масштаба. Она не устраняет нелинейность АЦП или ошибку смещения.
 """
 
 from __future__ import annotations
@@ -17,38 +17,38 @@ Reading = tuple[float, float]
 
 
 def parse_pair(value: str) -> Reading:
-    """Parse one CONTROLLER_V,MULTIMETER_V pair."""
+    """Разбирает одну пару ПОКАЗАНИЕ_КОНТРОЛЛЕРА,ПОКАЗАНИЕ_МУЛЬТИМЕТРА."""
     parts = value.split(",")
     if len(parts) != 2:
         raise argparse.ArgumentTypeError(
-            "expected CONTROLLER_V,MULTIMETER_V, for example 7.82,8.04"
+            "ожидается ПОКАЗАНИЕ_КОНТРОЛЛЕРА,ПОКАЗАНИЕ_МУЛЬТИМЕТРА, например 7.82,8.04"
         )
 
     try:
         controller_v, multimeter_v = (float(part.strip()) for part in parts)
     except ValueError as exc:
-        raise argparse.ArgumentTypeError("both readings must be numbers") from exc
+        raise argparse.ArgumentTypeError("оба показания должны быть числами") from exc
 
     if not all(math.isfinite(v) and v > 0 for v in (controller_v, multimeter_v)):
-        raise argparse.ArgumentTypeError("both readings must be finite values above 0 V")
+        raise argparse.ArgumentTypeError("оба показания должны быть конечными значениями выше 0 В")
 
     return controller_v, multimeter_v
 
 
 def calculate_scale_factor(readings: Sequence[Reading]) -> float:
-    """Find the least-squares scale factor mapping controller readings to the meter."""
+    """Находит методом наименьших квадратов коэффициент перевода показаний контроллера в показания мультиметра."""
     if not readings:
-        raise ValueError("at least one reading pair is required")
+        raise ValueError("требуется хотя бы одна пара показаний")
 
     denominator = sum(controller_v * controller_v for controller_v, _ in readings)
     if denominator <= 0:
-        raise ValueError("controller readings must be above 0 V")
+        raise ValueError("показания контроллера должны быть выше 0 В")
 
     numerator = sum(controller_v * multimeter_v for controller_v, multimeter_v in readings)
     factor = numerator / denominator
 
     if not math.isfinite(factor) or factor <= 0:
-        raise ValueError("calculated scale factor is invalid")
+        raise ValueError("вычисленный коэффициент масштаба некорректен")
 
     return factor
 
@@ -56,17 +56,17 @@ def calculate_scale_factor(readings: Sequence[Reading]) -> float:
 def calculate_updated_factor(
     readings: Sequence[Reading], current_factor: float = 1.0
 ) -> float:
-    """Return the new firmware multiplier, starting from the currently installed value."""
+    """Возвращает новый коэффициент прошивки на основе уже установленного значения."""
     if not math.isfinite(current_factor) or current_factor <= 0:
-        raise ValueError("current calibration factor must be finite and above 0")
+        raise ValueError("текущий коэффициент калибровки должен быть конечным и выше 0")
     return current_factor * calculate_scale_factor(readings)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
         description=(
-            "Calculate BATT_CALIBRATION_FACTOR from voltage pairs. "
-            "Each --pair is CURRENT_CONTROLLER_READING,MULTIMETER_REFERENCE."
+            "Рассчитывает BATT_CALIBRATION_FACTOR по парам напряжений. "
+            "Каждый --pair задаёт ПОКАЗАНИЕ_КОНТРОЛЛЕРА,ЭТАЛОН_МУЛЬТИМЕТРА."
         )
     )
     parser.add_argument(
@@ -75,13 +75,13 @@ def main() -> int:
         type=parse_pair,
         required=True,
         metavar="DISPLAY,METER",
-        help="reading pair in volts; repeat for multiple measurements",
+        help="пара показаний в вольтах; повторяй параметр для нескольких измерений",
     )
     parser.add_argument(
         "--current-factor",
         type=float,
         default=1.0,
-        help="BATT_CALIBRATION_FACTOR currently in firmware (default: 1.0)",
+        help="текущее значение BATT_CALIBRATION_FACTOR в прошивке (по умолчанию: 1.0)",
     )
     args = parser.parse_args()
 
