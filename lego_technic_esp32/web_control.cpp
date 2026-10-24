@@ -69,8 +69,8 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
   // Поэтому команды управления продолжают обновляться, даже если пользователь
   // держит слайдер неподвижно и браузер не генерирует новые input-события.
   if (doc.containsKey("hb")) {
-    if (doc["hb"].as<int>() != 1 ||
-        !doc["hb"].is<int>() ||
+    if (!doc["hb"].is<int>() ||
+        doc["hb"].as<int>() != 1 ||
         doc.size() != 6 ||
         !doc["A"].is<int>() ||
         !doc["B"].is<int>() ||
