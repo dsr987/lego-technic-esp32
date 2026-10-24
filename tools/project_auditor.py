@@ -143,7 +143,7 @@ def check_motor_safety_anchor() -> None:
 
 
 def check_gui_heartbeat_safety() -> None:
-    """Heartbeat должен повторять актуальные значения управления."""
+    """Heartbeat должен повторять актуальные значения управления без дополнительных reconnect-защит."""
     page = read_text(SOURCE_DIR / "web_page.cpp")
     if page is None:
         report("FAIL", "Не удалось прочитать web_page.cpp for heartbeat regression checks")
@@ -155,11 +155,13 @@ def check_gui_heartbeat_safety() -> None:
     else:
         report("FAIL", "Heartbeat должен каждые 150 мс передавать актуальные значения всех каналов")
 
-    if "zeroAll();" in page and "txWS({eng:0});" in page:
-        report("PASS", "После переподключения команды обнуляются перед возобновлением управления")
+    open_start = page.find("ws.onopen = function(){")
+    close_start = page.find("ws.onclose = function(){", open_start)
+    onopen = page[open_start:close_start] if open_start >= 0 and close_start > open_start else ""
+    if onopen and "zeroAll()" not in onopen and "txWS({eng:0})" not in onopen:
+        report("PASS", "При переподключении нет дополнительного сброса команд поверх watchdog/heartbeat")
     else:
-        report("FAIL", "При переподключении WebSocket команды должны обнуляться")
-
+        report("FAIL", "В обработчике переподключения остался дополнительный сброс команд")
 
 def check_gui_engine_guards() -> None:
     page = read_text(SOURCE_DIR / "web_page.cpp")
