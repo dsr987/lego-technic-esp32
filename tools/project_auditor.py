@@ -225,38 +225,42 @@ def check_firmware_heartbeat_and_watchdog() -> None:
         return
 
     heartbeat_branch = re.search(
-        r"if\s*\(\s*doc\.containsKey\(\s*['\"]hb['\"]\s*\)\s*\)\s*\{(.*?)\n\s*\}\s*\n\s*//\s*Переключение режима",
+        r"if\\s*\\(\\s*doc\\.containsKey\\(\\s*['\\"]hb['\\"]\\s*\\)\\s*\\)\\s*\\{(.*?)\\n\\s*\\}\\s*\\n\\s*//\\s*Переключение режима",
         control,
         re.DOTALL,
     )
     if heartbeat_branch:
         hb = heartbeat_branch.group(1)
         checks = (
-            re.search(r"doc\.size\(\)\s*!=\s*1", hb),
-            re.search(r"doc\s*\[\s*['\"]hb['\"]\s*\]\s*\.\s*is<int>\(\)", hb),
-            re.search(r"doc\s*\[\s*['\"]hb['\"]\s*\]\s*\.\s*as<int>\(\)\s*!=\s*1", hb),
-            re.search(r"lastHeartbeatMillis\s*=\s*messageMillis", hb) and re.search(r"lastCmdMillis\s*=\s*messageMillis", hb) and re.search(r"heartbeatCount\+\+", hb),
-            re.search(r"\breturn\s*;", hb),
+            re.search(r"doc\\s*\\.size\\(\\)\\s*!=\\s*6", hb),
+            re.search(r"doc\\s*\\[\\s*['\\"]hb['\\"]\\s*\\]\\s*\\.is<int>\\(\\)", hb),
+            re.search(r"doc\\s*\\[\\s*['\\"]hb['\\"]\\s*\\]\\s*\\.as<int>\\(\\)\\s*!=\\s*1", hb),
+            all(re.search(rf'doc\\s*\\[\\s*["\\']{ch}["\\']\\s*\\]\\s*\\.is<int>\\(\\)', hb) for ch in ("A", "B", "C", "D", "S")),
+            all(re.search(rf'applyMotor{ch}\\s*\\(', hb) for ch in ("A", "C", "D")),
+            re.search(r"applyMotorB\\s*\\(b\\)", hb),
+            re.search(r"applySteer\\s*\\(steer\\)", hb),
+            re.search(r"lastCmdMillis\\s*=\\s*messageMillis", hb),
+            re.search(r"updateDriverStandby\\s*\\(\\)", hb),
+            re.search(r"\\breturn\\s*;", hb),
         )
-        touches_outputs = re.search(r"\bapplyMotor[A-D]?\s*\(|\bapplySteer\s*\(|\bstopAll\s*\(", hb)
-        if all(checks) and not touches_outputs:
-            report("PASS", "Прошивка принимает только отдельное сообщение watchdog {hb:1}")
+        if all(checks):
+            report("PASS", "Heartbeat валидирует и применяет актуальные команды всех каналов")
         else:
-            report("FAIL", "Heartbeat прошивки должен проверять {hb:1}, обновлять watchdog и завершаться без управления выходами")
+            report("FAIL", "Heartbeat должен проверять A/B/C/D/S, применять команды и обновлять watchdog")
     else:
-        report("FAIL", "В web_control.cpp отсутствует отдельный обработчик heartbeat")
+        report("FAIL", "В web_control.cpp отсутствует обработчик heartbeat с командами")
 
-    timeout_ok = re.search(r"const\s+unsigned\s+long\s+CMD_TIMEOUT_MS\s*=\s*500\s*;", app)
+    timeout_ok = re.search(r"const\\s+unsigned\\s+long\\s+CMD_TIMEOUT_MS\\s*=\\s*500\\s*;", app)
     watchdog_ok = re.search(
-        r"if\s*\(\s*millis\(\)\s*-\s*lastCmdMillis\s*>\s*CMD_TIMEOUT_MS\s*\)\s*\{"
-        r"(?:(?!\n\s*\}).)*?stopAll\s*\(\s*\)\s*;",
+        r"if\\s*\\(\\s*\\(unsigned\\s+long\\)\\s*\\(\\s*watchdogNow\\s*-\\s*lastCommandAt\\s*\\)\\s*>\\s*CMD_TIMEOUT_MS\\s*\\)\\s*\\{"
+        r"(?:(?!\\n\\s*\\}).)*?stopAll\\s*\\(\\s*\\)\\s*;",
         app,
         re.DOTALL,
     )
     if timeout_ok and watchdog_ok:
-        report("PASS", "Прошивка останавливает управление по базовому watchdog с тайм-аутом 500 мс")
+        report("PASS", "Единственный watchdog останавливает выходы после 500 мс без пакетов")
     else:
-        report("FAIL", "Прошивка должна останавливать все выходы по watchdog с тайм-аутом 500 мс")
+        report("FAIL", "Watchdog должен останавливать выходы после 500 мс без пакетов управления")
 
 
 
