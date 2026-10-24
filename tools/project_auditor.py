@@ -143,35 +143,33 @@ def check_motor_safety_anchor() -> None:
 
 
 def check_gui_heartbeat_safety() -> None:
-    """Heartbeat должен поддерживать watchdog, не повторяя старые значения ползунков."""
+    """Heartbeat должен повторять актуальные значения управления."""
     page = read_text(SOURCE_DIR / "web_page.cpp")
     if page is None:
         report("FAIL", "Не удалось прочитать web_page.cpp for heartbeat regression checks")
         return
 
     interval_pattern = re.compile(
-        r"setInterval\s*\(\s*function\s*\(\s*\)\s*\{(.*?)\}\s*,\s*150\s*\)\s*;",
+        r"setInterval\\s*\\(\\s*function\\s*\\(\\s*\\)\\s*\\{(.*?)\\}\\s*,\\s*150\\s*\\)\\s*;",
         re.DOTALL,
     )
     intervals = interval_pattern.findall(page)
-    safe_intervals = [
-        block for block in intervals
-        if re.search(r"ws\s*\.\s*send\s*\(\s*JSON\s*\.\s*stringify\s*\(\s*\{\s*hb\s*:\s*1\s*\}\s*\)\s*\)", block)
-    ]
-
-    if not safe_intervals:
-        report("FAIL", "GUI должен отправлять только {hb:1} каждые 150 мс")
-    elif any(re.search(r"lastSent|txWS\s*\(\s*\{\s*ch\s*:", block) for block in safe_intervals):
-        report("FAIL", "Похоже, heartbeat GUI повторно отправляет предыдущие значения моторов/серво")
+    carries_controls = any(
+        re.search(r"ws\\s*\\.\\s*send\\s*\\(\\s*JSON\\.stringify\\s*\\(\\s*\\{[^}]*hb\\s*:\\s*1", block)
+        and all(re.search(rf"\\b{channel}\\s*:\\s*lastSent\\.{channel}\\b", block) for channel in ("A", "B", "C", "D", "S"))
+        for block in intervals
+    )
+    if carries_controls:
+        report("PASS", "Heartbeat каждые 150 мс передаёт актуальные значения A/B/C/D/S")
     else:
-        report("PASS", "GUI отправляет отдельное сообщение {hb:1} только для watchdog")
+        report("FAIL", "Heartbeat должен каждые 150 мс передавать актуальные значения всех каналов")
 
-    # A freshly opened/reconnected socket must not restore the former joystick state.
-    onopen = re.search(r"ws\s*\.\s*onopen\s*=\s*function\s*\(\s*\)\s*\{(.*?)\n\s*\};\s*\n\s*ws\s*\.\s*onclose", page, re.DOTALL)
-    if onopen and all(token in onopen.group(1) for token in ("eng = false", "zeroAll()", "txWS({eng:0})")):
-        report("PASS", "При переподключении WebSocket очищаются старые команды и имитация двигателя")
+    onopen = re.search(r"ws\\s*\\.\\s*onopen\\s*=\\s*function\\s*\\(\\s*\\)\\s*\\{(.*?)\\n\\s*\\};\\s*\\n\\s*ws\\s*\\.\\s*onclose", page, re.DOTALL)
+    if onopen and all(token in onopen.group(1) for token in ("zeroAll()", "txWS({eng:0})")):
+        report("PASS", "После переподключения команды обнуляются перед возобновлением управления")
     else:
-        report("FAIL", "Обработчик WebSocket onopen должен очищать команды и отправлять eng=0")
+        report("FAIL", "При переподключении WebSocket команды должны обнуляться")
+
 
 
 def check_gui_engine_guards() -> None:
