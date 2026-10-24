@@ -82,6 +82,7 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     }
 
     lastHeartbeatMillis = messageMillis;
+    lastCmdMillis = messageMillis; // Базовый watchdog обслуживается heartbeat каждые 150 мс.
     heartbeatCount++;
     return;
   }

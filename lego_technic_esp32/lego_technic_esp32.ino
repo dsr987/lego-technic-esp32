@@ -26,8 +26,8 @@
  *
  * CHANGELOG_VERSION: 0.9.9
  * CHANGELOG_START
- * - Разделён учёт heartbeat, активности WebSocket и команд управления, чтобы watchdog не путал отсутствие команд с потерей связи.
- * - Добавлены диагностические значения возраста heartbeat, последней активности и команды на момент срабатывания failsafe.
+ * - Возвращён базовый watchdog с тайм-аутом 500 мс; heartbeat поддерживает управление активным соединением.
+ * - Убрано дополнительное программное сглаживание руля: сервопривод получает целевую позицию сразу.
  * CHANGELOG_END
  *
  * тестовый запуск сборки
@@ -102,12 +102,12 @@ AsyncWebSocket ws("/ws");
 // Если команды управления не поступают в течение
 // указанного времени, моторы должны быть остановлены.
 // Эти метки записываются асинхронным обработчиком WebSocket и читаются из loop().
-volatile unsigned long lastCmdMillis = 0;        // Последняя команда управления, без heartbeat
+volatile unsigned long lastCmdMillis = 0;        // Последняя команда управления или heartbeat
 volatile unsigned long lastWsActivityMillis = 0; // Любое валидное сообщение WebSocket
 volatile unsigned long lastHeartbeatMillis = 0;  // Последний корректный heartbeat
 volatile unsigned long heartbeatCount = 0;        // Число принятых heartbeat с запуска
 // Failsafe срабатывает только при отсутствии любой валидной активности WebSocket.
-const unsigned long CMD_TIMEOUT_MS = 3000;
+const unsigned long CMD_TIMEOUT_MS = 500;
 unsigned long lastDisplayStatusMillis = 0;
 
 // Диагностика защитного тайм-аута хранится только в RAM и сбрасывается при перезапуске.
@@ -368,13 +368,8 @@ void recordSafetyTimeout() {
 
 void loop() {
 
-  // Плавное перемещение сервопривода к последней целевой позиции.
-  updateSteering();
-
-  // Аварийная остановка только при отсутствии любой валидной активности WebSocket.
-  // Heartbeat и команды имеют отдельные метки для диагностики; команды могут поступать
-  // нерегулярно, поэтому отсутствие движения ползунков само по себе не означает потерю связи.
-  if (millis() - lastWsActivityMillis > CMD_TIMEOUT_MS) {
+  // Базовый watchdog: без команд/heartbeat дольше 500 мс останавливаем управление.
+  if (millis() - lastCmdMillis > CMD_TIMEOUT_MS) {
     if (motorAVal != 0 ||
         motorBVal != 0 ||
         motorCVal != 0 ||

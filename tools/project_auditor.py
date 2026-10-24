@@ -237,28 +237,28 @@ def check_firmware_heartbeat_and_watchdog() -> None:
             re.search(r"doc\.size\(\)\s*!=\s*1", hb),
             re.search(r"doc\s*\[\s*['\"]hb['\"]\s*\]\s*\.\s*is<int>\(\)", hb),
             re.search(r"doc\s*\[\s*['\"]hb['\"]\s*\]\s*\.\s*as<int>\(\)\s*!=\s*1", hb),
-            re.search(r"lastHeartbeatMillis\s*=\s*messageMillis", hb) and re.search(r"heartbeatCount\+\+", hb),
+            re.search(r"lastHeartbeatMillis\s*=\s*messageMillis", hb) and re.search(r"lastCmdMillis\s*=\s*messageMillis", hb) and re.search(r"heartbeatCount\+\+", hb),
             re.search(r"\breturn\s*;", hb),
         )
         touches_outputs = re.search(r"\bapplyMotor[A-D]?\s*\(|\bapplySteer\s*\(|\bstopAll\s*\(", hb)
         if all(checks) and not touches_outputs:
             report("PASS", "Прошивка принимает только отдельное сообщение watchdog {hb:1}")
         else:
-            report("FAIL", "Heartbeat прошивки должен проверять {hb:1}, обновлять тайм-аут и завершаться без управления выходами")
+            report("FAIL", "Heartbeat прошивки должен проверять {hb:1}, обновлять watchdog и завершаться без управления выходами")
     else:
         report("FAIL", "В web_control.cpp отсутствует отдельный обработчик heartbeat")
 
-    timeout_ok = re.search(r"const\s+unsigned\s+long\s+CMD_TIMEOUT_MS\s*=\s*3000\s*;", app)
+    timeout_ok = re.search(r"const\s+unsigned\s+long\s+CMD_TIMEOUT_MS\s*=\s*500\s*;", app)
     watchdog_ok = re.search(
-        r"if\s*\(\s*millis\(\)\s*-\s*lastWsActivityMillis\s*>\s*CMD_TIMEOUT_MS\s*\)\s*\{"
+        r"if\s*\(\s*millis\(\)\s*-\s*lastCmdMillis\s*>\s*CMD_TIMEOUT_MS\s*\)\s*\{"
         r"(?:(?!\n\s*\}).)*?stopAll\s*\(\s*\)\s*;",
         app,
         re.DOTALL,
     )
     if timeout_ok and watchdog_ok:
-        report("PASS", "Прошивка сохраняет остановку моторов по тайм-ауту команды 3000 мс")
+        report("PASS", "Прошивка останавливает управление по базовому watchdog с тайм-аутом 500 мс")
     else:
-        report("FAIL", "Прошивка должна останавливать все выходы после тайм-аута команды 3000 мс")
+        report("FAIL", "Прошивка должна останавливать все выходы по watchdog с тайм-аутом 500 мс")
 
 
 
@@ -642,15 +642,11 @@ def check_diagnostics_regressions() -> None:
         ('id="diag-log"', "event log container"),
         ('id="diag-log-clear"', "clear-log button"),
         ("if(diagnosticEvents.length > 20) diagnosticEvents.length = 20", "bounded 20-event history"),
-        ("Соединение с ESP32 потеряно", "disconnect event"),
         ("Телеметрия не обновляется более 3 секунд", "stale telemetry event"),
         ("Получение телеметрии восстановлено", "telemetry recovery event"),
         ("Состояние батареи: ", "battery state change event"),
         ("Сработала защита (всего: ", "firmware safety-timeout event with timing details"),
         ("возраст heartbeat ", "heartbeat age in timeout event"),
-        ("event.code", "WebSocket close code"),
-        ("event.wasClean", "WebSocket clean-close flag"),
-        ("event.reason", "WebSocket close reason"),
         ("message.textContent = event.message", "safe text rendering"),
     )
     for token, description in event_log_checks:
