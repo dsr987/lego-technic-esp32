@@ -66,7 +66,7 @@ LEGO Technic ESP32 — прошивка на ESP32-WROOM-32 для управл�
 
 Тестовые скетчи из `test/` собираются вручную на компьютере; отдельного workflow GitHub Actions для их компиляции нет.
 
-Для прошивки полагайся на действующие workflow GitHub Actions. Web GUI, HTML для Pages, README и CHANGELOG частично синхронизируются генераторами в `tools/`; ищи источник до ручного изменения производных файлов.
+Основная прошивка собирается действующими workflow GitHub Actions по их триггерам; не считай PR-check обязательным, пока это не подтверждено настройками репозитория. Web GUI, HTML для Pages, README и CHANGELOG частично синхронизируются генераторами в `tools/`; ищи источник до ручного изменения производных файлов.
 
 В `main` используются workflow `ci-build-deploy.yml`, `release-versioning.yml` и `publish-release.yml`. Отдельных `pull-request-validation.yml` и `release-metadata-validation.yml` нет. Не называй проверки обязательными, пока это не подтверждено фактическими настройками репозитория. Не запускай Actions вручную.
 
