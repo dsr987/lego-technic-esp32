@@ -2,7 +2,7 @@
  * LEGO Technic ESP32
  * Main Arduino sketch: filename and containing directory must match.
  * Shared module implementations remain in their dedicated .cpp/.h files.
- * Версия разработки: 0.9.10
+ * Версия разработки: 0.9.11
  *
  * Текущий выпуск: калибровка измерения напряжения батареи.
  * В проекте также доступны обновлённый Web GUI и OLED Update 2.0.
@@ -24,9 +24,11 @@
  * - Рабочая панель OLED показывает режим, процент заряда и напряжение батареи, количество подключённых клиентов Wi-Fi и предупреждение о низком заряде.
  * - Если инициализация OLED не удалась, прошивка продолжает запуск без попыток выводить данные на недоступный дисплей.
  *
- * CHANGELOG_VERSION: 0.9.10
+ * CHANGELOG_VERSION: 0.9.11
  * CHANGELOG_START
- * - Возвращено базовое поведение watchdog/heartbeat из ранней версии и устранено искусственное замедление рулевого сервопривода. ([PR #87](https://github.com/dsr987/lego-technic-esp32/pull/87))
+ * - Heartbeat каждые 150 мс повторно передаёт актуальные значения каналов A/B/C/D/S; watchdog останавливает выходы после 500 мс без пакетов.
+ * - Удалена лишняя диагностика с возрастами heartbeat/WS/команд и исправлена повторная проверка тайм-аута, чтобы исключить гонку с WebSocket-обработчиком.
+ * - Удалён дополнительный сброс команд при переподключении браузера; управление опирается только на watchdog и heartbeat.
  * CHANGELOG_END
  *
  * тестовый запуск сборки
@@ -101,21 +103,9 @@ AsyncWebSocket ws("/ws");
 // Если команды управления не поступают в течение
 // указанного времени, моторы должны быть остановлены.
 // Эти метки записываются асинхронным обработчиком WebSocket и читаются из loop().
-volatile unsigned long lastCmdMillis = 0;        // Последняя команда управления или heartbeat
-volatile unsigned long lastWsActivityMillis = 0; // Любое валидное сообщение WebSocket
-volatile unsigned long lastHeartbeatMillis = 0;  // Последний корректный heartbeat
-volatile unsigned long heartbeatCount = 0;        // Число принятых heartbeat с запуска
-// Failsafe срабатывает только при отсутствии любой валидной активности WebSocket.
+volatile unsigned long lastCmdMillis = 0; // Последняя команда управления или пакет heartbeat с актуальными значениями
 const unsigned long CMD_TIMEOUT_MS = 500;
 unsigned long lastDisplayStatusMillis = 0;
-
-// Диагностика защитного тайм-аута хранится только в RAM и сбрасывается при перезапуске.
-unsigned long safetyTimeoutCount = 0;
-unsigned long lastSafetyTimeoutMillis = 0;
-unsigned long safetyTimeoutHeartbeatAgeMs = 0;
-unsigned long safetyTimeoutActivityAgeMs = 0;
-unsigned long safetyTimeoutCommandAgeMs = 0;
-bool safetyTimeoutLatched = false;
 
 // ---------- Текущие значения каналов ----------
 
@@ -165,8 +155,7 @@ void applyLeds() {
 
 // ---------- Формирование статуса для веб-интерфейса ----------
 
-// Статус GUI: батарея, Wi-Fi, режим, количество WS-клиентов, конфигурация
-// и read-only диагностика ресурсов/активности ESP32.
+// Статус GUI: батарея, Wi-Fi, режим, количество клиентов, конфигурация и ресурсы ESP32.
 void buildStatus(char *buf, size_t n) {
   const int trimOffsetUs = steerCenterUs - 1500;
   const int steerTrimDegrees = trimOffsetUs >= 0
@@ -178,8 +167,7 @@ void buildStatus(char *buf, size_t n) {
     n,
     "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,"
     "\"m\":%d,\"c\":%d,\"sta\":%d,"
-    "\"up\":%lu,\"heap\":%lu,\"minh\":%lu,\"age\":%lu,\"hba\":%lu,\"cage\":%lu,\"hbc\":%lu,\"lb\":%d,"
-    "\"fsc\":%lu,\"fsa\":%lu,\"fsh\":%lu,\"fsa2\":%lu,\"fscmd\":%lu,"
+    "\"up\":%lu,\"heap\":%lu,\"minh\":%lu,\"lb\":%d,"
     "\"ra\":%d,\"rb\":%d,\"rc\":%d,\"rd\":%d,"
     "\"lf\":%d,\"lr\":%d,\"es\":%d,"
     "\"tr\":%d,\"md\":%d}",
@@ -192,16 +180,7 @@ void buildStatus(char *buf, size_t n) {
     (unsigned long)(millis() / 1000UL),
     (unsigned long)ESP.getFreeHeap(),
     (unsigned long)ESP.getMinFreeHeap(),
-    (unsigned long)(millis() - lastWsActivityMillis),
-    (unsigned long)(millis() - lastHeartbeatMillis),
-    (unsigned long)(millis() - lastCmdMillis),
-    (unsigned long)heartbeatCount,
     lowBattCount,
-    (unsigned long)safetyTimeoutCount,
-    (unsigned long)(safetyTimeoutCount > 0 ? (millis() - lastSafetyTimeoutMillis) / 1000UL : 0),
-    safetyTimeoutHeartbeatAgeMs,
-    safetyTimeoutActivityAgeMs,
-    safetyTimeoutCommandAgeMs,
     reverseA ? 1 : 0,
     reverseB ? 1 : 0,
     reverseC ? 1 : 0,
@@ -344,43 +323,30 @@ void setup() {
 
   // Запускаем отсчёт тайм-аутов после завершения инициализации.
   lastCmdMillis = millis();
-  lastWsActivityMillis = millis();
-  lastHeartbeatMillis = millis();
   lastDisplayStatusMillis = millis();
   startDisplayStartupAnimation();
-}
-
-// Записывает одно срабатывание защиты на текущем цикле потери команд.
-void recordSafetyTimeout() {
-  if (!safetyTimeoutLatched) {
-    const unsigned long now = millis();
-    safetyTimeoutCount++;
-    lastSafetyTimeoutMillis = now;
-    safetyTimeoutHeartbeatAgeMs = now - lastHeartbeatMillis;
-    safetyTimeoutActivityAgeMs = now - lastWsActivityMillis;
-    safetyTimeoutCommandAgeMs = now - lastCmdMillis;
-    safetyTimeoutLatched = true;
-  }
 }
 
 // ---------- Основной цикл ----------
 
 void loop() {
 
-  // Базовый watchdog: без команд/heartbeat дольше 500 мс останавливаем управление.
-  if (millis() - lastCmdMillis > CMD_TIMEOUT_MS) {
-    if (motorAVal != 0 ||
+  // Единственная защита управления: остановить выходы, если пакет с командами
+  // и heartbeat не поступал более 500 мс. Повторная проверка исключает гонку
+  // с асинхронным WebSocket-обработчиком, который мог обновить метку между чтениями.
+  const unsigned long watchdogNow = millis();
+  const unsigned long lastCommandAt = lastCmdMillis;
+  if ((unsigned long)(watchdogNow - lastCommandAt) > CMD_TIMEOUT_MS) {
+    const bool outputsActive = motorAVal != 0 ||
         motorBVal != 0 ||
         motorCVal != 0 ||
         motorDVal != 0 ||
         servoVal != 0 ||
-        engineSimOn) {
-      recordSafetyTimeout();
+        engineSimOn;
+    if (outputsActive &&
+        (unsigned long)(millis() - lastCmdMillis) > CMD_TIMEOUT_MS) {
       stopAll();
     }
-  } else {
-    // Новая валидная активность снова разрешает учитывать следующий timeout.
-    safetyTimeoutLatched = false;
   }
 
   // Анимация запуска обновляется без блокировки WebSocket, OTA и watchdog.

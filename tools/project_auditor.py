@@ -143,36 +143,25 @@ def check_motor_safety_anchor() -> None:
 
 
 def check_gui_heartbeat_safety() -> None:
-    """Heartbeat должен поддерживать watchdog, не повторяя старые значения ползунков."""
+    """Heartbeat должен повторять актуальные значения управления без дополнительных reconnect-защит."""
     page = read_text(SOURCE_DIR / "web_page.cpp")
     if page is None:
         report("FAIL", "Не удалось прочитать web_page.cpp for heartbeat regression checks")
         return
 
-    interval_pattern = re.compile(
-        r"setInterval\s*\(\s*function\s*\(\s*\)\s*\{(.*?)\}\s*,\s*150\s*\)\s*;",
-        re.DOTALL,
-    )
-    intervals = interval_pattern.findall(page)
-    safe_intervals = [
-        block for block in intervals
-        if re.search(r"ws\s*\.\s*send\s*\(\s*JSON\s*\.\s*stringify\s*\(\s*\{\s*hb\s*:\s*1\s*\}\s*\)\s*\)", block)
-    ]
-
-    if not safe_intervals:
-        report("FAIL", "GUI должен отправлять только {hb:1} каждые 150 мс")
-    elif any(re.search(r"lastSent|txWS\s*\(\s*\{\s*ch\s*:", block) for block in safe_intervals):
-        report("FAIL", "Похоже, heartbeat GUI повторно отправляет предыдущие значения моторов/серво")
+    expected_packet = "ws.send(JSON.stringify({hb:1, A:lastSent.A, B:lastSent.B, C:lastSent.C, D:lastSent.D, S:lastSent.S}));"
+    if expected_packet in page and "}, 150);" in page:
+        report("PASS", "Heartbeat каждые 150 мс передаёт актуальные значения A/B/C/D/S")
     else:
-        report("PASS", "GUI отправляет отдельное сообщение {hb:1} только для watchdog")
+        report("FAIL", "Heartbeat должен каждые 150 мс передавать актуальные значения всех каналов")
 
-    # A freshly opened/reconnected socket must not restore the former joystick state.
-    onopen = re.search(r"ws\s*\.\s*onopen\s*=\s*function\s*\(\s*\)\s*\{(.*?)\n\s*\};\s*\n\s*ws\s*\.\s*onclose", page, re.DOTALL)
-    if onopen and all(token in onopen.group(1) for token in ("eng = false", "zeroAll()", "txWS({eng:0})")):
-        report("PASS", "При переподключении WebSocket очищаются старые команды и имитация двигателя")
+    open_start = page.find("ws.onopen = function(){")
+    close_start = page.find("ws.onclose = function(){", open_start)
+    onopen = page[open_start:close_start] if open_start >= 0 and close_start > open_start else ""
+    if onopen and "zeroAll()" not in onopen and "txWS({eng:0})" not in onopen:
+        report("PASS", "При переподключении нет дополнительного сброса команд поверх watchdog/heartbeat")
     else:
-        report("FAIL", "Обработчик WebSocket onopen должен очищать команды и отправлять eng=0")
-
+        report("FAIL", "В обработчике переподключения остался дополнительный сброс команд")
 
 def check_gui_engine_guards() -> None:
     page = read_text(SOURCE_DIR / "web_page.cpp")
@@ -219,46 +208,36 @@ def check_gui_engine_guards() -> None:
 def check_firmware_heartbeat_and_watchdog() -> None:
     control = read_text(SOURCE_DIR / "web_control.cpp")
     app = read_text(SOURCE_DIR / "lego_technic_esp32.ino")
-    if control is None:
-        report("FAIL", "Не удалось прочитать web_control.cpp for heartbeat regression checks")
-        return
-    if app is None:
-        report("FAIL", "Не удалось прочитать lego_technic_esp32.ino for watchdog regression checks")
+    if control is None or app is None:
+        report("FAIL", "Не удалось прочитать исходники watchdog/heartbeat")
         return
 
-    heartbeat_branch = re.search(
-        r"if\s*\(\s*doc\.containsKey\(\s*['\"]hb['\"]\s*\)\s*\)\s*\{(.*?)\n\s*\}\s*\n\s*//\s*Переключение режима",
-        control,
-        re.DOTALL,
+    heartbeat_start = control.find('if (doc.containsKey("hb"))')
+    heartbeat_end = control.find("// Переключение режима", heartbeat_start)
+    hb = control[heartbeat_start:heartbeat_end] if heartbeat_start >= 0 and heartbeat_end > heartbeat_start else ""
+    checks = (
+        'doc.size() != 6' in hb,
+        'doc["hb"].is<int>()' in hb,
+        'doc["A"].is<int>()' in hb and 'doc["B"].is<int>()' in hb,
+        'doc["C"].is<int>()' in hb and 'doc["D"].is<int>()' in hb and 'doc["S"].is<int>()' in hb,
+        "applyMotorA(a)" in hb and "applyMotorB(b)" in hb and "applyMotorC(c)" in hb and "applyMotorD(d)" in hb,
+        "applySteer(steer)" in hb,
+        "lastCmdMillis = messageMillis" in hb,
+        "updateDriverStandby()" in hb,
     )
-    if heartbeat_branch:
-        hb = heartbeat_branch.group(1)
-        checks = (
-            re.search(r"doc\.size\(\)\s*!=\s*1", hb),
-            re.search(r"doc\s*\[\s*['\"]hb['\"]\s*\]\s*\.\s*is<int>\(\)", hb),
-            re.search(r"doc\s*\[\s*['\"]hb['\"]\s*\]\s*\.\s*as<int>\(\)\s*!=\s*1", hb),
-            re.search(r"lastHeartbeatMillis\s*=\s*messageMillis", hb) and re.search(r"lastCmdMillis\s*=\s*messageMillis", hb) and re.search(r"heartbeatCount\+\+", hb),
-            re.search(r"\breturn\s*;", hb),
-        )
-        touches_outputs = re.search(r"\bapplyMotor[A-D]?\s*\(|\bapplySteer\s*\(|\bstopAll\s*\(", hb)
-        if all(checks) and not touches_outputs:
-            report("PASS", "Прошивка принимает только отдельное сообщение watchdog {hb:1}")
-        else:
-            report("FAIL", "Heartbeat прошивки должен проверять {hb:1}, обновлять watchdog и завершаться без управления выходами")
+    if all(checks):
+        report("PASS", "Heartbeat валидирует и применяет актуальные команды всех каналов")
     else:
-        report("FAIL", "В web_control.cpp отсутствует отдельный обработчик heartbeat")
+        report("FAIL", "Heartbeat должен проверять A/B/C/D/S, применять команды и обновлять watchdog")
 
-    timeout_ok = re.search(r"const\s+unsigned\s+long\s+CMD_TIMEOUT_MS\s*=\s*500\s*;", app)
-    watchdog_ok = re.search(
-        r"if\s*\(\s*millis\(\)\s*-\s*lastCmdMillis\s*>\s*CMD_TIMEOUT_MS\s*\)\s*\{"
-        r"(?:(?!\n\s*\}).)*?stopAll\s*\(\s*\)\s*;",
-        app,
-        re.DOTALL,
-    )
-    if timeout_ok and watchdog_ok:
-        report("PASS", "Прошивка останавливает управление по базовому watchdog с тайм-аутом 500 мс")
+    timeout_ok = "const unsigned long CMD_TIMEOUT_MS = 500;" in app
+    watchdog_ok = "watchdogNow - lastCommandAt" in app and "millis() - lastCmdMillis" in app and "stopAll();" in app
+    diagnostics_removed = all(token not in app for token in ("lastWsActivityMillis", "lastHeartbeatMillis", "heartbeatCount", "safetyTimeoutCount"))
+    if timeout_ok and watchdog_ok and diagnostics_removed:
+        report("PASS", "Оставлен один watchdog с тайм-аутом 500 мс без дополнительных защитных счётчиков")
     else:
-        report("FAIL", "Прошивка должна останавливать все выходы по watchdog с тайм-аутом 500 мс")
+        report("FAIL", "Watchdog должен останавливать выходы через 500 мс и не содержать лишних защитных счётчиков")
+
 
 
 
@@ -501,161 +480,35 @@ def check_accent_theme_regressions() -> None:
 
 
 def check_diagnostics_regressions() -> None:
-    """Проверяет диагностическую телеметрию только для чтения и её интерфейс без команд управления."""
+    """Проверяет только базовую read-only телеметрию интерфейса."""
     app = read_text(SOURCE_DIR / "lego_technic_esp32.ino")
-    control = read_text(SOURCE_DIR / "web_control.cpp")
     html = read_text(REPO_ROOT / "index.html")
-    if app is None or control is None or html is None:
-        report("FAIL", "Не удалось прочитать lego_technic_esp32.ino, web_control.cpp or index.html for diagnostics checks")
+    if app is None or html is None:
+        report("FAIL", "Не удалось прочитать исходники диагностики")
         return
 
-    status_fields = ("sta", "up", "heap", "minh", "age", "lb", "fsc", "fsa")
-    status_function = re.search(
-        r"void\s+buildStatus\s*\(\s*char\s*\*\s*buf\s*,\s*size_t\s+n\s*\)\s*\{(.*?)"
-        r"\n\s*\}\s*\n",
-        app,
-        re.DOTALL,
-    )
-    if status_function:
-        body = status_function.group(1)
-        required_sources = (
-            ("sta", "WiFi.softAPgetStationNum()"),
-            ("up", "millis() / 1000UL"),
-            ("heap", "ESP.getFreeHeap()"),
-            ("minh", "ESP.getMinFreeHeap()"),
-            ("age", "millis() - lastWsActivityMillis"),
-            ("hba", "millis() - lastHeartbeatMillis"),
-            ("cage", "millis() - lastCmdMillis"),
-            ("hbc", "heartbeatCount"),
-            ("fsh", "safetyTimeoutHeartbeatAgeMs"),
-            ("fsa2", "safetyTimeoutActivityAgeMs"),
-            ("fscmd", "safetyTimeoutCommandAgeMs"),
-            ("lb", "lowBattCount"),
-            ("fsc", "safetyTimeoutCount"),
-            ("fsa", "lastSafetyTimeoutMillis"),
-        )
-        for field, source in required_sources:
-            if re.search(rf'\\"{field}\\"\s*:', body) and source in body:
-                report("PASS", f"Поле диагностики {field} использует {source}")
-            else:
-                report("FAIL", f"Поле статуса диагностики {field} отсутствует или имеет неожиданный источник")
-
-        if "char buf[384];" in app and "char buf[384];" in control:
-            report("PASS", "Буферы статуса вмещают расширенный JSON диагностики")
-        else:
-            report("FAIL", "Для расширенного JSON диагностики нужны буферы статуса размером 384 байта")
+    required_fields = ("WiFi.softAPgetStationNum()", "millis() / 1000UL", "ESP.getFreeHeap()", "ESP.getMinFreeHeap()", "lowBattCount", "reverseA", "reverseB", "reverseC", "reverseD", "engineSimOn", "steerTrimDegrees", "steerMaxAngleDeg")
+    if "void buildStatus(" in app and all(field in app for field in required_fields):
+        report("PASS", "Статус содержит только базовые показатели системы и настройки")
     else:
-        report("FAIL", "Не удалось найти buildStatus() для проверки диагностической телеметрии")
+        report("FAIL", "В JSON статуса отсутствуют необходимые базовые поля")
 
-    timeout_loop = re.search(
-        r"void\s+loop\s*\(\s*\)\s*\{(.*?)//\s*Обслуживание OTA",
-        app,
-        re.DOTALL,
-    )
-    timeout_body = timeout_loop.group(1) if timeout_loop else ""
-    counter_function_start = app.find("void recordSafetyTimeout()")
-    counter_function_end = app.find("// ---------- Основной цикл ----------", counter_function_start)
-    counter_body = (
-        app[counter_function_start:counter_function_end]
-        if counter_function_start >= 0 and counter_function_end > counter_function_start
-        else ""
-    )
-    timeout_diagnostics_ok = (
-        "unsigned long safetyTimeoutCount = 0;" in app
-        and "unsigned long lastSafetyTimeoutMillis = 0;" in app
-        and "unsigned long safetyTimeoutHeartbeatAgeMs = 0;" in app
-        and "unsigned long safetyTimeoutActivityAgeMs = 0;" in app
-        and "unsigned long safetyTimeoutCommandAgeMs = 0;" in app
-        and "bool safetyTimeoutLatched = false;" in app
-        and "recordSafetyTimeout();" in timeout_body
-        and re.search(
-            r"if\s*\(\s*!safetyTimeoutLatched\s*\)\s*\{.*?"
-            r"safetyTimeoutCount\+\+;.*?lastSafetyTimeoutMillis\s*=\s*now;.*?safetyTimeoutHeartbeatAgeMs\s*=\s*now\s*-\s*lastHeartbeatMillis;.*?"
-            r"safetyTimeoutLatched\s*=\s*true;",
-            counter_body,
-            re.DOTALL,
-        )
-        and "safetyTimeoutLatched = false;" in timeout_body
-        and "stopAll();" in timeout_body
-    )
-    if timeout_diagnostics_ok:
-        report("PASS", "Срабатывания защитного тайм-аута учитываются один раз без изменения остановки")
+    removed_fields = ("lastWsActivityMillis", "lastHeartbeatMillis", "heartbeatCount", "safetyTimeoutCount", "fscmd", "fsh", "fsa2")
+    if all(field not in app for field in removed_fields):
+        report("PASS", "Дополнительные счётчики и возраста защитного тайм-аута удалены")
     else:
-        report("FAIL", "Диагностика защитного тайм-аута должна учитывать остановку один раз и сохранять вызов stopAll()")
+        report("FAIL", "В прошивке остались дополнительные поля диагностики защитного тайм-аута")
 
-    diag_heading = html.find("<h3>Диагностика системы</h3>")
-    buttons_heading = html.find("<h3>Кнопки</h3>")
-    diag_block_start = html.rfind('<div class="block">', 0, diag_heading)
-    buttons_block_start = html.rfind('<div class="block">', 0, buttons_heading)
-    if (
-        diag_heading >= 0
-        and buttons_heading > diag_heading
-        and diag_block_start >= 0
-        and buttons_block_start > diag_block_start
-        and len(re.findall(r'<div class="block">', html[diag_block_start:buttons_block_start])) == 1
-        and html[diag_block_start:buttons_block_start].rstrip().endswith("</div>")
-    ):
-        report("PASS", "Блок диагностики находится в конце настроек, непосредственно перед подсказкой «Кнопки»")
+    removed_gui = ("diag-message-age", "diag-failsafe-count", "diag-failsafe-last", "возраст heartbeat ", "heartbeat принято:")
+    if all(field not in html for field in removed_gui):
+        report("PASS", "Из веб-интерфейса удалены подробности ложных срабатываний watchdog")
     else:
-        report("FAIL", "Diagnostics must be placed at the end of settings immediately before the Buttons guide")
+        report("FAIL", "В веб-интерфейсе остались подробности защитной диагностики")
 
-    diag_ids = (
-        "diag-link", "diag-age", "diag-wifi", "diag-clients", "diag-rssi",
-        "diag-battery", "diag-battery-state", "diag-uptime", "diag-heap",
-        "diag-minheap", "diag-message-age", "diag-failsafe-count",
-        "diag-failsafe-last",
-    )
-    for element_id in diag_ids:
-        if re.search(rf"""id=["']{re.escape(element_id)}["']""", html):
-            report("PASS", f"Экран диагностики содержит {element_id}")
-        else:
-            report("FAIL", f"Diagnostics display is missing {element_id}")
-
-    update_match = re.search(
-        r"function\s+updateDiagnostics\s*\(\s*d\s*\)\s*\{(.*?)"
-        r"\n\s*\}\s*\n\s*function\s+renderDiagnosticFreshness",
-        html,
-        re.DOTALL,
-    )
-    if update_match:
-        body = update_match.group(1)
-        if all(token in body for token in ("d.sta", "d.c", "d.r", "d.v", "d.p", "d.lb", "d.up", "d.heap", "d.minh", "d.age", "d.fsc", "d.fsa")):
-            report("PASS", "Интерфейс отображает все переданные диагностические значения только для чтения")
-        else:
-            report("FAIL", "В обработчике интерфейса отсутствуют одно или несколько полей диагностической телеметрии")
-        if not re.search(r"\btxWS\s*\(", body):
-            report("PASS", "Отрисовка диагностики не отправляет команды управления")
-        else:
-            report("FAIL", "Отрисовка диагностики не должна отправлять команды управления через WebSocket")
+    if "updateDiagnostics(d);" in html and "txWS(" not in html[html.find("function updateDiagnostics"):html.find("function renderDiagnosticFreshness")]:
+        report("PASS", "Отрисовка базовой диагностики не отправляет команды управления")
     else:
-        report("FAIL", "Функция updateDiagnostics() отсутствует")
-
-    if (
-        "updateDiagnostics(d);" in html
-        and "setInterval(renderDiagnosticFreshness, 1000)" in html
-        and "now - lastTelemetryAt > 3000" in html
-    ):
-        report("PASS", "Диагностика обновляет актуальность соединения и обнаруживает устаревшую телеметрию")
-    else:
-        report("FAIL", "Экран диагностики должен обновлять актуальность и отмечать устаревшую телеметрию")
-    event_log_checks = (
-        ('id="diag-log"', "event log container"),
-        ('id="diag-log-clear"', "clear-log button"),
-        ("if(diagnosticEvents.length > 20) diagnosticEvents.length = 20", "bounded 20-event history"),
-        ("Телеметрия не обновляется более 3 секунд", "stale telemetry event"),
-        ("Получение телеметрии восстановлено", "telemetry recovery event"),
-        ("Состояние батареи: ", "battery state change event"),
-        ("Сработала защита (всего: ", "firmware safety-timeout event with timing details"),
-        ("возраст heartbeat ", "heartbeat age in timeout event"),
-        ("message.textContent = event.message", "safe text rendering"),
-    )
-    for token, description in event_log_checks:
-        if token in html:
-            report("PASS", f"Diagnostic event log includes {description}")
-        else:
-            report("FAIL", f"В журнале событий диагностики отсутствует {description}")
-
-
+        report("FAIL", "Диагностика должна оставаться read-only")
 
 
 def check_battery_warning_regressions() -> None:

@@ -1,8 +1,6 @@
 #include "web_page.h"
 
-const char PAGE_HTML[] PROGMEM = R"HTML(
-
-<!DOCTYPE html>
+const char PAGE_HTML[] PROGMEM = R"HTML(<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
@@ -503,7 +501,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="brand-info" id="brand-info">
         <div class="brand-title">LEGO TECHNIC ESP32</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-addr">192.168.4.1</span></div>
-        <div class="brand-ver">0.9.10 · beta</div>
+        <div class="brand-ver">0.9.11 · beta</div>
       </div>
       <div class="brand-monitor hidden" id="brand-monitor" aria-live="polite">
         <code id="telemetry">{"ch":"—","val":0}</code>
@@ -900,10 +898,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="line"><span>Время работы ESP32</span><span class="grow"></span><b class="diag-value" id="diag-uptime">--</b></div>
       <div class="line"><span>Свободная память</span><span class="grow"></span><b class="diag-value" id="diag-heap">--</b></div>
       <div class="line"><span>Минимум свободной памяти</span><span class="grow"></span><b class="diag-value" id="diag-minheap">--</b></div>
-      <div class="line"><span>Последняя активность WS</span><span class="grow"></span><b class="diag-value" id="diag-message-age">--</b></div>
-      <div class="line"><span>Срабатываний защиты с запуска</span><span class="grow"></span><b class="diag-value" id="diag-failsafe-count">--</b></div>
-      <div class="line"><span>Последнее срабатывание защиты</span><span class="grow"></span><b class="diag-value" id="diag-failsafe-last">--</b></div>
-      <div style="font-size:10px;line-height:1.45;color:var(--muted)">Счётчик защиты хранится в RAM и сбрасывается при перезапуске ESP32. Код закрытия WebSocket не всегда раскрывает причину обрыва.</div>
       <div class="diag-log-head"><b>Журнал событий</b><button type="button" class="diag-clear" id="diag-log-clear">Очистить</button></div>
       <div class="diag-log" id="diag-log" role="log" aria-live="polite"><div class="diag-log-empty" id="diag-log-empty">Событий пока нет</div></div>
       <div style="font-size:10px;line-height:1.45;color:var(--muted)">Последние 20 событий этой вкладки. Журнал очищается при перезагрузке страницы и не сохраняется в ESP32.</div>
@@ -972,10 +966,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   var ws = null;
   var lastTelemetryAt = 0;
   var diagnosticEvents = [];
-  var diagnosticStale = false;
   var diagnosticBatteryState = null;
   var diagnosticStationCount = null;
-  var diagnosticFailsafeCount = null;
   var batteryWarningLevel = 0;
   var dismissedBatteryWarningLevel = 0;
   var batteryWarningTestMode = new URLSearchParams(window.location.search).get('batteryTest') === '1';
@@ -1154,19 +1146,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     ws = new WebSocket('ws://' + location.host + '/ws');
     ws.onopen = function(){
       lastTelemetryAt = 0;
-      diagnosticStale = false;
       addDiagnosticEvent('Связь с ESP32 установлена', 'ok');
       renderDiagnosticFreshness();
       $('ws-status').textContent='ESP32';
       $('ws-status').style.color='var(--emerald)';
 
-      // После любого переподключения не восстанавливаем прежние команды моторов.
-      // Сначала сбрасываем интерфейс и отправляем нулевые значения каналов.
-      eng = false;
-      updateEngUI();
-      applyEngGate();
-      zeroAll();
-      txWS({eng:0});
     };
     ws.onclose = function(){ 
       $('ws-status').textContent='НЕТ СВЯЗИ'; 
@@ -1200,13 +1184,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     };
   }
 
-  // Heartbeat поддерживает связь с прошивкой, но не повторяет команды моторов.
-  // Иначе после тайм-аута или переподключения старое значение слайдера могло бы
-  // неожиданно снова запустить мотор.
-  // Базовый heartbeat каждые 150 мс поддерживает watchdog с тайм-аутом 500 мс.
+  // Каждые 150 мс отправляем heartbeat вместе с последними значениями каналов.
+  // Это поддерживает команды управления, даже когда слайдер неподвижен.
+  // Если браузер/связь перестанут отправлять пакеты, прошивка остановит выходы через 500 мс.
   setInterval(function(){
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({hb:1}));
+    ws.send(JSON.stringify({hb:1, A:lastSent.A, B:lastSent.B, C:lastSent.C, D:lastSent.D, S:lastSent.S}));
   }, 150);
 
   function addDiagnosticEvent(message, level){
@@ -1273,19 +1256,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     var rssi = Number(d.r);
     var voltage = Number(d.v);
     var warningCount = Number(d.lb);
-    var failsafeCount = Number(d.fsc);
-    var failsafeAge = Number(d.fsa);
-    if(Number.isFinite(failsafeCount)){
-      failsafeCount = Math.max(0, Math.floor(failsafeCount));
-      if(diagnosticFailsafeCount === null && failsafeCount > 0){
-        addDiagnosticEvent('На ESP32 с запуска зафиксировано срабатываний защиты: ' + failsafeCount, 'warn');
-      } else if(diagnosticFailsafeCount !== null && failsafeCount > diagnosticFailsafeCount){
-        addDiagnosticEvent('Сработала защита (всего: ' + failsafeCount + '): возраст heartbeat ' + Number(d.fsh || 0) + ' мс, WS-активности ' + Number(d.fsa2 || 0) + ' мс, команды ' + Number(d.fscmd || 0) + ' мс; heartbeat принято: ' + Number(d.hbc || 0), 'error');
-      } else if(diagnosticFailsafeCount !== null && failsafeCount < diagnosticFailsafeCount){
-        addDiagnosticEvent('Счётчик защиты на ESP32 сброшен (возможен перезапуск)', 'warn');
-      }
-      diagnosticFailsafeCount = failsafeCount;
-    }
     if(Number.isFinite(stations) && diagnosticStationCount !== null && stations !== diagnosticStationCount){
       addDiagnosticEvent('Число Wi-Fi-клиентов: ' + diagnosticStationCount + ' → ' + stations, 'info');
     }
@@ -1312,15 +1282,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     put('diag-uptime', formatUptime(d.up));
     put('diag-heap', Number.isFinite(Number(d.heap)) ? Math.round(Number(d.heap)/1024) + ' KB' : '--');
     put('diag-minheap', Number.isFinite(Number(d.minh)) ? Math.round(Number(d.minh)/1024) + ' KB' : '--');
-    put('diag-message-age', Number.isFinite(Number(d.age)) ? Math.max(0, Math.round(Number(d.age))) + ' мс' : '--');
-    put('diag-failsafe-count', Number.isFinite(failsafeCount) ? String(failsafeCount) : '--');
-    if(Number.isFinite(failsafeCount) && failsafeCount === 0){
-      put('diag-failsafe-last', 'Не срабатывал с запуска');
-    } else if(Number.isFinite(failsafeCount) && failsafeCount > 0 && Number.isFinite(failsafeAge)){
-      put('diag-failsafe-last', Math.max(0, Math.floor(failsafeAge)) + ' с назад');
-    } else {
-      put('diag-failsafe-last', '--');
-    }
     renderDiagnosticFreshness();
   }
 
@@ -1332,13 +1293,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       if(link) { link.textContent = 'Нет связи'; link.style.color = 'var(--rose)'; }
     } else if(!lastTelemetryAt){
       if(link) { link.textContent = 'Ожидание телеметрии'; link.style.color = 'var(--amber)'; }
-    } else if(now - lastTelemetryAt > 3000){
-      if(!diagnosticStale) addDiagnosticEvent('Телеметрия не обновляется более 3 секунд', 'error');
-      diagnosticStale = true;
-      if(link) { link.textContent = 'Нет свежих данных'; link.style.color = 'var(--rose)'; }
     } else if(link){
-      if(diagnosticStale) addDiagnosticEvent('Получение телеметрии восстановлено', 'ok');
-      diagnosticStale = false;
       link.textContent = 'На связи'; link.style.color = 'var(--emerald)';
     }
     if(ageLabel){

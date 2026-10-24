@@ -12,9 +12,6 @@
 
 extern Mode currentMode;
 extern volatile unsigned long lastCmdMillis;
-extern volatile unsigned long lastWsActivityMillis;
-extern volatile unsigned long lastHeartbeatMillis;
-extern volatile unsigned long heartbeatCount;
 extern Preferences prefs;
 
 extern int motorAVal;
@@ -49,11 +46,7 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     return;
   }
 
-  // Любое корректно разобранное сообщение подтверждает активность WebSocket.
-  // Отдельно учитываем heartbeat и команды управления, чтобы отличать потерю связи
-  // от отсутствия движения ползунков и видеть возраст каждого типа активности.
   const unsigned long messageMillis = millis();
-  lastWsActivityMillis = messageMillis;
 
   // Reset persistent ESP32 settings and restore safe defaults.
   if (doc.containsKey("reset")) {
@@ -72,18 +65,39 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     return;
   }
 
-  // Heartbeat подтверждает, что вкладка управления ещё активна.
-  // Он намеренно НЕ повторяет значения слайдеров: после срабатывания
-  // CMD_TIMEOUT_MS остановленные моторы не должны запуститься повторно
-  // только потому, что браузер восстановил соединение или таймеры.
+  // Heartbeat одновременно передаёт актуальные значения всех каналов.
+  // Поэтому команды управления продолжают обновляться, даже если пользователь
+  // держит слайдер неподвижно и браузер не генерирует новые input-события.
   if (doc.containsKey("hb")) {
-    if (doc.size() != 1 || !doc["hb"].is<int>() || doc["hb"].as<int>() != 1) {
+    if (!doc["hb"].is<int>() ||
+        doc["hb"].as<int>() != 1 ||
+        doc.size() != 6 ||
+        !doc["A"].is<int>() ||
+        !doc["B"].is<int>() ||
+        !doc["C"].is<int>() ||
+        !doc["D"].is<int>() ||
+        !doc["S"].is<int>()) {
       return;
     }
 
-    lastHeartbeatMillis = messageMillis;
-    lastCmdMillis = messageMillis; // Базовый watchdog обслуживается heartbeat каждые 150 мс.
-    heartbeatCount++;
+    const int a = doc["A"].as<int>();
+    const int b = doc["B"].as<int>();
+    const int c = doc["C"].as<int>();
+    const int d = doc["D"].as<int>();
+    const int steer = doc["S"].as<int>();
+    if (a < -100 || a > 100 || b < -100 || b > 100 ||
+        c < -100 || c > 100 || d < -100 || d > 100 ||
+        steer < -100 || steer > 100) {
+      return;
+    }
+
+    applyMotorA(a);
+    if (!engineSimOn) applyMotorB(b);
+    applyMotorC(c);
+    applyMotorD(d);
+    applySteer(steer);
+    updateDriverStandby();
+    lastCmdMillis = messageMillis;
     return;
   }
 
