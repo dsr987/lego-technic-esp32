@@ -39,7 +39,8 @@
     79,
     81,
     83,
-    87
+    87,
+    91
   ],
   "release_prs": [
     10,
@@ -51,9 +52,10 @@
     77,
     79,
     83,
-    87
+    87,
+    91
   ],
-  "last_processed_pr": 87,
+  "last_processed_pr": 91,
   "last_release_type": "patch",
-  "last_version": "0.9.10"
+  "last_version": "0.9.12"
 }
