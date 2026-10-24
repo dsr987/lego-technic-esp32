@@ -1289,14 +1289,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     put('diag-uptime', formatUptime(d.up));
     put('diag-heap', Number.isFinite(Number(d.heap)) ? Math.round(Number(d.heap)/1024) + ' KB' : '--');
     put('diag-minheap', Number.isFinite(Number(d.minh)) ? Math.round(Number(d.minh)/1024) + ' KB' : '--');
-    put('diag-failsafe-count', Number.isFinite(failsafeCount) ? String(failsafeCount) : '--');
-    if(Number.isFinite(failsafeCount) && failsafeCount === 0){
-      put('diag-failsafe-last', 'Не срабатывал с запуска');
-    } else if(Number.isFinite(failsafeCount) && failsafeCount > 0 && Number.isFinite(failsafeAge)){
-      put('diag-failsafe-last', Math.max(0, Math.floor(failsafeAge)) + ' с назад');
-    } else {
-      put('diag-failsafe-last', '--');
-    }
     renderDiagnosticFreshness();
   }
 
