@@ -165,8 +165,7 @@ void buildStatus(char *buf, size_t n) {
     n,
     "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,"
     "\"m\":%d,\"c\":%d,\"sta\":%d,"
-    "\"up\":%lu,\"heap\":%lu,\"minh\":%lu,\"age\":%lu,\"hba\":%lu,\"cage\":%lu,\"hbc\":%lu,\"lb\":%d,"
-    "\"fsc\":%lu,\"fsa\":%lu,\"fsh\":%lu,\"fsa2\":%lu,\"fscmd\":%lu,"
+    "\"up\":%lu,\"heap\":%lu,\"minh\":%lu,\"lb\":%d,"
     "\"ra\":%d,\"rb\":%d,\"rc\":%d,\"rd\":%d,"
     "\"lf\":%d,\"lr\":%d,\"es\":%d,"
     "\"tr\":%d,\"md\":%d}",
