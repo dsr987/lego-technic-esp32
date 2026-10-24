@@ -1151,13 +1151,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       $('ws-status').textContent='ESP32';
       $('ws-status').style.color='var(--emerald)';
 
-      // После любого переподключения не восстанавливаем прежние команды моторов.
-      // Сначала сбрасываем интерфейс и отправляем нулевые значения каналов.
-      eng = false;
-      updateEngUI();
-      applyEngGate();
-      zeroAll();
-      txWS({eng:0});
     };
     ws.onclose = function(){ 
       $('ws-status').textContent='НЕТ СВЯЗИ'; 
