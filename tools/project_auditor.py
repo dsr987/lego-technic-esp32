@@ -485,8 +485,8 @@ def check_diagnostics_regressions() -> None:
         report("FAIL", "Не удалось прочитать исходники диагностики")
         return
 
-    required_fields = ('"sta":', '"up":', '"heap":', '"minh":', '"lb":', '"ra":', '"rb":', '"rc":', '"rd":', '"es":', '"tr":', '"md":')
-    if all(field in app for field in required_fields):
+    required_fields = ("WiFi.softAPgetStationNum()", "millis() / 1000UL", "ESP.getFreeHeap()", "ESP.getMinFreeHeap()", "lowBattCount", "reverseA", "reverseB", "reverseC", "reverseD", "engineSimOn", "steerTrimDegrees", "steerMaxAngleDeg")
+    if "void buildStatus(" in app and all(field in app for field in required_fields):
         report("PASS", "Статус содержит только базовые показатели системы и настройки")
     else:
         report("FAIL", "В JSON статуса отсутствуют необходимые базовые поля")
