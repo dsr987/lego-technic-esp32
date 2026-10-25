@@ -548,10 +548,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
         <span class="lbl">Левая гусеница</span>
         <span class="val" id="val-left">0%</span>
         <div class="slider-v-container"><input data-mode-slider="A" type="range" id="slider-left" class="slider-v" min="-100" max="100" value="0">
-<div class="motor-mode-controls motor-button-controls vertical" data-mode-controls="A" data-control-mode="buttons">
-<button type="button" class="motor-dir-btn" data-motor-hold="A" data-direction="-1" aria-label="Вращать мотор A влево" title="Вращать влево">◀</button>
-<button type="button" class="motor-dir-btn" data-motor-hold="A" data-direction="1" aria-label="Вращать мотор A вправо" title="Вращать вправо">▶</button>
-</div></div>
+</div>
       </div>
       <div class="col">
         <svg class="tank-svg" viewBox="0 0 240 280" role="img" aria-label="Гусеничная модель LEGO Technic">
@@ -599,10 +596,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
         <span class="lbl">Правая гусеница</span>
         <span class="val" id="val-right">0%</span>
         <div class="slider-v-container"><input data-mode-slider="B" type="range" id="slider-right" class="slider-v" min="-100" max="100" value="0">
-<div class="motor-mode-controls motor-button-controls vertical" data-mode-controls="B" data-control-mode="buttons">
-<button type="button" class="motor-dir-btn" data-motor-hold="B" data-direction="-1" aria-label="Вращать мотор B влево" title="Вращать влево">◀</button>
-<button type="button" class="motor-dir-btn" data-motor-hold="B" data-direction="1" aria-label="Вращать мотор B вправо" title="Вращать вправо">▶</button>
-</div></div>
+</div>
       </div>
     </div>
   </main>
@@ -613,10 +607,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
         <span class="lbl">Газ (A)</span>
         <span class="val g" id="val-drive">0%</span>
         <div class="slider-v-container"><input data-mode-slider="A" type="range" id="slider-drive" class="slider-v" min="-100" max="100" value="0">
-<div class="motor-mode-controls motor-button-controls horizontal" data-mode-controls="A" data-control-mode="buttons">
-<button type="button" class="motor-dir-btn" data-motor-hold="A" data-direction="-1" aria-label="Вращать мотор A влево" title="Вращать влево">◀</button>
-<button type="button" class="motor-dir-btn" data-motor-hold="A" data-direction="1" aria-label="Вращать мотор A вправо" title="Вращать вправо">▶</button>
-</div></div>
+</div>
       </div>
       <div class="col">
         <div class="car-wrap">
@@ -759,10 +750,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
               <div class="slim-container">
                 <div class="slim-wrap" id="wrap-aux">
                   <input data-mode-slider="B" type="range" class="slim" id="slider-aux" min="-100" max="100" value="0" style="width:100%">
-<div class="motor-mode-controls motor-button-controls horizontal" data-mode-controls="B" data-control-mode="buttons">
-<button type="button" class="motor-dir-btn" data-motor-hold="B" data-direction="-1" aria-label="Вращать мотор B влево" title="Вращать влево">◀</button>
-<button type="button" class="motor-dir-btn" data-motor-hold="B" data-direction="1" aria-label="Вращать мотор B вправо" title="Вращать вправо">▶</button>
-</div>
+
                 </div>
                 <div class="eng-label" id="eng-label">Имитация ДВС</div>
               </div>
@@ -771,25 +759,15 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
               <div class="row"><label>Мотор C</label><span class="val a" id="val-C">0%</span></div>
               <div class="slim-wrap">
                 <input data-mode-slider="C" type="range" class="slim" id="slider-C" min="-100" max="100" value="0" style="width:100%">
-<div class="motor-mode-controls motor-button-controls horizontal" data-mode-controls="C" data-control-mode="buttons">
-<button type="button" class="motor-dir-btn" data-motor-hold="C" data-direction="-1" aria-label="Вращать мотор C влево" title="Вращать влево">◀</button>
-<button type="button" class="motor-dir-btn" data-motor-hold="C" data-direction="1" aria-label="Вращать мотор C вправо" title="Вращать вправо">▶</button>
-</div>
-<div class="motor-mode-controls motor-position-controls horizontal" data-mode-controls="C" data-control-mode="position">
-<button type="button" class="motor-dir-btn" data-position-hold="C" data-direction="-1" aria-label="Позиционный мотор C: влево" title="Вращать влево">◀ ВЛЕВО</button>
-<button type="button" class="motor-dir-btn center-stub" aria-label="Центр, пока не подключён" title="Пока не подключено">ЦЕНТР</button>
-<button type="button" class="motor-dir-btn" data-position-hold="C" data-direction="1" aria-label="Позиционный мотор C: вправо" title="Вращать вправо">ВПРАВО ▶</button>
-</div>
+
+
               </div>
             </div>
             <div class="field" id="field-D">
               <div class="row"><label>Мотор D</label><span class="val" id="val-D">0%</span></div>
               <div class="slim-wrap">
                 <input data-mode-slider="D" type="range" class="slim" id="slider-D" min="-100" max="100" value="0" style="width:100%">
-<div class="motor-mode-controls motor-button-controls horizontal" data-mode-controls="D" data-control-mode="buttons">
-<button type="button" class="motor-dir-btn" data-motor-hold="D" data-direction="-1" aria-label="Вращать мотор D влево" title="Вращать влево">◀</button>
-<button type="button" class="motor-dir-btn" data-motor-hold="D" data-direction="1" aria-label="Вращать мотор D вправо" title="Вращать вправо">▶</button>
-</div>
+
               </div>
             </div>
           </div>
@@ -813,42 +791,26 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
           <span class="lbl">Мотор A</span>
           <span class="val g" id="val-test-A">0%</span>
           <div class="slider-v-container"><input data-mode-slider="A" type="range" id="slider-test-A" class="slider-v" min="-100" max="100" value="0">
-<div class="motor-mode-controls motor-button-controls vertical" data-mode-controls="A" data-control-mode="buttons">
-<button type="button" class="motor-dir-btn" data-motor-hold="A" data-direction="-1" aria-label="Вращать мотор A влево" title="Вращать влево">◀</button>
-<button type="button" class="motor-dir-btn" data-motor-hold="A" data-direction="1" aria-label="Вращать мотор A вправо" title="Вращать вправо">▶</button>
-</div></div>
+</div>
         </div>
         <div class="col">
           <span class="lbl">Мотор B</span>
           <span class="val c" id="val-test-B">0%</span>
           <div class="slider-v-container"><input data-mode-slider="B" type="range" id="slider-test-B" class="slider-v" min="-100" max="100" value="0">
-<div class="motor-mode-controls motor-button-controls vertical" data-mode-controls="B" data-control-mode="buttons">
-<button type="button" class="motor-dir-btn" data-motor-hold="B" data-direction="-1" aria-label="Вращать мотор B влево" title="Вращать влево">◀</button>
-<button type="button" class="motor-dir-btn" data-motor-hold="B" data-direction="1" aria-label="Вращать мотор B вправо" title="Вращать вправо">▶</button>
-</div></div>
+</div>
         </div>
         <div class="col">
           <span class="lbl">Мотор C</span>
           <span class="val a" id="val-test-C">0%</span>
           <div class="slider-v-container"><input data-mode-slider="C" type="range" id="slider-test-C" class="slider-v" min="-100" max="100" value="0">
-<div class="motor-mode-controls motor-button-controls vertical" data-mode-controls="C" data-control-mode="buttons">
-<button type="button" class="motor-dir-btn" data-motor-hold="C" data-direction="-1" aria-label="Вращать мотор C влево" title="Вращать влево">◀</button>
-<button type="button" class="motor-dir-btn" data-motor-hold="C" data-direction="1" aria-label="Вращать мотор C вправо" title="Вращать вправо">▶</button>
+
 </div>
-<div class="motor-mode-controls motor-position-controls vertical" data-mode-controls="C" data-control-mode="position">
-<button type="button" class="motor-dir-btn" data-position-hold="C" data-direction="-1" aria-label="Позиционный мотор C: влево" title="Вращать влево">◀ ВЛЕВО</button>
-<button type="button" class="motor-dir-btn center-stub" aria-label="Центр, пока не подключён" title="Пока не подключено">ЦЕНТР</button>
-<button type="button" class="motor-dir-btn" data-position-hold="C" data-direction="1" aria-label="Позиционный мотор C: вправо" title="Вращать вправо">ВПРАВО ▶</button>
-</div></div>
         </div>
         <div class="col" data-motor="D">
           <span class="lbl">Мотор D</span>
           <span class="val" id="val-test-D">0%</span>
           <div class="slider-v-container"><input data-mode-slider="D" type="range" id="slider-test-D" class="slider-v" min="-100" max="100" value="0">
-<div class="motor-mode-controls motor-button-controls vertical" data-mode-controls="D" data-control-mode="buttons">
-<button type="button" class="motor-dir-btn" data-motor-hold="D" data-direction="-1" aria-label="Вращать мотор D влево" title="Вращать влево">◀</button>
-<button type="button" class="motor-dir-btn" data-motor-hold="D" data-direction="1" aria-label="Вращать мотор D вправо" title="Вращать вправо">▶</button>
-</div></div>
+</div>
         </div>
       </div>
       <div class="servo-group">
@@ -1224,6 +1186,36 @@ function applyMotorModeUI(ch){
     var reverseRow=$('reverse-row-'+ch); if(reverseRow) reverseRow.classList.toggle('hidden',ch==='C'&&selectedMode===2);
   }
   function applyAllMotorModeUI(){['A','B','C','D'].forEach(applyMotorModeUI);}
+  function createMotorControls(){
+    document.querySelectorAll('[data-mode-slider]').forEach(function(slider){
+      var ch=slider.getAttribute('data-mode-slider'), parent=slider.parentElement;
+      var orientation=slider.classList.contains('slider-v')?'vertical':'horizontal';
+      function makeButton(text, attrs, extraClass){
+        var button=document.createElement('button');
+        button.type='button'; button.className='motor-dir-btn'+(extraClass?' '+extraClass:'');
+        button.textContent=text;
+        Object.keys(attrs||{}).forEach(function(key){button.setAttribute(key,attrs[key]);});
+        return button;
+      }
+      var buttons=document.createElement('div');
+      buttons.className='motor-mode-controls motor-button-controls '+orientation;
+      buttons.setAttribute('data-mode-controls',ch); buttons.setAttribute('data-control-mode','buttons');
+      buttons.appendChild(makeButton('◀',{'data-motor-hold':ch,'data-direction':'-1','aria-label':'Вращать мотор '+ch+' влево',title:'Вращать влево'}));
+      buttons.appendChild(makeButton('▶',{'data-motor-hold':ch,'data-direction':'1','aria-label':'Вращать мотор '+ch+' вправо',title:'Вращать вправо'}));
+      parent.appendChild(buttons);
+      if(ch==='C'){
+        var position=document.createElement('div');
+        position.className='motor-mode-controls motor-position-controls '+orientation;
+        position.setAttribute('data-mode-controls','C'); position.setAttribute('data-control-mode','position');
+        position.appendChild(makeButton('◀ ВЛЕВО',{'data-position-hold':'C','data-direction':'-1','aria-label':'Позиционный мотор C: влево',title:'Вращать влево'}));
+        position.appendChild(makeButton('ЦЕНТР',{'aria-label':'Центр, пока не подключён',title:'Пока не подключено'},'center-stub'));
+        position.appendChild(makeButton('ВПРАВО ▶',{'data-position-hold':'C','data-direction':'1','aria-label':'Позиционный мотор C: вправо',title:'Вращать вправо'}));
+        parent.appendChild(position);
+      }
+    });
+  }
+  createMotorControls();
+  
   document.querySelectorAll('[data-motor-mode]').forEach(function(select){
     select.addEventListener('change',function(){
       var ch=this.getAttribute('data-motor-mode'), next=Number(this.value);
