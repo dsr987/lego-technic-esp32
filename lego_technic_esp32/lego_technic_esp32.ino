@@ -27,6 +27,7 @@
  * CHANGELOG_VERSION: 0.9.12
  * CHANGELOG_START
  * - Удалена автоматическая сборка тестовых скетчей ESP32; тестовые скетчи собираются вручную на компьютере. ([PR #91](https://github.com/dsr987/lego-technic-esp32/pull/91))
+ * - Добавлен конфигуратор режимов управления моторами с сохранением в Preferences и тестовым управлением позиционным каналом C.
  * CHANGELOG_END
  *
  * тестовый запуск сборки
@@ -120,6 +121,12 @@ bool reverseB = false;
 bool reverseC = false;
 bool reverseD = false;
 
+// Режимы управления каналами: 0 — слайдер, 1 — кнопки, 2 — позиционный (только C).
+uint8_t motorModeA = 0;
+uint8_t motorModeB = 0;
+uint8_t motorModeC = 0;
+uint8_t motorModeD = 0;
+
 // ---------- Состояние света ----------
 
 // Состояния сохранены для совместимости с интерфейсом.
@@ -168,6 +175,7 @@ void buildStatus(char *buf, size_t n) {
     "\"up\":%lu,\"heap\":%lu,\"minh\":%lu,\"lb\":%d,"
     "\"ra\":%d,\"rb\":%d,\"rc\":%d,\"rd\":%d,"
     "\"lf\":%d,\"lr\":%d,\"es\":%d,"
+    "\"cfgA\":%d,\"cfgB\":%d,\"cfgC\":%d,\"cfgD\":%d,"
     "\"tr\":%d,\"md\":%d}",
     battV,
     battPct,
@@ -186,6 +194,10 @@ void buildStatus(char *buf, size_t n) {
     ledFrontOn ? 1 : 0,
     ledRearOn ? 1 : 0,
     engineSimOn ? 1 : 0,
+    (int)motorModeA,
+    (int)motorModeB,
+    (int)motorModeC,
+    (int)motorModeD,
     steerTrimDegrees,
     steerMaxAngleDeg
   );
