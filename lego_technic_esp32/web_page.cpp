@@ -1190,7 +1190,7 @@ function applyMotorModeUI(ch){
     document.querySelectorAll('[data-mode-slider]').forEach(function(slider){
       var ch=slider.getAttribute('data-mode-slider'), parent=slider.parentElement;
       var orientation=(slider.classList.contains('slider-v') ||
-        (slider.classList.contains('slim') && $('classic-panel').classList.contains('motor-count-4'))) ? 'vertical':'horizontal';
+        (slider.classList.contains('slim') && motorCount===4)) ? 'vertical':'horizontal';
       function makeButton(text, attrs, extraClass){
         var button=document.createElement('button');
         button.type='button'; button.className='motor-dir-btn'+(extraClass?' '+extraClass:'');
@@ -1208,15 +1208,30 @@ function applyMotorModeUI(ch){
         var position=document.createElement('div');
         position.className='motor-mode-controls motor-position-controls '+orientation;
         position.setAttribute('data-mode-controls','C'); position.setAttribute('data-control-mode','position');
-        position.appendChild(makeButton(orientation==='vertical'?'◀':'◀ ВЛЕВО',{'data-position-hold':'C','data-direction':'-1','aria-label':'Позиционный мотор C: влево',title:'Вращать влево'}));
-        position.appendChild(makeButton(orientation==='vertical'?'●':'ЦЕНТР',{'aria-label':'Центр, пока не подключён',title:'Пока не подключено'},'center-stub'));
-        position.appendChild(makeButton(orientation==='vertical'?'▶':'ВПРАВО ▶',{'data-position-hold':'C','data-direction':'1','aria-label':'Позиционный мотор C: вправо',title:'Вращать вправо'}));
+        position.appendChild(makeButton(orientation==='vertical'?'◀':'◀ ВЛЕВО',{'data-position-hold':'C','data-position-label':'left','data-direction':'-1','aria-label':'Позиционный мотор C: влево',title:'Вращать влево'}));
+        position.appendChild(makeButton(orientation==='vertical'?'●':'ЦЕНТР',{'data-position-label':'center','aria-label':'Центр, пока не подключён',title:'Пока не подключено'},'center-stub'));
+        position.appendChild(makeButton(orientation==='vertical'?'▶':'ВПРАВО ▶',{'data-position-hold':'C','data-position-label':'right','data-direction':'1','aria-label':'Позиционный мотор C: вправо',title:'Вращать вправо'}));
         parent.appendChild(position);
       }
     });
   }
   createMotorControls();
+  function updateMotorControlOrientations(){
+    document.querySelectorAll('[data-mode-slider]').forEach(function(slider){
+      var ch=slider.getAttribute('data-mode-slider');
+      var vertical=slider.classList.contains('slider-v')||(slider.classList.contains('slim')&&motorCount===4);
+      var labels={left:vertical?'◀':'◀ ВЛЕВО',center:vertical?'●':'ЦЕНТР',right:vertical?'▶':'ВПРАВО ▶'};
+      slider.parentElement.querySelectorAll('[data-mode-controls="'+ch+'"]').forEach(function(controls){
+        controls.classList.toggle('vertical',vertical);
+        controls.classList.toggle('horizontal',!vertical);
+        controls.querySelectorAll('[data-position-label]').forEach(function(button){
+          button.textContent=labels[button.getAttribute('data-position-label')];
+        });
+      });
+    });
+  }
   
+  updateMotorControlOrientations();
   document.querySelectorAll('[data-motor-mode]').forEach(function(select){
     select.addEventListener('change',function(){
       var ch=this.getAttribute('data-motor-mode'), next=Number(this.value);
@@ -1519,6 +1534,7 @@ function applyMotorModeUI(ch){
     $('motor-count-select').value = String(motorCount);
     var panel = $('classic-panel');
     [1,2,3,4].forEach(function(n){ panel.classList.toggle('motor-count-'+n, n===motorCount); });
+    updateMotorControlOrientations();
     // При уменьшении числа моторов лишние каналы сбрасываем, чтобы старое значение не осталось активным.
     if(motorCount < 4){ auxD=0; if($('slider-D')) $('slider-D').value=0; if($('val-D')) $('val-D').textContent='0%'; txWS({ch:'D',val:0}); }
     if(motorCount < 3){ auxC=0; if($('slider-C')) $('slider-C').value=0; if($('val-C')) $('val-C').textContent='0%'; txWS({ch:'C',val:0}); }
