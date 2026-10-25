@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include <Arduino.h>
+
 // Загрузка сохранённых настроек
 void loadPreferences();
 
