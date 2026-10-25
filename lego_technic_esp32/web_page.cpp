@@ -1189,7 +1189,8 @@ function applyMotorModeUI(ch){
   function createMotorControls(){
     document.querySelectorAll('[data-mode-slider]').forEach(function(slider){
       var ch=slider.getAttribute('data-mode-slider'), parent=slider.parentElement;
-      var orientation=slider.classList.contains('slider-v')?'vertical':'horizontal';
+      var orientation=(slider.classList.contains('slider-v') ||
+        (slider.classList.contains('slim') && $('classic-panel').classList.contains('motor-count-4'))) ? 'vertical':'horizontal';
       function makeButton(text, attrs, extraClass){
         var button=document.createElement('button');
         button.type='button'; button.className='motor-dir-btn'+(extraClass?' '+extraClass:'');
@@ -1207,9 +1208,9 @@ function applyMotorModeUI(ch){
         var position=document.createElement('div');
         position.className='motor-mode-controls motor-position-controls '+orientation;
         position.setAttribute('data-mode-controls','C'); position.setAttribute('data-control-mode','position');
-        position.appendChild(makeButton('◀ ВЛЕВО',{'data-position-hold':'C','data-direction':'-1','aria-label':'Позиционный мотор C: влево',title:'Вращать влево'}));
-        position.appendChild(makeButton('ЦЕНТР',{'aria-label':'Центр, пока не подключён',title:'Пока не подключено'},'center-stub'));
-        position.appendChild(makeButton('ВПРАВО ▶',{'data-position-hold':'C','data-direction':'1','aria-label':'Позиционный мотор C: вправо',title:'Вращать вправо'}));
+        position.appendChild(makeButton(orientation==='vertical'?'◀':'◀ ВЛЕВО',{'data-position-hold':'C','data-direction':'-1','aria-label':'Позиционный мотор C: влево',title:'Вращать влево'}));
+        position.appendChild(makeButton(orientation==='vertical'?'●':'ЦЕНТР',{'aria-label':'Центр, пока не подключён',title:'Пока не подключено'},'center-stub'));
+        position.appendChild(makeButton(orientation==='vertical'?'▶':'ВПРАВО ▶',{'data-position-hold':'C','data-direction':'1','aria-label':'Позиционный мотор C: вправо',title:'Вращать вправо'}));
         parent.appendChild(position);
       }
     });
