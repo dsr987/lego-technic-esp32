@@ -292,6 +292,18 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .led-btn[data-ch="R"].active{ border-color:#f43f5e;color:#f43f5e; box-shadow:0 0 14px rgba(244,63,94,.5), inset 0 0 8px rgba(244,63,94,.1); }
 .reset-btn:active{ border-color:var(--rose);color:var(--rose); box-shadow:0 0 14px rgba(244,63,94,.5); }
 .settings-reset-btn{width:100%;min-height:42px;padding:10px;border:1px solid var(--rose);border-radius:10px;background:rgba(244,63,94,.12);color:var(--rose);font:inherit;font-weight:800;cursor:pointer}.settings-reset-btn:disabled{opacity:.5;cursor:wait}
+.motor-mode-controls{display:none;align-items:stretch;justify-content:center;gap:6px;min-width:0;min-height:0}
+.motor-mode-controls.active{display:flex}
+.motor-mode-controls.vertical{flex-direction:column;width:100%;height:100%}
+.motor-mode-controls.horizontal{flex-direction:row;width:100%;height:100%}
+.motor-dir-btn{flex:1;min-width:0;min-height:36px;border:1px solid var(--border);border-radius:9px;background:var(--panel2);color:var(--text);font:inherit;font-weight:800;touch-action:none;user-select:none;-webkit-user-select:none}
+.motor-dir-btn:active,.motor-dir-btn.pressed{background:var(--blue-dk);border-color:var(--blue);color:#fff}
+.motor-dir-btn.center-stub{background:var(--panel);border-style:dashed;color:var(--muted);cursor:default;touch-action:manipulation}
+.motor-mode-controls.vertical .motor-dir-btn{min-height:0;flex:1}
+.motor-position-controls.horizontal .motor-dir-btn{padding:3px 4px;font-size:11px}
+.motor-position-controls.vertical .motor-dir-btn{padding:3px 1px;font-size:10px}
+#classic-panel.motor-count-4 .motor-mode-controls.horizontal{flex-direction:column}
+
 .eng-btn.active{ border-color:#f59e0b;color:#f59e0b; box-shadow:0 0 12px rgba(245,158,11,.45), inset 0 0 8px rgba(245,158,11,.08); }
 .aux-mode-btn.active{ border-color:#22d3ee;color:#22d3ee; box-shadow:0 0 12px rgba(34,211,238,.4), inset 0 0 8px rgba(34,211,238,.08); }
 
@@ -533,7 +545,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="col">
         <span class="lbl">Левая гусеница</span>
         <span class="val" id="val-left">0%</span>
-        <div class="slider-v-container"><input type="range" id="slider-left" class="slider-v" min="-100" max="100" value="0"></div>
+        <div class="slider-v-container"><input data-mode-slider="A" type="range" id="slider-left" class="slider-v" min="-100" max="100" value="0">
+</div>
       </div>
       <div class="col">
         <svg class="tank-svg" viewBox="0 0 240 280" role="img" aria-label="Гусеничная модель LEGO Technic">
@@ -580,7 +593,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="col">
         <span class="lbl">Правая гусеница</span>
         <span class="val" id="val-right">0%</span>
-        <div class="slider-v-container"><input type="range" id="slider-right" class="slider-v" min="-100" max="100" value="0"></div>
+        <div class="slider-v-container"><input data-mode-slider="B" type="range" id="slider-right" class="slider-v" min="-100" max="100" value="0">
+</div>
       </div>
     </div>
   </main>
@@ -590,7 +604,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="col">
         <span class="lbl">Газ (A)</span>
         <span class="val g" id="val-drive">0%</span>
-        <div class="slider-v-container"><input type="range" id="slider-drive" class="slider-v" min="-100" max="100" value="0"></div>
+        <div class="slider-v-container"><input data-mode-slider="A" type="range" id="slider-drive" class="slider-v" min="-100" max="100" value="0">
+</div>
       </div>
       <div class="col">
         <div class="car-wrap">
@@ -732,7 +747,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
               <div class="row"><label>Мотор B</label><span class="val c" id="val-aux">0%</span></div>
               <div class="slim-container">
                 <div class="slim-wrap" id="wrap-aux">
-                  <input type="range" class="slim" id="slider-aux" min="-100" max="100" value="0" style="width:100%">
+                  <input data-mode-slider="B" type="range" class="slim" id="slider-aux" min="-100" max="100" value="0" style="width:100%">
+
                 </div>
                 <div class="eng-label" id="eng-label">Имитация ДВС</div>
               </div>
@@ -740,13 +756,16 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
             <div class="field" id="field-C">
               <div class="row"><label>Мотор C</label><span class="val a" id="val-C">0%</span></div>
               <div class="slim-wrap">
-                <input type="range" class="slim" id="slider-C" min="-100" max="100" value="0" style="width:100%">
+                <input data-mode-slider="C" type="range" class="slim" id="slider-C" min="-100" max="100" value="0" style="width:100%">
+
+
               </div>
             </div>
             <div class="field" id="field-D">
               <div class="row"><label>Мотор D</label><span class="val" id="val-D">0%</span></div>
               <div class="slim-wrap">
-                <input type="range" class="slim" id="slider-D" min="-100" max="100" value="0" style="width:100%">
+                <input data-mode-slider="D" type="range" class="slim" id="slider-D" min="-100" max="100" value="0" style="width:100%">
+
               </div>
             </div>
           </div>
@@ -769,22 +788,27 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
         <div class="col">
           <span class="lbl">Мотор A</span>
           <span class="val g" id="val-test-A">0%</span>
-          <div class="slider-v-container"><input type="range" id="slider-test-A" class="slider-v" min="-100" max="100" value="0"></div>
+          <div class="slider-v-container"><input data-mode-slider="A" type="range" id="slider-test-A" class="slider-v" min="-100" max="100" value="0">
+</div>
         </div>
         <div class="col">
           <span class="lbl">Мотор B</span>
           <span class="val c" id="val-test-B">0%</span>
-          <div class="slider-v-container"><input type="range" id="slider-test-B" class="slider-v" min="-100" max="100" value="0"></div>
+          <div class="slider-v-container"><input data-mode-slider="B" type="range" id="slider-test-B" class="slider-v" min="-100" max="100" value="0">
+</div>
         </div>
         <div class="col">
           <span class="lbl">Мотор C</span>
           <span class="val a" id="val-test-C">0%</span>
-          <div class="slider-v-container"><input type="range" id="slider-test-C" class="slider-v" min="-100" max="100" value="0"></div>
+          <div class="slider-v-container"><input data-mode-slider="C" type="range" id="slider-test-C" class="slider-v" min="-100" max="100" value="0">
+
+</div>
         </div>
         <div class="col" data-motor="D">
           <span class="lbl">Мотор D</span>
           <span class="val" id="val-test-D">0%</span>
-          <div class="slider-v-container"><input type="range" id="slider-test-D" class="slider-v" min="-100" max="100" value="0"></div>
+          <div class="slider-v-container"><input data-mode-slider="D" type="range" id="slider-test-D" class="slider-v" min="-100" max="100" value="0">
+</div>
         </div>
       </div>
       <div class="servo-group">
@@ -848,6 +872,14 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       </div>
     </div>
     <div class="block">
+      <h3>Управление моторами</h3>
+      <div class="line"><label for="motor-mode-A">Канал A</label><span class="grow"></span><select id="motor-mode-A" data-motor-mode="A"><option value="0">Слайдер</option><option value="1">Кнопки</option></select></div>
+      <div class="line"><label for="motor-mode-B">Канал B</label><span class="grow"></span><select id="motor-mode-B" data-motor-mode="B"><option value="0">Слайдер</option><option value="1">Кнопки</option></select></div>
+      <div class="line"><label for="motor-mode-C">Канал C</label><span class="grow"></span><select id="motor-mode-C" data-motor-mode="C"><option value="0">Слайдер</option><option value="1">Кнопки</option><option value="2">Позиционный мотор</option></select></div>
+      <div class="line"><label for="motor-mode-D">Канал D</label><span class="grow"></span><select id="motor-mode-D" data-motor-mode="D"><option value="0">Слайдер</option><option value="1">Кнопки</option></select></div>
+      <div style="font-size:10px;line-height:1.45;color:var(--muted)">Настройки сохраняются в ESP32. Перед сменой режима остановите соответствующий мотор. Для первого теста позиционного канала C кнопка «Центр» пока не подключена.</div>
+    </div>
+    <div class="block">
       <h3>Виброотклик (Haptic)</h3>
       <div class="line" style="flex-direction:column; align-items:stretch; gap:8px;">
         <select id="haptic-select">
@@ -881,7 +913,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <h3>Реверс моторов</h3>
       <div class="line"><span>Канал A</span><span class="grow"></span><button class="rev-btn" data-ch="A" type="button">⇄</button></div>
       <div class="line"><span>Канал B</span><span class="grow"></span><button class="rev-btn" data-ch="B" type="button">⇄</button></div>
-      <div class="line"><span>Канал C</span><span class="grow"></span><button class="rev-btn" data-ch="C" type="button">⇄</button></div>
+      <div class="line" id="reverse-row-C"><span>Канал C</span><span class="grow"></span><button class="rev-btn" data-ch="C" type="button">⇄</button></div>
       <div class="line"><span>Канал D</span><span class="grow"></span><button class="rev-btn" data-ch="D" type="button">⇄</button></div>
     </div>
     <div class="block">
@@ -1092,6 +1124,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   }
 
   var mode=0, rev={A:0,B:0,C:0,D:0}, led={F:0,R:0};
+  var motorModes={A:0,B:0,C:0,D:0}, heldMotorButtons={}, motorRampTimers={};
   var eng=false, auxMode=false, trim=0;
   var drive=0, auxB=0, auxC=0, auxD=0, steer=0;
   var motorCount = +(localStorage.getItem("lcc_motor_count") || 3);
@@ -1140,7 +1173,106 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     });
   }
 
-  function initWS(){
+function applyMotorModeUI(ch){
+    var selectedMode=motorModes[ch]||0;
+    document.querySelectorAll('[data-mode-slider="'+ch+'"]').forEach(function(el){el.classList.toggle('hidden',selectedMode!==0);});
+    document.querySelectorAll('[data-mode-controls="'+ch+'"]').forEach(function(el){
+      var cm=el.getAttribute('data-control-mode');
+      el.classList.toggle('active',(selectedMode===1&&cm==='buttons')||(selectedMode===2&&cm==='position'));
+    });
+    var select=$('motor-mode-'+ch); if(select) select.value=String(selectedMode);
+    var reverseRow=$('reverse-row-'+ch); if(reverseRow) reverseRow.classList.toggle('hidden',ch==='C'&&selectedMode===2);
+  }
+  function applyAllMotorModeUI(){['A','B','C','D'].forEach(applyMotorModeUI);}
+  function createMotorControls(){
+    document.querySelectorAll('[data-mode-slider]').forEach(function(slider){
+      var ch=slider.getAttribute('data-mode-slider'), parent=slider.parentElement;
+      var orientation=slider.classList.contains('slider-v')?'vertical':'horizontal';
+      function makeButton(text, attrs, extraClass){
+        var button=document.createElement('button');
+        button.type='button'; button.className='motor-dir-btn'+(extraClass?' '+extraClass:'');
+        button.textContent=text;
+        Object.keys(attrs||{}).forEach(function(key){button.setAttribute(key,attrs[key]);});
+        return button;
+      }
+      var buttons=document.createElement('div');
+      buttons.className='motor-mode-controls motor-button-controls '+orientation;
+      buttons.setAttribute('data-mode-controls',ch); buttons.setAttribute('data-control-mode','buttons');
+      buttons.appendChild(makeButton('◀',{'data-motor-hold':ch,'data-direction':'-1','aria-label':'Вращать мотор '+ch+' влево',title:'Вращать влево'}));
+      buttons.appendChild(makeButton('▶',{'data-motor-hold':ch,'data-direction':'1','aria-label':'Вращать мотор '+ch+' вправо',title:'Вращать вправо'}));
+      parent.appendChild(buttons);
+      if(ch==='C'){
+        var position=document.createElement('div');
+        position.className='motor-mode-controls motor-position-controls '+orientation;
+        position.setAttribute('data-mode-controls','C'); position.setAttribute('data-control-mode','position');
+        position.appendChild(makeButton('◀ ВЛЕВО',{'data-position-hold':'C','data-direction':'-1','aria-label':'Позиционный мотор C: влево',title:'Вращать влево'}));
+        position.appendChild(makeButton('ЦЕНТР',{'aria-label':'Центр, пока не подключён',title:'Пока не подключено'},'center-stub'));
+        position.appendChild(makeButton('ВПРАВО ▶',{'data-position-hold':'C','data-direction':'1','aria-label':'Позиционный мотор C: вправо',title:'Вращать вправо'}));
+        parent.appendChild(position);
+      }
+    });
+  }
+  createMotorControls();
+  
+  document.querySelectorAll('[data-motor-mode]').forEach(function(select){
+    select.addEventListener('change',function(){
+      var ch=this.getAttribute('data-motor-mode'), next=Number(this.value);
+      var max=ch==='C'?2:1;
+      if(!Number.isInteger(next)||next<0||next>max||lastSent[ch]!==0){
+        this.value=String(motorModes[ch]||0);
+        if(lastSent[ch]!==0) window.alert('Сначала остановите мотор '+ch+', затем меняйте режим.');
+        return;
+      }
+      if(!ws||ws.readyState!==WebSocket.OPEN){
+        this.value=String(motorModes[ch]||0); window.alert('Нет соединения с ESP32. Режим не изменён.'); return;
+      }
+      motorModes[ch]=next; applyMotorModeUI(ch);
+      var cfg={}; cfg['cfg'+ch]=next; txWS(cfg);
+    });
+  });
+  function rampMotorTo(ch,target,duration){
+    if(motorRampTimers[ch]){clearInterval(motorRampTimers[ch]);delete motorRampTimers[ch];}
+    var from=Number(lastSent[ch])||0;
+    if(!duration){txWS({ch:ch,val:target});return;}
+    var start=performance.now();
+    motorRampTimers[ch]=setInterval(function(){
+      var t=Math.min(1,(performance.now()-start)/duration), val=Math.round(from+(target-from)*t);
+      txWS({ch:ch,val:val});
+      if(t>=1){clearInterval(motorRampTimers[ch]);delete motorRampTimers[ch];}
+    },20);
+  }
+  function releaseMotorButton(ch,immediate){
+    var held=heldMotorButtons[ch]; if(!held)return;
+    delete heldMotorButtons[ch]; held.button.classList.remove('pressed');
+    rampMotorTo(ch,0,(held.position||immediate)?0:150);
+  }
+  function releaseAllMotorButtons(immediate){Object.keys(heldMotorButtons).forEach(function(ch){releaseMotorButton(ch,!!immediate);});}
+  function bindMotorHoldButton(button,position){
+    button.addEventListener('pointerdown',function(e){
+      e.preventDefault();
+      var ch=button.getAttribute(position?'data-position-hold':'data-motor-hold');
+      if(!ch||heldMotorButtons[ch]||(position?motorModes[ch]!==2:motorModes[ch]!==1))return;
+      if(!ws||ws.readyState!==WebSocket.OPEN)return;
+      var direction=Number(button.getAttribute('data-direction'))<0?-1:1;
+      heldMotorButtons[ch]={button:button,position:position}; button.classList.add('pressed');
+      rampMotorTo(ch,direction*100,position?0:150);
+      if(button.setPointerCapture&&e.pointerId!==undefined){try{button.setPointerCapture(e.pointerId);}catch(err){}}
+    });
+    function release(){
+      var ch=button.getAttribute(position?'data-position-hold':'data-motor-hold');
+      if(ch&&heldMotorButtons[ch]&&heldMotorButtons[ch].button===button)releaseMotorButton(ch,false);
+    }
+    button.addEventListener('pointerup',release);
+    button.addEventListener('pointercancel',release);
+    button.addEventListener('lostpointercapture',release);
+  }
+  document.querySelectorAll('[data-motor-hold]').forEach(function(b){bindMotorHoldButton(b,false);});
+  document.querySelectorAll('[data-position-hold]').forEach(function(b){bindMotorHoldButton(b,true);});
+  document.addEventListener('pointerup',function(){releaseAllMotorButtons(false);});
+  document.addEventListener('pointercancel',function(){releaseAllMotorButtons(true);});
+  window.addEventListener('blur',function(){releaseAllMotorButtons(true);});
+  document.addEventListener('visibilitychange',function(){if(document.hidden)releaseAllMotorButtons(true);});
+    function initWS(){
     ws = new WebSocket('ws://' + location.host + '/ws');
     ws.onopen = function(){
       lastTelemetryAt = 0;
@@ -1151,6 +1283,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 
     };
     ws.onclose = function(){ 
+      releaseAllMotorButtons(true);
+      ['A','B','C','D'].forEach(function(ch){lastSent[ch]=0;});
       $('ws-status').textContent='НЕТ СВЯЗИ'; 
       $('ws-status').style.color='var(--rose)'; 
       updateWifi(0);
@@ -1171,6 +1305,10 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
           if(typeof d.rb !== 'undefined') { rev.B = !!d.rb; updateRevUI('B'); }
           if(typeof d.rc !== 'undefined') { rev.C = !!d.rc; updateRevUI('C'); }
           if(typeof d.rd !== 'undefined') { rev.D = !!d.rd; updateRevUI('D'); }
+           if(typeof d.cfgA!=='undefined'){motorModes.A=Number(d.cfgA)||0;applyMotorModeUI('A');}
+           if(typeof d.cfgB!=='undefined'){motorModes.B=Number(d.cfgB)||0;applyMotorModeUI('B');}
+           if(typeof d.cfgC!=='undefined'){motorModes.C=Number(d.cfgC)||0;applyMotorModeUI('C');}
+           if(typeof d.cfgD!=='undefined'){motorModes.D=Number(d.cfgD)||0;applyMotorModeUI('D');}
           if(typeof d.lf !== 'undefined') { led.F = !!d.lf; updateLedUI('F'); }
           if(typeof d.lr !== 'undefined') { led.R = !!d.lr; updateLedUI('R'); }
           if(typeof d.es !== 'undefined') { eng = !!d.es; updateEngUI(); applyEngGate(); }
@@ -1890,6 +2028,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   }
   updateEngUI(); applyEngGate(); paintLights();
   applyMotorCount(motorCount);
+  applyAllMotorModeUI();
   switchMode(0); fitSliders();
 })();
 </script>
