@@ -13,7 +13,6 @@ ASSETS = {
     "wheel-art": ROOT / "lego_technic_esp32" / "assets" / "original" / "webp" / "Wheel.webp",
     "crawler-body": ROOT / "lego_technic_esp32" / "assets" / "crawler_chassis.webp.b64",
     "t-left-body": ROOT / "lego_technic_esp32" / "assets" / "crawler_track.webp.b64",
-    "t-right-body": ROOT / "lego_technic_esp32" / "assets" / "crawler_track.webp.b64",
 }
 
 
@@ -46,6 +45,9 @@ def read_webp(path: Path) -> str:
 def main() -> int:
     original = PAGE.read_text(encoding="utf-8")
     content = original
+
+    if content.count('<use id="t-right-body" href="#t-left-body" transform="translate(240 0) scale(-1 1)"/>') != 1:
+        raise SystemExit("ОШИБКА: правая гусеница должна переиспользовать изображение t-left-body")
 
     for element_id, path in ASSETS.items():
         payload = read_webp(path)
