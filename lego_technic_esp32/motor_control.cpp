@@ -6,6 +6,7 @@
 #include "steering_control.h" 
 
 // Состояние объявлено и определяется в lego_technic_esp32.ino
+extern uint8_t motorModeC;
 extern Mode currentMode;
 
 extern int motorAVal;
@@ -97,7 +98,7 @@ void applyMotorC(int val) {
     TB2_AIN1,
     TB2_AIN2,
     LEDC_CH_C,
-    reverseC ? -motorCVal : motorCVal
+    (reverseC && motorModeC != 2) ? -motorCVal : motorCVal
   );
 }
 

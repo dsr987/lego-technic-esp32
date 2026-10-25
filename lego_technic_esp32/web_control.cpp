@@ -25,6 +25,11 @@ extern bool reverseB;
 extern bool reverseC;
 extern bool reverseD;
 
+extern uint8_t motorModeA;
+extern uint8_t motorModeB;
+extern uint8_t motorModeC;
+extern uint8_t motorModeD;
+
 extern bool ledFrontOn;
 extern bool ledRearOn;
 extern bool engineSimOn;
@@ -62,6 +67,26 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     lastCmdMillis = millis();
 
     if (client) client->text("{\"reset\":1}");
+    return;
+  }
+
+  // Смена конфигурации не отправляет команду мотору и допускается только на остановленном канале.
+  if (doc.containsKey("cfgA") || doc.containsKey("cfgB") ||
+      doc.containsKey("cfgC") || doc.containsKey("cfgD")) {
+    if (doc.size() != 1) return;
+    if (doc.containsKey("cfgA")) {
+      if (!doc["cfgA"].is<int>() || doc["cfgA"].as<int>() < 0 || doc["cfgA"].as<int>() > 1 || motorAVal != 0) return;
+      motorModeA = (uint8_t)doc["cfgA"].as<int>(); saveMotorModeA(motorModeA);
+    } else if (doc.containsKey("cfgB")) {
+      if (!doc["cfgB"].is<int>() || doc["cfgB"].as<int>() < 0 || doc["cfgB"].as<int>() > 1 || motorBVal != 0) return;
+      motorModeB = (uint8_t)doc["cfgB"].as<int>(); saveMotorModeB(motorModeB);
+    } else if (doc.containsKey("cfgC")) {
+      if (!doc["cfgC"].is<int>() || doc["cfgC"].as<int>() < 0 || doc["cfgC"].as<int>() > 2 || motorCVal != 0) return;
+      motorModeC = (uint8_t)doc["cfgC"].as<int>(); saveMotorModeC(motorModeC);
+    } else {
+      if (!doc["cfgD"].is<int>() || doc["cfgD"].as<int>() < 0 || doc["cfgD"].as<int>() > 1 || motorDVal != 0) return;
+      motorModeD = (uint8_t)doc["cfgD"].as<int>(); saveMotorModeD(motorModeD);
+    }
     return;
   }
 

@@ -1,8 +1,16 @@
 
 #pragma once
 
+#include <Arduino.h>
+
 // Загрузка сохранённых настроек
 void loadPreferences();
+
+// Режимы управления моторами: 0 — слайдер, 1 — кнопки, 2 — позиционный (только C).
+void saveMotorModeA(uint8_t value);
+void saveMotorModeB(uint8_t value);
+void saveMotorModeC(uint8_t value);
+void saveMotorModeD(uint8_t value);
 
 // Настройки рулевого управления
 void saveSteeringCenter(int value);
