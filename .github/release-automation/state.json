@@ -42,7 +42,8 @@
     87,
     91,
     96,
-    98
+    98,
+    100
   ],
   "release_prs": [
     10,
@@ -59,7 +60,7 @@
     96,
     98
   ],
-  "last_processed_pr": 98,
-  "last_release_type": "patch",
+  "last_processed_pr": 100,
+  "last_release_type": "none",
   "last_version": "0.10.1"
 }
