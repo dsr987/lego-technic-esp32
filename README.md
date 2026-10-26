@@ -40,6 +40,7 @@
 - [3D-модель корпуса и исходники KOMPAS-3D](hardware/3d-models/enclosure/README.md)
 - [Иллюстрации распиновки и схем подключения](docs/assets/connection-guide/README.md)
 - [Руководство по подключению и сборке](docs/connection_guide.md)
+- [Планирование Hardware 2.0: распиновка, разъёмы и ревизионный список](docs/hardware_2.0/README.md)
 
 ## Первоначальная прошивка ESP32
 
