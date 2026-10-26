@@ -1199,16 +1199,16 @@ function applyMotorModeUI(ch){
       var buttons=document.createElement('div');
       buttons.className='motor-mode-controls motor-button-controls '+orientation;
       buttons.setAttribute('data-mode-controls',ch); buttons.setAttribute('data-control-mode','buttons');
-      buttons.appendChild(makeButton('◀',{'data-motor-hold':ch,'data-direction':'-1','aria-label':'Вращать мотор '+ch+' влево',title:'Вращать влево'}));
-      buttons.appendChild(makeButton('▶',{'data-motor-hold':ch,'data-direction':'1','aria-label':'Вращать мотор '+ch+' вправо',title:'Вращать вправо'}));
+      buttons.appendChild(makeButton(orientation==='vertical'?'▲':'◀',{'data-motor-hold':ch,'data-motor-label':'negative','data-direction':'-1','aria-label':'Отрицательное направление мотора '+ch,title:'Отрицательное направление'}));
+      buttons.appendChild(makeButton(orientation==='vertical'?'▼':'▶',{'data-motor-hold':ch,'data-motor-label':'positive','data-direction':'1','aria-label':'Положительное направление мотора '+ch,title:'Положительное направление'}));
       parent.appendChild(buttons);
       if(ch==='C'){
         var position=document.createElement('div');
         position.className='motor-mode-controls motor-position-controls '+orientation;
         position.setAttribute('data-mode-controls','C'); position.setAttribute('data-control-mode','position');
-        position.appendChild(makeButton(orientation==='vertical'?'◀':'◀ ВЛЕВО',{'data-position-hold':'C','data-position-label':'left','data-direction':'-1','aria-label':'Позиционный мотор C: влево',title:'Вращать влево'}));
+        position.appendChild(makeButton(orientation==='vertical'?'▲':'◀ ВЛЕВО',{'data-position-hold':'C','data-position-label':'left','data-direction':'-1','aria-label':'Позиционный мотор C: влево',title:'Вращать влево'}));
         position.appendChild(makeButton(orientation==='vertical'?'●':'ЦЕНТР',{'data-position-label':'center','aria-label':'Центр, пока не подключён',title:'Пока не подключено'},'center-stub'));
-        position.appendChild(makeButton(orientation==='vertical'?'▶':'ВПРАВО ▶',{'data-position-hold':'C','data-position-label':'right','data-direction':'1','aria-label':'Позиционный мотор C: вправо',title:'Вращать вправо'}));
+        position.appendChild(makeButton(orientation==='vertical'?'▼':'ВПРАВО ▶',{'data-position-hold':'C','data-position-label':'right','data-direction':'1','aria-label':'Позиционный мотор C: вправо',title:'Вращать вправо'}));
         parent.appendChild(position);
       }
     });
@@ -1218,12 +1218,21 @@ function applyMotorModeUI(ch){
     document.querySelectorAll('[data-mode-slider]').forEach(function(slider){
       var ch=slider.getAttribute('data-mode-slider');
       var vertical=slider.classList.contains('slider-v')||(slider.classList.contains('slim')&&motorCount===4);
-      var labels={left:vertical?'◀':'◀ ВЛЕВО',center:vertical?'●':'ЦЕНТР',right:vertical?'▶':'ВПРАВО ▶'};
+      var labels={
+        negative:vertical?'▲':'◀',
+        positive:vertical?'▼':'▶',
+        left:vertical?'▲':'◀ ВЛЕВО',
+        center:vertical?'●':'ЦЕНТР',
+        right:vertical?'▼':'ВПРАВО ▶'
+      };
       slider.parentElement.querySelectorAll('[data-mode-controls="'+ch+'"]').forEach(function(controls){
         controls.classList.toggle('vertical',vertical);
         controls.classList.toggle('horizontal',!vertical);
-        controls.querySelectorAll('[data-position-label]').forEach(function(button){
-          button.textContent=labels[button.getAttribute('data-position-label')];
+        controls.querySelectorAll('[data-motor-label],[data-position-label]').forEach(function(button){
+          var key=button.hasAttribute('data-motor-label')
+            ? button.getAttribute('data-motor-label')
+            : button.getAttribute('data-position-label');
+          button.textContent=labels[key];
         });
       });
     });
