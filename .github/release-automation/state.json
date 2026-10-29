@@ -41,6 +41,7 @@
     83,
     87,
     91,
+    93,
     96,
     98,
     100
@@ -60,7 +61,7 @@
     96,
     98
   ],
-  "last_processed_pr": 100,
+  "last_processed_pr": 93,
   "last_release_type": "none",
   "last_version": "0.10.1"
 }
