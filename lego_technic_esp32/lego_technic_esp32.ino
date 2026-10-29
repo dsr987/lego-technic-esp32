@@ -52,6 +52,7 @@
 #include "display_control.h"
 #include "steering_control.h"
 #include "preferences_manager.h"
+#include "i2c_motor_backend.h"
 
 // ============================================================
 // НАСТРОЙКИ ДОСТУПА — МЕНЯТЬ ЗДЕСЬ
@@ -75,8 +76,8 @@ constexpr char OTA_PASSWORD[] = "admin";
 // ---------- Периферия ----------
 
 #define SERVO_PIN 27
-#define OLED_SDA  25
-#define OLED_SCL  26
+#define OLED_SDA  I2C_SDA
+#define OLED_SCL  I2C_SCL
 
 // ---------- Режим и состояние системы ----------
 
@@ -129,8 +130,7 @@ uint8_t motorModeD = 0;
 // ---------- Состояние света ----------
 
 // Состояния сохранены для совместимости с интерфейсом.
-// GPIO для фар пока не назначены: GPIO32 и GPIO33
-// используются вторым TB6612FNG.
+// GPIO для фар пока не назначены; GPIO32 и GPIO33 свободны в Hardware pre2.0.
 bool ledFrontOn = false;
 bool ledRearOn  = false;
 
@@ -148,9 +148,7 @@ void applyLeds() {
   /*
    * Временно пустая функция.
    *
-   * GPIO32 и GPIO33 используются вторым TB6612FNG:
-   * GPIO32 — TB2_BIN1
-   * GPIO33 — TB2_BIN2
+   * GPIO32 и GPIO33 пока не назначены.
    *
    * После выбора отдельных GPIO для фар здесь
    * будет реализовано управление светом.
@@ -208,61 +206,45 @@ void setup() {
   // Аппаратная Serial-отладка не используется.
   // Диагностика доступна через Wi-Fi и веб-интерфейс.
 
-  // 1. Безопасное состояние драйверов.
-  // Оба TB6612FNG выключены до завершения настройки.
+  // 1. Безопасное состояние единственного прямого TB6612FNG (каналы C/D).
   pinMode(TB_STBY, OUTPUT);
   digitalWrite(TB_STBY, LOW);
 
-  // 2. Настройка входов направления четырёх моторов.
   pinMode(TB_AIN1, OUTPUT);
   pinMode(TB_AIN2, OUTPUT);
-
   pinMode(TB_BIN1, OUTPUT);
   pinMode(TB_BIN2, OUTPUT);
 
-  pinMode(TB2_AIN1, OUTPUT);
-  pinMode(TB2_AIN2, OUTPUT);
-
-  pinMode(TB2_BIN1, OUTPUT);
-  pinMode(TB2_BIN2, OUTPUT);
-
-  // Устанавливаем безопасное начальное состояние входов.
   digitalWrite(TB_AIN1, LOW);
   digitalWrite(TB_AIN2, LOW);
-
   digitalWrite(TB_BIN1, LOW);
   digitalWrite(TB_BIN2, LOW);
 
-  digitalWrite(TB2_AIN1, LOW);
-  digitalWrite(TB2_AIN2, LOW);
-
-  digitalWrite(TB2_BIN1, LOW);
-  digitalWrite(TB2_BIN2, LOW);
-
-  // 3. Настройка четырёх PWM-каналов.
-  // Частота 5 кГц, разрешение 8 бит.
-  // LEDC-каналы и GPIO определены в hardware_config.h.
-
-  ledcSetup(LEDC_CH_A, 5000, 8);
-  ledcAttachPin(TB_PWMA, LEDC_CH_A);
-
-  ledcSetup(LEDC_CH_B, 5000, 8);
-  ledcAttachPin(TB_PWMB, LEDC_CH_B);
-
+  // Каналы C/D используют прямой PWM ESP32. A/B/E/F идут через PCA9685.
   ledcSetup(LEDC_CH_C, 5000, 8);
-  ledcAttachPin(TB2_PWMA, LEDC_CH_C);
-
+  ledcAttachPin(TB_PWMA, LEDC_CH_C);
   ledcSetup(LEDC_CH_D, 5000, 8);
-  ledcAttachPin(TB2_PWMB, LEDC_CH_D);
+  ledcAttachPin(TB_PWMB, LEDC_CH_D);
 
   // 4. Инициализация рулевого сервопривода.
   steerServo.setPeriodHertz(50);
   // Positional servo: allow the full calibrated pulse range for up to 270-degree steering.
   steerServo.attach(SERVO_PIN, 500, 2500);
 
-  // 5. Инициализация OLED-дисплея.
+  // 5. Запуск общей I2C-шины для OLED и PCA9685 FeatherWing.
   Wire.begin(OLED_SDA, OLED_SCL);
-  oledAvailable = display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  Wire.setTimeOut(50);
+
+  // Инициализируем PCA9685 до OLED, чтобы создать общую блокировку Wire.
+  // Отсутствующий FeatherWing не должен останавливать запуск Wi-Fi/OLED.
+  const bool featherWingReady = i2cMotorBackendBegin(Wire);
+  (void)featherWingReady;
+
+  const bool displayLockAcquired = i2cMotorBackendLockSharedI2c(1000);
+  oledAvailable = displayLockAcquired && display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  if (displayLockAcquired) {
+    i2cMotorBackendUnlockSharedI2c();
+  }
 
   if (oledAvailable) {
     // Фирменная заставка появляется только после успешного определения OLED.

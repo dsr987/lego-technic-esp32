@@ -3,7 +3,8 @@
 
 #include "hardware_config.h"
 #include "motor_control.h"
-#include "steering_control.h" 
+#include "steering_control.h"
+#include "i2c_motor_backend.h"
 
 // Состояние объявлено и определяется в lego_technic_esp32.ino
 extern uint8_t motorModeC;
@@ -50,10 +51,8 @@ static void setDCBridge(int in1, int in2, int pwmChannel, int val) {
 void applyMotorA(int val) {
   motorAVal = constrain(val, -100, 100);
 
-  setDCBridge(
-    TB_AIN1,
-    TB_AIN2,
-    LEDC_CH_A,
+  i2cMotorBackendSetMotor(
+    I2CMotorChannel::A,
     reverseA ? -motorAVal : motorAVal
   );
 
@@ -65,12 +64,7 @@ void applyMotorA(int val) {
     int actualB = reverseB ? -aux : aux;
     motorBVal = actualB;
 
-    setDCBridge(
-      TB_BIN1,
-      TB_BIN2,
-      LEDC_CH_B,
-      actualB
-    );
+    i2cMotorBackendSetMotor(I2CMotorChannel::B, actualB);
   }
 }
 
@@ -80,10 +74,8 @@ void applyMotorA(int val) {
 void applyMotorB(int val) {
   motorBVal = constrain(val, -100, 100);
 
-  setDCBridge(
-    TB_BIN1,
-    TB_BIN2,
-    LEDC_CH_B,
+  i2cMotorBackendSetMotor(
+    I2CMotorChannel::B,
     reverseB ? -motorBVal : motorBVal
   );
 }
@@ -95,8 +87,8 @@ void applyMotorC(int val) {
   motorCVal = constrain(val, -100, 100);
 
   setDCBridge(
-    TB2_AIN1,
-    TB2_AIN2,
+    TB_AIN1,
+    TB_AIN2,
     LEDC_CH_C,
     (motorModeC == 2 || reverseC) ? -motorCVal : motorCVal
   );
@@ -109,8 +101,8 @@ void applyMotorD(int val) {
   motorDVal = constrain(val, -100, 100);
 
   setDCBridge(
-    TB2_BIN1,
-    TB2_BIN2,
+    TB_BIN1,
+    TB_BIN2,
     LEDC_CH_D,
     reverseD ? -motorDVal : motorDVal
   );
@@ -120,16 +112,10 @@ void applyMotorD(int val) {
 // ---------- Общее включение драйверов ----------
 
 void updateDriverStandby() {
-  bool active =
-    motorAVal != 0 ||
-    motorBVal != 0 ||
-    motorCVal != 0 ||
-    motorDVal != 0 ||
-    servoVal != 0 ||
-    engineSimOn;
-
-  // Оба TB6612FNG используют общий STBY.
-  digitalWrite(TB_STBY, active ? HIGH : LOW);
+  // STBY относится только к прямому TB6612 каналов C/D.
+  // FeatherWing A/B/E/F управляется независимо через PCA9685.
+  const bool directDriverActive = motorCVal != 0 || motorDVal != 0;
+  digitalWrite(TB_STBY, directDriverActive ? HIGH : LOW);
 }
 
 
@@ -144,10 +130,10 @@ void stopAll() {
   motorCVal = 0;
   motorDVal = 0;
 
-  setDCBridge(TB_AIN1, TB_AIN2, LEDC_CH_A, 0);
-  setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_B, 0);
-  setDCBridge(TB2_AIN1, TB2_AIN2, LEDC_CH_C, 0);
-  setDCBridge(TB2_BIN1, TB2_BIN2, LEDC_CH_D, 0);
+  // Останавливаем FeatherWing-каналы A/B/E/F и прямые C/D.
+  i2cMotorBackendStopAll();
+  setDCBridge(TB_AIN1, TB_AIN2, LEDC_CH_C, 0);
+  setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_D, 0);
 
   applySteer(0);
   updateDriverStandby();
