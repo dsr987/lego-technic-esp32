@@ -848,7 +848,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="line"><label for="motor-mode-D">Канал D</label><span class="grow"></span><select id="motor-mode-D" data-motor-mode="D"><option value="0">Слайдер</option><option value="1">Кнопки</option></select></div>
       <div class="line"><label for="motor-mode-E">Канал E</label><span class="grow"></span><select id="motor-mode-E" data-motor-mode="E"><option value="0">Слайдер</option><option value="1">Кнопки</option></select></div>
       <div class="line"><label for="motor-mode-F">Канал F</label><span class="grow"></span><select id="motor-mode-F" data-motor-mode="F"><option value="0">Слайдер</option><option value="1">Кнопки</option></select></div>
-      <div style="font-size:10px;line-height:1.45;color:var(--muted)">Настройки сохраняются в ESP32. Перед сменой режима остановите соответствующий мотор. Для первого теста позиционного канала C кнопка «Центр» пока не подключена.</div>
+      <div style="font-size:10px;line-height:1.45;color:var(--muted)">Настройки сохраняются в ESP32. Перед сменой режима остановите соответствующий мотор. Позиционный режим C перемещает механизм к выбранной цели.</div>
     </div>
     <div class="block">
       <h3>Виброотклик (Haptic)</h3>
