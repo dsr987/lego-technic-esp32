@@ -30,7 +30,6 @@ static PositionState state = PositionState::Idle;
 static int targetVoltageMv = FEEDBACK_CENTER_MV;
 static int movementDirection = 0;
 static int filteredVoltageMv = 0;
-static int movementStartVoltageMv = 0;
 static int progressReferenceMv = 0;
 static unsigned long lastUpdateMs = 0;
 static unsigned long movementStartMs = 0;
@@ -115,7 +114,6 @@ bool positionalServoRequest(PositionalServoTarget target) {
   // Положительное направление механизма повышает напряжение обратной связи.
   // applyMotorC() инвертирует знак в режиме C=2, сохраняя прежнюю ориентацию UI.
   movementDirection = difference > 0 ? 1 : -1;
-  movementStartVoltageMv = currentMv;
   progressReferenceMv = currentMv;
   movementStartMs = millis();
   lastProgressMs = movementStartMs;
