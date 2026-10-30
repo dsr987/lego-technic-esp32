@@ -152,7 +152,7 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
 
     int requestedMode = doc["mode"].as<int>();
 
-    if (requestedMode < MODE_TANK || requestedMode > MODE_TEST) {
+    if (requestedMode < MODE_TANK || requestedMode > MODE_CAR) {
       return;
     }
 
