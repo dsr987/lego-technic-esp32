@@ -75,7 +75,7 @@ constexpr char OTA_PASSWORD[] = "admin";
 
 // ---------- Периферия ----------
 
-#define SERVO_PIN 27
+// SERVO_PIN, I2C_SDA и I2C_SCL определены в hardware_config.h.
 #define OLED_SDA  I2C_SDA
 #define OLED_SCL  I2C_SCL
 
