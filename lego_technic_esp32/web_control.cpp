@@ -7,6 +7,7 @@
 #include "web_control.h"
 #include "steering_control.h"
 #include "preferences_manager.h"
+#include "positional_servo.h"
 
 // ---------- Состояние, объявленное в lego_technic_esp32.ino ----------
 
@@ -89,6 +90,7 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
       motorModeB = (uint8_t)doc["cfgB"].as<int>(); saveMotorModeB(motorModeB);
     } else if (doc.containsKey("cfgC")) {
       if (!doc["cfgC"].is<int>() || doc["cfgC"].as<int>() < 0 || doc["cfgC"].as<int>() > 2 || motorCVal != 0) return;
+      positionalServoCancel();
       motorModeC = (uint8_t)doc["cfgC"].as<int>(); saveMotorModeC(motorModeC);
     } else if (doc.containsKey("cfgD")) {
       if (!doc["cfgD"].is<int>() || doc["cfgD"].as<int>() < 0 || doc["cfgD"].as<int>() > 1 || motorDVal != 0) return;
@@ -100,6 +102,26 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
       if (!doc["cfgF"].is<int>() || doc["cfgF"].as<int>() < 0 || doc["cfgF"].as<int>() > 1 || motorFVal != 0) return;
       motorModeF = (uint8_t)doc["cfgF"].as<int>(); saveMotorModeF(motorModeF);
     }
+    return;
+  }
+
+  // Команда автоматического позиционирования мотора C. Одно нажатие задаёт цель,
+  // движение продолжается автономно до достижения цели или срабатывания защиты.
+  if (doc.containsKey("posC")) {
+    if (doc.size() != 1 || !doc["posC"].is<const char*>() || motorModeC != 2) return;
+    const char* target = doc["posC"].as<const char*>();
+    PositionalServoTarget positionTarget;
+    if (strcmp(target, "left") == 0) {
+      positionTarget = PositionalServoTarget::Left;
+    } else if (strcmp(target, "center") == 0) {
+      positionTarget = PositionalServoTarget::Center;
+    } else if (strcmp(target, "right") == 0) {
+      positionTarget = PositionalServoTarget::Right;
+    } else {
+      return;
+    }
+    lastCmdMillis = messageMillis;
+    positionalServoRequest(positionTarget);
     return;
   }
 
@@ -136,7 +158,8 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
 
     applyMotorA(a);
     if (!engineSimOn) applyMotorB(b);
-    applyMotorC(c);
+    // В позиционном режиме канал C принадлежит автономному регулятору.
+    if (motorModeC != 2) applyMotorC(c);
     applyMotorD(d);
     applyMotorE(e);
     applyMotorF(f);
@@ -205,6 +228,7 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     val = doc["val"].as<int>();
 
     if (val < -100 || val > 100) return;
+    if (strcmp(ch, "C") == 0 && motorModeC == 2) return;
 
     if (strcmp(ch, "A") != 0 &&
         strcmp(ch, "B") != 0 &&
