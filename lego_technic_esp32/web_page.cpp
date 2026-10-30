@@ -1117,7 +1117,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   }
 
   // --- Единый источник правды для heartbeat: последние отправленные значения A/B/C/S ---
-  var lastSent = {A:0, B:0, C:0, D:0, S:0};
+  var lastSent = {A:0, B:0, C:0, D:0, E:0, F:0, S:0};
 
   function txWS(obj){
     $('telemetry').textContent = JSON.stringify(obj);
@@ -1125,8 +1125,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     if(ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
   }
 
-  var mode=0, rev={A:0,B:0,C:0,D:0}, led={F:0,R:0};
-  var motorModes={A:0,B:0,C:0,D:0}, heldMotorButtons={}, motorRampTimers={};
+  var mode=0, rev={A:0,B:0,C:0,D:0,E:0,F:0}, led={F:0,R:0};
+  var motorModes={A:0,B:0,C:0,D:0,E:0,F:0}, heldMotorButtons={}, motorRampTimers={};
   var eng=false, auxMode=false, trim=0;
   var drive=0, auxB=0, auxC=0, auxD=0, steer=0;
   var motorCount = +(localStorage.getItem("lcc_motor_count") || 3);
@@ -1134,10 +1134,10 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   var savedDrivenAxle = localStorage.getItem('lcc_driven_axle');
   var drivenAxle = (savedDrivenAxle === 'front' || savedDrivenAxle === 'awd') ? savedDrivenAxle : 'rear';
   
-  var holdConfig = { A: false, B: false, C: false, D: false };
-  var holdActive = { A: false, B: false, C: false, D: false };
-  var holdTimer = { A: null, B: null, C: null, D: null };
-  var holdStartVal = { A: 0, B: 0, C: 0, D: 0 };
+  var holdConfig = { A: false, B: false, C: false, D: false, E: false, F: false };
+  var holdActive = { A: false, B: false, C: false, D: false, E: false, F: false };
+  var holdTimer = { A: null, B: null, C: null, D: null, E: null, F: null };
+  var holdStartVal = { A: 0, B: 0, C: 0, D: 0, E: 0, F: 0 };
 
   var hapticMode = localStorage.getItem('lcc_haptic') || 'all';
   if($('haptic-select')) $('haptic-select').value = hapticMode;
@@ -1185,7 +1185,7 @@ function applyMotorModeUI(ch){
     var select=$('motor-mode-'+ch); if(select) select.value=String(selectedMode);
     var reverseRow=$('reverse-row-'+ch); if(reverseRow) reverseRow.classList.toggle('hidden',ch==='C'&&selectedMode===2);
   }
-  function applyAllMotorModeUI(){['A','B','C','D'].forEach(applyMotorModeUI);}
+  function applyAllMotorModeUI(){['A','B','C','D','E','F'].forEach(applyMotorModeUI);}
   function createMotorControls(){
     document.querySelectorAll('[data-mode-slider]').forEach(function(slider){
       var ch=slider.getAttribute('data-mode-slider'), parent=slider.parentElement;
@@ -1332,10 +1332,14 @@ function applyMotorModeUI(ch){
           if(typeof d.rb !== 'undefined') { rev.B = !!d.rb; updateRevUI('B'); }
           if(typeof d.rc !== 'undefined') { rev.C = !!d.rc; updateRevUI('C'); }
           if(typeof d.rd !== 'undefined') { rev.D = !!d.rd; updateRevUI('D'); }
+          if(typeof d.re !== 'undefined') { rev.E = !!d.re; updateRevUI('E'); }
+          if(typeof d.rf !== 'undefined') { rev.F = !!d.rf; updateRevUI('F'); }
            if(typeof d.cfgA!=='undefined'){motorModes.A=Number(d.cfgA)||0;applyMotorModeUI('A');}
            if(typeof d.cfgB!=='undefined'){motorModes.B=Number(d.cfgB)||0;applyMotorModeUI('B');}
            if(typeof d.cfgC!=='undefined'){motorModes.C=Number(d.cfgC)||0;applyMotorModeUI('C');}
            if(typeof d.cfgD!=='undefined'){motorModes.D=Number(d.cfgD)||0;applyMotorModeUI('D');}
+           if(typeof d.cfgE!=='undefined'){motorModes.E=Number(d.cfgE)||0;applyMotorModeUI('E');}
+           if(typeof d.cfgF!=='undefined'){motorModes.F=Number(d.cfgF)||0;applyMotorModeUI('F');}
           if(typeof d.lf !== 'undefined') { led.F = !!d.lf; updateLedUI('F'); }
           if(typeof d.lr !== 'undefined') { led.R = !!d.lr; updateLedUI('R'); }
           if(typeof d.es !== 'undefined') { eng = !!d.es; updateEngUI(); applyEngGate(); }
@@ -1352,7 +1356,7 @@ function applyMotorModeUI(ch){
   // Если браузер/связь перестанут отправлять пакеты, прошивка остановит выходы через 500 мс.
   setInterval(function(){
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({hb:1, A:lastSent.A, B:lastSent.B, C:lastSent.C, D:lastSent.D, S:lastSent.S}));
+    ws.send(JSON.stringify({hb:1, A:lastSent.A, B:lastSent.B, C:lastSent.C, D:lastSent.D, E:lastSent.E, F:lastSent.F, S:lastSent.S}));
   }, 150);
 
   function addDiagnosticEvent(message, level){
