@@ -1181,9 +1181,9 @@ function applyMotorModeUI(ch){
         var position=document.createElement('div');
         position.className='motor-mode-controls motor-position-controls '+orientation;
         position.setAttribute('data-mode-controls','C'); position.setAttribute('data-control-mode','position');
-        position.appendChild(makeButton(orientation==='vertical'?'▲':'◀ ВЛЕВО',{'data-position-hold':'C','data-position-label':'left','data-direction':'-1','aria-label':'Позиционный мотор C: влево',title:'Вращать влево'}));
-        position.appendChild(makeButton(orientation==='vertical'?'●':'ЦЕНТР',{'data-position-label':'center','aria-label':'Центр, пока не подключён',title:'Пока не подключено'},'center-stub'));
-        position.appendChild(makeButton(orientation==='vertical'?'▼':'ВПРАВО ▶',{'data-position-hold':'C','data-position-label':'right','data-direction':'1','aria-label':'Позиционный мотор C: вправо',title:'Вращать вправо'}));
+        position.appendChild(makeButton(orientation==='vertical'?'▲':'◀ ВЛЕВО',{'data-position-target':'left','data-position-label':'left','aria-label':'Позиционный мотор C: влево',title:'Переместить влево'}));
+        position.appendChild(makeButton(orientation==='vertical'?'●':'ЦЕНТР',{'data-position-target':'center','data-position-label':'center','aria-label':'Позиционный мотор C: в центр',title:'Переместить в центр'}));
+        position.appendChild(makeButton(orientation==='vertical'?'▼':'ВПРАВО ▶',{'data-position-target':'right','data-position-label':'right','aria-label':'Позиционный мотор C: вправо',title:'Переместить вправо'}));
         parent.appendChild(position);
       }
     });
@@ -1267,7 +1267,13 @@ function applyMotorModeUI(ch){
     button.addEventListener('lostpointercapture',release);
   }
   document.querySelectorAll('[data-motor-hold]').forEach(function(b){bindMotorHoldButton(b,false);});
-  document.querySelectorAll('[data-position-hold]').forEach(function(b){bindMotorHoldButton(b,true);});
+  document.querySelectorAll('[data-position-target]').forEach(function(button){
+    button.addEventListener('click',function(){
+      if(motorModes.C!==2 || !ws || ws.readyState!==WebSocket.OPEN) return;
+      txWS({posC:button.getAttribute('data-position-target')});
+      vibrateClick();
+    });
+  });
   document.addEventListener('pointerup',function(){releaseAllMotorButtons(false);});
   document.addEventListener('pointercancel',function(){releaseAllMotorButtons(true);});
   window.addEventListener('blur',function(){releaseAllMotorButtons(true);});
