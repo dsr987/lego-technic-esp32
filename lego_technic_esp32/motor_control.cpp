@@ -4,6 +4,7 @@
 #include "hardware_config.h"
 #include "motor_control.h"
 #include "steering_control.h"
+#include "positional_servo.h"
 #include "i2c_motor_backend.h"
 
 // Состояние объявлено и определяется в lego_technic_esp32.ino
@@ -145,6 +146,9 @@ void updateDriverStandby() {
 // ---------- Аварийная остановка ----------
 
 void stopAll() {
+  // Отменяем автоматическое позиционирование C перед общей остановкой.
+  positionalServoCancel();
+
   // Отключаем имитацию двигателя.
   engineSimOn = false;
 
