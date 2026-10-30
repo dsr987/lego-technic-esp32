@@ -1,4 +1,6 @@
 #include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 
 #include "hardware_config.h"
 #include "motor_control.h"
@@ -18,11 +20,13 @@ static constexpr int POSITION_MOTOR_SPEED = 70;
 static constexpr unsigned long UPDATE_INTERVAL_MS = 10;
 static constexpr unsigned long POSITION_TIMEOUT_MS = 3000;
 static constexpr unsigned long STALL_TIMEOUT_MS = 1200;
+static constexpr unsigned long DIRECTION_DEADTIME_MS = 30;
 static constexpr int MIN_PROGRESS_MV = 30;
 
 enum class PositionState : uint8_t {
   Idle,
   Moving,
+  WaitingForDirectionChange,
   Fault
 };
 
@@ -34,8 +38,25 @@ static int progressReferenceMv = 0;
 static unsigned long lastUpdateMs = 0;
 static unsigned long movementStartMs = 0;
 static unsigned long lastProgressMs = 0;
+static unsigned long directionChangeStartMs = 0;
 static bool filterReady = false;
 static uint8_t invalidReadCount = 0;
+
+// WebSocket callbacks run in the AsyncTCP task while positionalServoUpdate()
+// runs in loop(). A mutex protects controller state and all C-channel writes.
+static SemaphoreHandle_t controllerMutex = nullptr;
+
+static void lockController() {
+  if (controllerMutex != nullptr) {
+    xSemaphoreTake(controllerMutex, portMAX_DELAY);
+  }
+}
+
+static void unlockController() {
+  if (controllerMutex != nullptr) {
+    xSemaphoreGive(controllerMutex);
+  }
+}
 
 static int readFeedbackMillivolts() {
   const int rawMv = (int)analogReadMilliVolts(SERVO_FEEDBACK_PIN);
@@ -79,7 +100,26 @@ static int targetVoltage(PositionalServoTarget target) {
   }
 }
 
+static void startPositionMotor(unsigned long now) {
+  progressReferenceMv = filteredVoltageMv;
+  movementStartMs = now;
+  lastProgressMs = now;
+  lastUpdateMs = now;
+  state = PositionState::Moving;
+
+  // applyMotorC() инвертирует знак в режиме C=2, сохраняя ориентацию UI.
+  applyMotorC(movementDirection > 0
+      ? -POSITION_MOTOR_SPEED
+      : POSITION_MOTOR_SPEED);
+  updateDriverStandby();
+}
+
 void positionalServoBegin() {
+  if (controllerMutex == nullptr) {
+    controllerMutex = xSemaphoreCreateMutex();
+  }
+
+  lockController();
   pinMode(SERVO_FEEDBACK_PIN, INPUT);
   analogSetPinAttenuation(SERVO_FEEDBACK_PIN, ADC_11db);
 
@@ -93,12 +133,16 @@ void positionalServoBegin() {
     readFeedbackMillivolts();
     delay(2);
   }
+  unlockController();
 }
 
 bool positionalServoRequest(PositionalServoTarget target) {
+  lockController();
+
   const int currentMv = readFeedbackMillivolts();
   if (!feedbackIsValid(currentMv)) {
     setPositionFault();
+    unlockController();
     return false;
   }
 
@@ -108,35 +152,91 @@ bool positionalServoRequest(PositionalServoTarget target) {
   const int difference = targetVoltageMv - currentMv;
   if (abs(difference) <= FEEDBACK_TOLERANCE_MV) {
     stopPositionMotor();
+    unlockController();
     return true;
   }
 
-  // Положительное направление механизма повышает напряжение обратной связи.
-  // applyMotorC() инвертирует знак в режиме C=2, сохраняя прежнюю ориентацию UI.
-  movementDirection = difference > 0 ? 1 : -1;
-  progressReferenceMv = currentMv;
-  movementStartMs = millis();
-  lastProgressMs = movementStartMs;
-  lastUpdateMs = 0;
-  state = PositionState::Moving;
+  const int requestedDirection = difference > 0 ? 1 : -1;
+  const unsigned long now = millis();
 
-  applyMotorC(movementDirection > 0
-      ? -POSITION_MOTOR_SPEED
-      : POSITION_MOTOR_SPEED);
-  updateDriverStandby();
+  // Не меняем полярность H-моста на ходу. При реверсе сначала снимаем PWM
+  // и отключаем TB6612 через STBY, затем выдерживаем паузу перед новым ходом.
+  if ((state == PositionState::Moving ||
+       state == PositionState::WaitingForDirectionChange) &&
+      requestedDirection != movementDirection) {
+    applyMotorC(0);
+    updateDriverStandby();
+    movementDirection = requestedDirection;
+    directionChangeStartMs = now;
+    state = PositionState::WaitingForDirectionChange;
+    unlockController();
+    return true;
+  }
+
+  movementDirection = requestedDirection;
+  if (state == PositionState::Moving) {
+    // Новая цель в том же направлении: продолжаем движение без остановки.
+    unlockController();
+    return true;
+  }
+
+  if (state == PositionState::WaitingForDirectionChange) {
+    // Цель изменилась, но направление осталось прежним: сохраняем deadtime.
+    unlockController();
+    return true;
+  }
+
+  startPositionMotor(now);
+  unlockController();
   return true;
 }
 
 void positionalServoUpdate() {
-  if (state != PositionState::Moving) return;
+  lockController();
+
+  if (state != PositionState::Moving &&
+      state != PositionState::WaitingForDirectionChange) {
+    unlockController();
+    return;
+  }
 
   const unsigned long now = millis();
-  if ((unsigned long)(now - lastUpdateMs) < UPDATE_INTERVAL_MS) return;
+  if (state == PositionState::WaitingForDirectionChange) {
+    if ((unsigned long)(now - directionChangeStartMs) < DIRECTION_DEADTIME_MS) {
+      unlockController();
+      return;
+    }
+
+    const int currentMv = readFeedbackMillivolts();
+    if (!feedbackIsValid(currentMv)) {
+      if (++invalidReadCount >= 3) setPositionFault();
+      unlockController();
+      return;
+    }
+    invalidReadCount = 0;
+
+    const bool targetReached = movementDirection > 0
+        ? currentMv >= targetVoltageMv - FEEDBACK_TOLERANCE_MV
+        : currentMv <= targetVoltageMv + FEEDBACK_TOLERANCE_MV;
+    if (targetReached) {
+      stopPositionMotor();
+    } else {
+      startPositionMotor(now);
+    }
+    unlockController();
+    return;
+  }
+
+  if ((unsigned long)(now - lastUpdateMs) < UPDATE_INTERVAL_MS) {
+    unlockController();
+    return;
+  }
   lastUpdateMs = now;
 
   const int currentMv = readFeedbackMillivolts();
   if (!feedbackIsValid(currentMv)) {
     if (++invalidReadCount >= 3) setPositionFault();
+    unlockController();
     return;
   }
   invalidReadCount = 0;
@@ -149,6 +249,7 @@ void positionalServoUpdate() {
 
   if (targetReached) {
     stopPositionMotor();
+    unlockController();
     return;
   }
 
@@ -161,17 +262,26 @@ void positionalServoUpdate() {
       (unsigned long)(now - lastProgressMs) >= STALL_TIMEOUT_MS) {
     setPositionFault();
   }
+
+  unlockController();
 }
 
 void positionalServoCancel() {
-  if (state == PositionState::Moving) {
+  lockController();
+  if (state == PositionState::Moving ||
+      state == PositionState::WaitingForDirectionChange) {
     applyMotorC(0);
     updateDriverStandby();
   }
   movementDirection = 0;
   state = PositionState::Idle;
+  unlockController();
 }
 
 bool positionalServoIsMoving() {
-  return state == PositionState::Moving;
+  lockController();
+  const bool moving = state == PositionState::Moving ||
+      state == PositionState::WaitingForDirectionChange;
+  unlockController();
+  return moving;
 }
