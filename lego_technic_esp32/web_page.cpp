@@ -953,6 +953,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="line"><span>Канал B</span><span class="grow"></span><button class="rev-btn" data-ch="B" type="button">⇄</button></div>
       <div class="line" id="reverse-row-C"><span>Канал C</span><span class="grow"></span><button class="rev-btn" data-ch="C" type="button">⇄</button></div>
       <div class="line"><span>Канал D</span><span class="grow"></span><button class="rev-btn" data-ch="D" type="button">⇄</button></div>
+      <div class="line"><span>Канал E</span><span class="grow"></span><button class="rev-btn" data-ch="E" type="button">⇄</button></div>
+      <div class="line"><span>Канал F</span><span class="grow"></span><button class="rev-btn" data-ch="F" type="button">⇄</button></div>
     </div>
     <div class="block">
       <h3>Диагностика системы</h3>
@@ -1255,7 +1257,7 @@ function applyMotorModeUI(ch){
   function updateMotorControlOrientations(){
     document.querySelectorAll('[data-mode-slider]').forEach(function(slider){
       var ch=slider.getAttribute('data-mode-slider');
-      var vertical=slider.classList.contains('slider-v')||(slider.classList.contains('slim')&&motorCount===4);
+      var vertical=slider.classList.contains('slider-v')||(slider.classList.contains('slim')&&motorCount>=4);
       var labels={
         negative:vertical?'▲':'◀',
         positive:vertical?'▼':'▶',
@@ -1347,7 +1349,7 @@ function applyMotorModeUI(ch){
     };
     ws.onclose = function(){ 
       releaseAllMotorButtons(true);
-      ['A','B','C','D'].forEach(function(ch){lastSent[ch]=0;});
+      ['A','B','C','D','E','F','S'].forEach(function(ch){lastSent[ch]=0;});
       $('ws-status').textContent='НЕТ СВЯЗИ'; 
       $('ws-status').style.color='var(--rose)'; 
       updateWifi(0);
