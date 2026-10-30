@@ -14,12 +14,16 @@ extern int motorAVal;
 extern int motorBVal;
 extern int motorCVal;
 extern int motorDVal;
+extern int motorEVal;
+extern int motorFVal;
 extern int servoVal;
 
 extern bool reverseA;
 extern bool reverseB;
 extern bool reverseC;
 extern bool reverseD;
+extern bool reverseE;
+extern bool reverseF;
 extern bool engineSimOn;
 
 
@@ -109,6 +113,25 @@ void applyMotorD(int val) {
 }
 
 
+// ---------- Моторы E/F на FeatherWing ----------
+
+void applyMotorE(int val) {
+  motorEVal = constrain(val, -100, 100);
+  i2cMotorBackendSetMotor(
+    I2CMotorChannel::E,
+    reverseE ? -motorEVal : motorEVal
+  );
+}
+
+void applyMotorF(int val) {
+  motorFVal = constrain(val, -100, 100);
+  i2cMotorBackendSetMotor(
+    I2CMotorChannel::F,
+    reverseF ? -motorFVal : motorFVal
+  );
+}
+
+
 // ---------- Общее включение драйверов ----------
 
 void updateDriverStandby() {
@@ -129,6 +152,8 @@ void stopAll() {
   motorBVal = 0;
   motorCVal = 0;
   motorDVal = 0;
+  motorEVal = 0;
+  motorFVal = 0;
 
   // Останавливаем FeatherWing-каналы A/B/E/F и прямые C/D.
   i2cMotorBackendStopAll();

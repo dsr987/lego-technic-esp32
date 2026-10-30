@@ -18,17 +18,23 @@ extern int motorAVal;
 extern int motorBVal;
 extern int motorCVal;
 extern int motorDVal;
+extern int motorEVal;
+extern int motorFVal;
 extern int servoVal;
 
 extern bool reverseA;
 extern bool reverseB;
 extern bool reverseC;
 extern bool reverseD;
+extern bool reverseE;
+extern bool reverseF;
 
 extern uint8_t motorModeA;
 extern uint8_t motorModeB;
 extern uint8_t motorModeC;
 extern uint8_t motorModeD;
+extern uint8_t motorModeE;
+extern uint8_t motorModeF;
 
 extern bool ledFrontOn;
 extern bool ledRearOn;
@@ -72,7 +78,8 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
 
   // Смена конфигурации не отправляет команду мотору и допускается только на остановленном канале.
   if (doc.containsKey("cfgA") || doc.containsKey("cfgB") ||
-      doc.containsKey("cfgC") || doc.containsKey("cfgD")) {
+      doc.containsKey("cfgC") || doc.containsKey("cfgD") ||
+      doc.containsKey("cfgE") || doc.containsKey("cfgF")) {
     if (doc.size() != 1) return;
     if (doc.containsKey("cfgA")) {
       if (!doc["cfgA"].is<int>() || doc["cfgA"].as<int>() < 0 || doc["cfgA"].as<int>() > 1 || motorAVal != 0) return;
@@ -83,9 +90,15 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     } else if (doc.containsKey("cfgC")) {
       if (!doc["cfgC"].is<int>() || doc["cfgC"].as<int>() < 0 || doc["cfgC"].as<int>() > 2 || motorCVal != 0) return;
       motorModeC = (uint8_t)doc["cfgC"].as<int>(); saveMotorModeC(motorModeC);
-    } else {
+    } else if (doc.containsKey("cfgD")) {
       if (!doc["cfgD"].is<int>() || doc["cfgD"].as<int>() < 0 || doc["cfgD"].as<int>() > 1 || motorDVal != 0) return;
       motorModeD = (uint8_t)doc["cfgD"].as<int>(); saveMotorModeD(motorModeD);
+    } else if (doc.containsKey("cfgE")) {
+      if (!doc["cfgE"].is<int>() || doc["cfgE"].as<int>() < 0 || doc["cfgE"].as<int>() > 1 || motorEVal != 0) return;
+      motorModeE = (uint8_t)doc["cfgE"].as<int>(); saveMotorModeE(motorModeE);
+    } else {
+      if (!doc["cfgF"].is<int>() || doc["cfgF"].as<int>() < 0 || doc["cfgF"].as<int>() > 1 || motorFVal != 0) return;
+      motorModeF = (uint8_t)doc["cfgF"].as<int>(); saveMotorModeF(motorModeF);
     }
     return;
   }
@@ -96,11 +109,13 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
   if (doc.containsKey("hb")) {
     if (!doc["hb"].is<int>() ||
         doc["hb"].as<int>() != 1 ||
-        doc.size() != 6 ||
+        doc.size() != 8 ||
         !doc["A"].is<int>() ||
         !doc["B"].is<int>() ||
         !doc["C"].is<int>() ||
         !doc["D"].is<int>() ||
+        !doc["E"].is<int>() ||
+        !doc["F"].is<int>() ||
         !doc["S"].is<int>()) {
       return;
     }
@@ -109,9 +124,12 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     const int b = doc["B"].as<int>();
     const int c = doc["C"].as<int>();
     const int d = doc["D"].as<int>();
+    const int e = doc["E"].as<int>();
+    const int f = doc["F"].as<int>();
     const int steer = doc["S"].as<int>();
     if (a < -100 || a > 100 || b < -100 || b > 100 ||
         c < -100 || c > 100 || d < -100 || d > 100 ||
+        e < -100 || e > 100 || f < -100 || f > 100 ||
         steer < -100 || steer > 100) {
       return;
     }
@@ -120,6 +138,8 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     if (!engineSimOn) applyMotorB(b);
     applyMotorC(c);
     applyMotorD(d);
+    applyMotorE(e);
+    applyMotorF(f);
     applySteer(steer);
     updateDriverStandby();
     lastCmdMillis = messageMillis;
@@ -190,6 +210,8 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
         strcmp(ch, "B") != 0 &&
         strcmp(ch, "C") != 0 &&
         strcmp(ch, "D") != 0 &&
+        strcmp(ch, "E") != 0 &&
+        strcmp(ch, "F") != 0 &&
         strcmp(ch, "S") != 0) {
       return;
     }
@@ -222,6 +244,20 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
 
     reverseD = doc["revD"].as<int>() == 1;
     saveReverseD(reverseD);
+  }
+
+  if (doc.containsKey("revE")) {
+    if (!doc["revE"].is<int>()) return;
+
+    reverseE = doc["revE"].as<int>() == 1;
+    saveReverseE(reverseE);
+  }
+
+  if (doc.containsKey("revF")) {
+    if (!doc["revF"].is<int>()) return;
+
+    reverseF = doc["revF"].as<int>() == 1;
+    saveReverseF(reverseF);
   }
 
   // Передний и задний свет. Физическая реализация applyLeds() пока пустая.
@@ -269,6 +305,10 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
       applyMotorC(val);
     } else if (strcmp(ch, "D") == 0) {
       applyMotorD(val);
+    } else if (strcmp(ch, "E") == 0) {
+      applyMotorE(val);
+    } else if (strcmp(ch, "F") == 0) {
+      applyMotorF(val);
     } else if (strcmp(ch, "S") == 0) {
       applySteer(val);
     }
@@ -276,6 +316,8 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
              doc.containsKey("revB") ||
              doc.containsKey("revC") ||
              doc.containsKey("revD") ||
+             doc.containsKey("revE") ||
+             doc.containsKey("revF") ||
              doc.containsKey("ledF") ||
              doc.containsKey("ledR") ||
              doc.containsKey("eng")) {

@@ -112,6 +112,8 @@ int motorAVal = 0;
 int motorBVal = 0;
 int motorCVal = 0;
 int motorDVal = 0;
+int motorEVal = 0;
+int motorFVal = 0;
 int servoVal  = 0;
 
 // ---------- Настройки реверса ----------
@@ -120,12 +122,16 @@ bool reverseA = false;
 bool reverseB = false;
 bool reverseC = false;
 bool reverseD = false;
+bool reverseE = false;
+bool reverseF = false;
 
 // Режимы управления каналами: 0 — слайдер, 1 — кнопки, 2 — позиционный (только C).
 uint8_t motorModeA = 0;
 uint8_t motorModeB = 0;
 uint8_t motorModeC = 0;
 uint8_t motorModeD = 0;
+uint8_t motorModeE = 0;
+uint8_t motorModeF = 0;
 
 // ---------- Состояние света ----------
 
@@ -170,9 +176,9 @@ void buildStatus(char *buf, size_t n) {
     "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,"
     "\"m\":%d,\"c\":%d,\"sta\":%d,"
     "\"up\":%lu,\"heap\":%lu,\"minh\":%lu,\"lb\":%d,"
-    "\"ra\":%d,\"rb\":%d,\"rc\":%d,\"rd\":%d,"
+    "\"ra\":%d,\"rb\":%d,\"rc\":%d,\"rd\":%d,\"re\":%d,\"rf\":%d,"
     "\"lf\":%d,\"lr\":%d,\"es\":%d,"
-    "\"cfgA\":%d,\"cfgB\":%d,\"cfgC\":%d,\"cfgD\":%d,"
+    "\"cfgA\":%d,\"cfgB\":%d,\"cfgC\":%d,\"cfgD\":%d,\"cfgE\":%d,\"cfgF\":%d,"
     "\"tr\":%d,\"md\":%d}",
     battV,
     battPct,
@@ -188,6 +194,8 @@ void buildStatus(char *buf, size_t n) {
     reverseB ? 1 : 0,
     reverseC ? 1 : 0,
     reverseD ? 1 : 0,
+    reverseE ? 1 : 0,
+    reverseF ? 1 : 0,
     ledFrontOn ? 1 : 0,
     ledRearOn ? 1 : 0,
     engineSimOn ? 1 : 0,
@@ -195,6 +203,8 @@ void buildStatus(char *buf, size_t n) {
     (int)motorModeB,
     (int)motorModeC,
     (int)motorModeD,
+    (int)motorModeE,
+    (int)motorModeF,
     steerTrimDegrees,
     steerMaxAngleDeg
   );
@@ -332,6 +342,8 @@ void loop() {
         motorBVal != 0 ||
         motorCVal != 0 ||
         motorDVal != 0 ||
+        motorEVal != 0 ||
+        motorFVal != 0 ||
         servoVal != 0 ||
         engineSimOn;
     if (outputsActive &&

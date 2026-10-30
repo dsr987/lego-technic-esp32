@@ -13,6 +13,8 @@ void applyMotorA(int val);
 void applyMotorB(int val);
 void applyMotorC(int val);
 void applyMotorD(int val);
+void applyMotorE(int val);
+void applyMotorF(int val);
 
 // Общее управление драйверами
 void updateDriverStandby();
