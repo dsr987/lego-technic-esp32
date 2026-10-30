@@ -259,15 +259,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 #classic-panel .car-svg{height:calc(var(--sh) + 12px);max-height:100%;}
 #classic-panel .btn-row{margin-top:0;margin-bottom:18px;flex-shrink:0}
 #classic-panel.motor-count-4 .btn-row{margin-bottom:18px}
-#test-panel .motors-group{flex-wrap:nowrap}
-#test-panel .motors-group .col{min-width:48px}
-#test-panel .motors-group .col[data-motor="D"]{display:flex}
-/* Высота основного слайдера A не уменьшается отдельно в конфигурации из четырёх моторов. */
-
-#test-panel .cluster{display:flex;align-items:center;justify-content:space-around;width:100%;height:100%;gap:clamp(16px,4vw,40px)}
-#test-panel .motors-group{display:flex;align-items:center;justify-content:center;gap:clamp(24px,5vw,48px)}
-#test-panel .servo-group{display:flex;flex-direction:column;align-items:center;justify-content:center;width:min(380px,40vw);gap:16px}
-
 .side-stack { position: relative; flex: 1 1 auto; min-height: 0; width: 100%; overflow: hidden; }
 .dash{
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px;
@@ -532,7 +523,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     <div class="mode-switch">
       <button id="btn-tank" class="mode-btn active" type="button">🛡 Танковый</button>
       <button id="btn-classic" class="mode-btn" type="button">🚗 Классический</button>
-      <button id="btn-test" class="mode-btn" type="button">🔧 Тестовый</button>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
       <div class="hstats">
@@ -805,61 +795,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     </div>
   </main>
 
-  <main id="test-panel" class="panel hidden">
-    <div class="cluster">
-      <div class="motors-group">
-        <div class="col">
-          <span class="lbl">Мотор A</span>
-          <span class="val g" id="val-test-A">0%</span>
-          <div class="slider-v-container"><input data-mode-slider="A" type="range" id="slider-test-A" class="slider-v" min="-100" max="100" value="0">
-</div>
-        </div>
-        <div class="col">
-          <span class="lbl">Мотор B</span>
-          <span class="val c" id="val-test-B">0%</span>
-          <div class="slider-v-container"><input data-mode-slider="B" type="range" id="slider-test-B" class="slider-v" min="-100" max="100" value="0">
-</div>
-        </div>
-        <div class="col">
-          <span class="lbl">Мотор C</span>
-          <span class="val a" id="val-test-C">0%</span>
-          <div class="slider-v-container"><input data-mode-slider="C" type="range" id="slider-test-C" class="slider-v" min="-100" max="100" value="0">
-
-</div>
-        </div>
-        <div class="col" data-motor="D">
-          <span class="lbl">Мотор D</span>
-          <span class="val" id="val-test-D">0%</span>
-          <div class="slider-v-container"><input data-mode-slider="D" type="range" id="slider-test-D" class="slider-v" min="-100" max="100" value="0"></div>
-        </div>
-        <div class="col" data-motor="E">
-          <span class="lbl">Мотор E</span>
-          <span class="val" id="val-test-E">0%</span>
-          <div class="slider-v-container"><input data-mode-slider="E" type="range" id="slider-test-E" class="slider-v" min="-100" max="100" value="0"></div>
-        </div>
-        <div class="col" data-motor="F">
-          <span class="lbl">Мотор F</span>
-          <span class="val" id="val-test-F">0%</span>
-          <div class="slider-v-container"><input data-mode-slider="F" type="range" id="slider-test-F" class="slider-v" min="-100" max="100" value="0"></div>
-        </div>
-      </div>
-      <div class="servo-group">
-        <div class="btn-row" style="margin-top:0; justify-content:center; gap:12px">
-          <button class="aux-btn led-btn" data-ch="F" type="button" title="Передние фары"><span class="ico">💡</span></button>
-          <button class="aux-btn led-btn" data-ch="R" type="button" title="Задние фонари"><span class="ico">🛑</span></button>
-          <button class="aux-btn reset-btn" id="test-reset-btn" type="button" title="Сбросить всё в 0"><span class="ico">🔄</span></button>
-        </div>
-        <div style="width:100%">
-          <div class="row" style="display:flex;justify-content:space-between;margin-bottom:4px">
-            <span class="lbl">Серво (Servo)</span><span class="val" id="val-test-S">0%</span>
-          </div>
-          <div class="slider-h-container">
-            <input type="range" id="slider-test-S" min="-100" max="100" value="0">
-          </div>
-        </div>
-      </div>
-    </div>
-  </main>
 
 </div>
 
@@ -895,7 +830,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
           <option value="5">5 моторов — A + B + C + D + E</option>
           <option value="6">6 моторов — A + B + C + D + E + F</option>
         </select>
-        <div style="font-size:10px;line-height:1.45">Настройка влияет на классический интерфейс. В тестовом режиме доступны все каналы, танковый режим не меняется.</div>
+        <div style="font-size:10px;line-height:1.45">Настройка влияет на классический интерфейс. Танковый режим не меняется.</div>
         <label for="drive-axle-select" style="font-size:12px;color:var(--text)">Ведущая ось для подсветки</label>
         <select id="drive-axle-select">
           <option value="rear">Задняя (RWD)</option>
@@ -1609,11 +1544,9 @@ function applyMotorModeUI(ch){
     mode=m;
     $('btn-tank').classList.toggle('active', m===0);
     $('btn-classic').classList.toggle('active', m===1);
-    $('btn-test').classList.toggle('active', m===2);
     
     $('tank-panel').classList.toggle('hidden', m!==0);
     $('classic-panel').classList.toggle('hidden', m!==1);
-    $('test-panel').classList.toggle('hidden', m!==2);
 
     if(m!==1 && eng){
       eng=false;
@@ -1627,15 +1560,12 @@ function applyMotorModeUI(ch){
   }
   $('btn-tank').onclick=function(){ switchMode(0); };
   $('btn-classic').onclick=function(){ switchMode(1); };
-  $('btn-test').onclick=function(){ switchMode(2); };
 
   function zeroAll(){
     drive=auxB=auxC=auxD=steer=0;
     ['A','B','C','D','E','F'].forEach(function(ch){ clearHoldState(ch); });
     ['slider-left','slider-right','slider-drive','slider-aux','slider-C','slider-D','slider-steer',
-     'slider-test-A','slider-test-B','slider-test-C','slider-test-D','slider-test-E','slider-test-F','slider-test-S'].forEach(function(id){ var e=$(id); if(e) e.value=0; });
     ['val-left','val-right','val-drive','val-aux','val-C','val-D','val-steer',
-     'val-test-A','val-test-B','val-test-C','val-test-D','val-test-E','val-test-F','val-test-S'].forEach(function(id){ var e=$(id); if(e) e.textContent='0%'; });
 
     // Фары намеренно не трогаем — привязаны к физическому выходу, не к режиму.
     txWS({ch:'A', val:0}); txWS({ch:'B', val:0}); txWS({ch:'C', val:0}); txWS({ch:'D', val:0}); txWS({ch:'E', val:0}); txWS({ch:'F', val:0}); txWS({ch:'S', val:0});
@@ -1879,7 +1809,7 @@ function applyMotorModeUI(ch){
     el.addEventListener('mousedown', start);
     el.addEventListener('touchstart', start, {passive:true});
     function release(){
-      if(el.disabled || mode===2) return;
+      if(el.disabled) return;
       var target = (ch && holdActive[ch]) ? +el.value : 0;
       springTo(el, target, onFrame);
     }
@@ -1987,15 +1917,6 @@ function applyMotorModeUI(ch){
     steer=v; $('val-steer').textContent=v+'%'; txWS({ch:'S',val:v}); paintCar();
   });
 
-  $('slider-test-A').oninput=function(){ var v=+this.value; $('val-test-A').textContent=v+'%'; txWS({ch:'A',val:v}); if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge(); };
-  $('slider-test-B').oninput=function(){ var v=+this.value; $('val-test-B').textContent=v+'%'; txWS({ch:'B',val:v}); if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge(); };
-  $('slider-test-C').oninput=function(){ var v=+this.value; $('val-test-C').textContent=v+'%'; txWS({ch:'C',val:v}); if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge(); };
-  $('slider-test-D').oninput=function(){ var v=+this.value; $('val-test-D').textContent=v+'%'; txWS({ch:'D',val:v}); if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge(); };
-  $('slider-test-E').oninput=function(){ var v=+this.value; $('val-test-E').textContent=v+'%'; txWS({ch:'E',val:v}); if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge(); };
-  $('slider-test-F').oninput=function(){ var v=+this.value; $('val-test-F').textContent=v+'%'; txWS({ch:'F',val:v}); if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge(); };
-  $('slider-test-S').oninput=function(){ var v=+this.value; $('val-test-S').textContent=v+'%'; txWS({ch:'S',val:v}); if ((v === 100 || v === -100) && hapticMode === 'all') vibrateEdge(); };
-  
-  $('test-reset-btn').onclick=function(){ vibrateClick(); zeroAll(); };
 
   document.querySelectorAll('.rev-btn').forEach(function(b){
     b.addEventListener('click', function(){
