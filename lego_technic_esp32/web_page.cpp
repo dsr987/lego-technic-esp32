@@ -226,8 +226,8 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 #classic-panel.motor-count-4 .val{font-size:9px}
 #classic-panel.motor-count-4 .slim-wrap{width:100%;height:var(--sh);padding:0;justify-content:center;overflow:hidden;box-sizing:border-box}
 #classic-panel.motor-count-4 .slim-wrap input{width:calc(var(--sh) - 12px)!important;height:var(--T)!important;max-width:calc(var(--sh) - 12px);transform:rotate(-90deg);transform-origin:center;flex:none}
-#classic-panel.motor-count-4 #eng-label{width:100%;height:var(--sh);writing-mode:vertical-rl;text-orientation:mixed;white-space:nowrap;transform:none;letter-spacing:0;font-size:12px;line-height:1;box-sizing:border-box;padding:3px;overflow:hidden}
-#classic-panel.motor-count-4 #eng-label.visible{transform:none}
+#classic-panel.motor-count-4 #eng-label, #classic-panel.motor-count-5 #eng-label, #classic-panel.motor-count-6 #eng-label{width:100%;height:var(--sh);writing-mode:vertical-rl;text-orientation:mixed;white-space:nowrap;transform:none;letter-spacing:0;font-size:12px;line-height:1;box-sizing:border-box;padding:3px;overflow:hidden}
+#classic-panel.motor-count-4 #eng-label.visible, #classic-panel.motor-count-5 #eng-label.visible, #classic-panel.motor-count-6 #eng-label.visible{transform:none}
 #classic-panel.motor-count-4 #field-B .slim-container{width:100%;height:var(--sh)!important;min-height:var(--sh)!important;max-height:var(--sh)!important;flex:0 0 var(--sh);margin-top:0!important;box-sizing:border-box}
 #classic-panel.motor-count-4 #field-B .slim-container>.slim-wrap,
 #classic-panel.motor-count-4 #field-B #eng-label{top:0;bottom:0;height:100%!important;min-height:0;max-height:100%;box-sizing:border-box}
@@ -313,7 +313,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .motor-mode-controls.vertical .motor-dir-btn{min-height:0;flex:1}
 .motor-position-controls.horizontal .motor-dir-btn{padding:3px 4px;font-size:11px}
 .motor-position-controls.vertical .motor-dir-btn{padding:3px 1px;font-size:10px}
-#classic-panel.motor-count-4 .motor-mode-controls.horizontal{flex-direction:column}
+#classic-panel.motor-count-4 .motor-mode-controls.horizontal, #classic-panel.motor-count-5 .motor-mode-controls.horizontal, #classic-panel.motor-count-6 .motor-mode-controls.horizontal{flex-direction:column}
 
 .eng-btn.active{ border-color:#f59e0b;color:#f59e0b; box-shadow:0 0 12px rgba(245,158,11,.45), inset 0 0 8px rgba(245,158,11,.08); }
 .aux-mode-btn.active{ border-color:#22d3ee;color:#22d3ee; box-shadow:0 0 12px rgba(34,211,238,.4), inset 0 0 8px rgba(34,211,238,.08); }
@@ -1225,7 +1225,7 @@ function applyMotorModeUI(ch){
     document.querySelectorAll('[data-mode-slider]').forEach(function(slider){
       var ch=slider.getAttribute('data-mode-slider'), parent=slider.parentElement;
       var orientation=(slider.classList.contains('slider-v') ||
-        (slider.classList.contains('slim') && motorCount===4)) ? 'vertical':'horizontal';
+        (slider.classList.contains('slim') && motorCount>=4)) ? 'vertical':'horizontal';
       function makeButton(text, attrs, extraClass){
         var button=document.createElement('button');
         button.type='button'; button.className='motor-dir-btn'+(extraClass?' '+extraClass:'');
