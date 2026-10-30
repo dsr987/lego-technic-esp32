@@ -118,6 +118,10 @@ void positionalServoBegin() {
   if (controllerMutex == nullptr) {
     controllerMutex = xSemaphoreCreateMutex();
   }
+  if (controllerMutex == nullptr) {
+    state = PositionState::Fault;
+    return;
+  }
 
   lockController();
   pinMode(SERVO_FEEDBACK_PIN, INPUT);
@@ -137,6 +141,7 @@ void positionalServoBegin() {
 }
 
 bool positionalServoRequest(PositionalServoTarget target) {
+  if (controllerMutex == nullptr) return false;
   lockController();
 
   const int currentMv = readFeedbackMillivolts();
@@ -192,6 +197,7 @@ bool positionalServoRequest(PositionalServoTarget target) {
 }
 
 void positionalServoUpdate() {
+  if (controllerMutex == nullptr) return;
   lockController();
 
   if (state != PositionState::Moving &&
@@ -267,6 +273,10 @@ void positionalServoUpdate() {
 }
 
 void positionalServoCancel() {
+  if (controllerMutex == nullptr) {
+    state = PositionState::Idle;
+    return;
+  }
   lockController();
   if (state == PositionState::Moving ||
       state == PositionState::WaitingForDirectionChange) {
@@ -279,6 +289,7 @@ void positionalServoCancel() {
 }
 
 bool positionalServoIsMoving() {
+  if (controllerMutex == nullptr) return false;
   lockController();
   const bool moving = state == PositionState::Moving ||
       state == PositionState::WaitingForDirectionChange;
