@@ -1564,8 +1564,8 @@ function applyMotorModeUI(ch){
   function zeroAll(){
     drive=auxB=auxC=auxD=steer=0;
     ['A','B','C','D','E','F'].forEach(function(ch){ clearHoldState(ch); });
-    ['slider-left','slider-right','slider-drive','slider-aux','slider-C','slider-D','slider-steer',
-    ['val-left','val-right','val-drive','val-aux','val-C','val-D','val-steer',
+    ['slider-left','slider-right','slider-drive','slider-aux','slider-C','slider-D','slider-steer'].forEach(function(id){ var e=$(id); if(e) e.value=0; });
+    ['val-left','val-right','val-drive','val-aux','val-C','val-D','val-steer'].forEach(function(id){ var e=$(id); if(e) e.textContent='0%'; });
 
     // Фары намеренно не трогаем — привязаны к физическому выходу, не к режиму.
     txWS({ch:'A', val:0}); txWS({ch:'B', val:0}); txWS({ch:'C', val:0}); txWS({ch:'D', val:0}); txWS({ch:'E', val:0}); txWS({ch:'F', val:0}); txWS({ch:'S', val:0});
