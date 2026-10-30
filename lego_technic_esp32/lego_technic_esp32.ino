@@ -51,6 +51,7 @@
 #include "battery_monitor.h"
 #include "display_control.h"
 #include "steering_control.h"
+#include "positional_servo.h"
 #include "preferences_manager.h"
 #include "i2c_motor_backend.h"
 
@@ -270,6 +271,9 @@ void setup() {
   prefs.begin("cfg", false);
   loadPreferences();
 
+  // Аналоговая обратная связь позиционного мотора C (GPIO35).
+  positionalServoBegin();
+
   // Свет пока не управляется физически, функция оставлена
   // для совместимости с веб-командами.
   applyLeds();
@@ -332,6 +336,9 @@ void setup() {
 
 void loop() {
 
+  // Автопозиционирование C выполняется независимо от частоты WebSocket heartbeat.
+  positionalServoUpdate();
+
   // Единственная защита управления: остановить выходы, если пакет с командами
   // и heartbeat не поступал более 500 мс. Повторная проверка исключает гонку
   // с асинхронным WebSocket-обработчиком, который мог обновить метку между чтениями.
@@ -340,7 +347,7 @@ void loop() {
   if ((unsigned long)(watchdogNow - lastCommandAt) > CMD_TIMEOUT_MS) {
     const bool outputsActive = motorAVal != 0 ||
         motorBVal != 0 ||
-        motorCVal != 0 ||
+        (motorCVal != 0 && !positionalServoIsMoving()) ||
         motorDVal != 0 ||
         motorEVal != 0 ||
         motorFVal != 0 ||
