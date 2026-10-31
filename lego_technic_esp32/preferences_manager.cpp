@@ -42,8 +42,9 @@ void loadPreferences() {
   if (motorModeA > 1) motorModeA = 0;
   motorModeB = prefs.getUChar("modeB", 0);
   if (motorModeB > 1) motorModeB = 0;
-  motorModeC = prefs.getUChar("modeC", 0);
-  if (motorModeC > 2) motorModeC = 0;
+  // Канал C жёстко закреплён за позиционным PF-сервоприводом.
+  // Старое значение modeC в NVS намеренно игнорируется.
+  motorModeC = 2;
   motorModeD = prefs.getUChar("modeD", 0);
   if (motorModeD > 1) motorModeD = 0;
   motorModeE = prefs.getUChar("modeE", 0);
@@ -113,7 +114,6 @@ void saveLedRear(bool value) {
 
 void saveMotorModeA(uint8_t value) { prefs.putUChar("modeA", value); }
 void saveMotorModeB(uint8_t value) { prefs.putUChar("modeB", value); }
-void saveMotorModeC(uint8_t value) { prefs.putUChar("modeC", value); }
 void saveMotorModeD(uint8_t value) { prefs.putUChar("modeD", value); }
 void saveMotorModeE(uint8_t value) { prefs.putUChar("modeE", value); }
 void saveMotorModeF(uint8_t value) { prefs.putUChar("modeF", value); }
