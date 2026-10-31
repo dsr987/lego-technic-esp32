@@ -25,14 +25,8 @@ static constexpr unsigned long STALL_TIMEOUT_MS = 1200;
 static constexpr unsigned long DIRECTION_DEADTIME_MS = 30;
 static constexpr int MIN_PROGRESS_MV = 30;
 
-enum class PositionState : uint8_t {
-  Idle,
-  Moving,
-  WaitingForDirectionChange,
-  Fault
-};
-
-static PositionState state = PositionState::Idle;
+static PositionalServoState state = PositionalServoState::Idle;
+static bool targetValid = false;
 static int targetVoltageMv = FEEDBACK_CENTER_MV;
 static int movementDirection = 0;
 static int filteredVoltageMv = 0;
@@ -86,7 +80,7 @@ static void stopPositionMotor() {
   updateDriverStandby();
   movementDirection = 0;
   appliedMotorSpeed = 0;
-  state = PositionState::Idle;
+  state = PositionalServoState::Idle;
 }
 
 static void setPositionFault() {
@@ -94,7 +88,7 @@ static void setPositionFault() {
   updateDriverStandby();
   movementDirection = 0;
   appliedMotorSpeed = 0;
-  state = PositionState::Fault;
+  state = PositionalServoState::Fault;
 }
 
 static int targetVoltage(PositionalServoTarget target) {
@@ -111,7 +105,7 @@ static void startPositionMotor(unsigned long now) {
   movementStartMs = now;
   lastProgressMs = now;
   lastUpdateMs = now;
-  state = PositionState::Moving;
+  state = PositionalServoState::Moving;
   appliedMotorSpeed = 0;
   lastMotorRampMs = now;
 
@@ -125,7 +119,7 @@ void positionalServoBegin() {
     controllerMutex = xSemaphoreCreateMutex();
   }
   if (controllerMutex == nullptr) {
-    state = PositionState::Fault;
+    state = PositionalServoState::Fault;
     return;
   }
 
@@ -135,8 +129,9 @@ void positionalServoBegin() {
 
   filterReady = false;
   invalidReadCount = 0;
-  state = PositionState::Idle;
+  state = PositionalServoState::Idle;
   movementDirection = 0;
+  targetValid = false;
 
   // Первичное заполнение фильтра до приёма команд из WebSocket.
   for (uint8_t i = 0; i < 8; ++i) {
@@ -158,6 +153,7 @@ bool positionalServoRequest(PositionalServoTarget target) {
   }
 
   targetVoltageMv = targetVoltage(target);
+  targetValid = true;
   invalidReadCount = 0;
 
   const int difference = targetVoltageMv - currentMv;
@@ -172,26 +168,26 @@ bool positionalServoRequest(PositionalServoTarget target) {
 
   // Не меняем полярность H-моста на ходу. При реверсе сначала снимаем PWM
   // и отключаем TB6612 через STBY, затем выдерживаем паузу перед новым ходом.
-  if ((state == PositionState::Moving ||
-       state == PositionState::WaitingForDirectionChange) &&
+  if ((state == PositionalServoState::Moving ||
+       state == PositionalServoState::WaitingForDirectionChange) &&
       requestedDirection != movementDirection) {
     applyMotorC(0);
     updateDriverStandby();
     movementDirection = requestedDirection;
     directionChangeStartMs = now;
-    state = PositionState::WaitingForDirectionChange;
+    state = PositionalServoState::WaitingForDirectionChange;
     unlockController();
     return true;
   }
 
   movementDirection = requestedDirection;
-  if (state == PositionState::Moving) {
+  if (state == PositionalServoState::Moving) {
     // Новая цель в том же направлении: продолжаем движение без остановки.
     unlockController();
     return true;
   }
 
-  if (state == PositionState::WaitingForDirectionChange) {
+  if (state == PositionalServoState::WaitingForDirectionChange) {
     // Цель изменилась, но направление осталось прежним: сохраняем deadtime.
     unlockController();
     return true;
@@ -206,14 +202,14 @@ void positionalServoUpdate() {
   if (controllerMutex == nullptr) return;
   lockController();
 
-  if (state != PositionState::Moving &&
-      state != PositionState::WaitingForDirectionChange) {
+  if (state != PositionalServoState::Moving &&
+      state != PositionalServoState::WaitingForDirectionChange) {
     unlockController();
     return;
   }
 
   const unsigned long now = millis();
-  if (state == PositionState::WaitingForDirectionChange) {
+  if (state == PositionalServoState::WaitingForDirectionChange) {
     if ((unsigned long)(now - directionChangeStartMs) < DIRECTION_DEADTIME_MS) {
       unlockController();
       return;
@@ -295,25 +291,54 @@ void positionalServoUpdate() {
 
 void positionalServoCancel() {
   if (controllerMutex == nullptr) {
-    state = PositionState::Idle;
+    state = PositionalServoState::Idle;
     return;
   }
   lockController();
-  if (state == PositionState::Moving ||
-      state == PositionState::WaitingForDirectionChange) {
+  if (state == PositionalServoState::Moving ||
+      state == PositionalServoState::WaitingForDirectionChange) {
     applyMotorC(0);
     updateDriverStandby();
   }
   movementDirection = 0;
-  state = PositionState::Idle;
+  state = PositionalServoState::Idle;
   unlockController();
 }
 
 bool positionalServoIsMoving() {
   if (controllerMutex == nullptr) return false;
   lockController();
-  const bool moving = state == PositionState::Moving ||
-      state == PositionState::WaitingForDirectionChange;
+  const bool moving = state == PositionalServoState::Moving ||
+      state == PositionalServoState::WaitingForDirectionChange;
   unlockController();
   return moving;
+}
+
+void positionalServoGetStatus(PositionalServoStatus &status) {
+  status.state = PositionalServoState::Fault;
+  status.target = PositionalServoTarget::Center;
+  status.feedbackMv = 0;
+  status.targetMv = FEEDBACK_CENTER_MV;
+  status.targetValid = false;
+  status.feedbackValid = false;
+  status.targetReached = false;
+
+  if (controllerMutex == nullptr) return;
+
+  lockController();
+  const int currentMv = readFeedbackMillivolts();
+  status.state = state;
+  status.target = targetValid
+      ? (targetVoltageMv == FEEDBACK_LEFT_MV ? PositionalServoTarget::Left
+        : targetVoltageMv == FEEDBACK_RIGHT_MV ? PositionalServoTarget::Right
+        : PositionalServoTarget::Center)
+      : PositionalServoTarget::Center;
+  status.feedbackMv = currentMv;
+  status.targetMv = targetVoltageMv;
+  status.targetValid = targetValid;
+  status.feedbackValid = feedbackIsValid(currentMv);
+  status.targetReached = state == PositionalServoState::Idle &&
+      targetValid && status.feedbackValid &&
+      abs(currentMv - targetVoltageMv) <= FEEDBACK_TOLERANCE_MV;
+  unlockController();
 }
