@@ -15,7 +15,7 @@
 extern Adafruit_SSD1306 display;
 extern AsyncWebSocket ws;
 extern bool oledAvailable;
-extern bool oledDisplayEnabled;
+extern volatile bool oledDisplayEnabled;
 
 // Режим работы объявлен в lego_technic_esp32.ino.
 extern Mode currentMode;
