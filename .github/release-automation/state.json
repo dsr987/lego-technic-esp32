@@ -45,7 +45,8 @@
     94,
     96,
     98,
-    100
+    100,
+    104
   ],
   "release_prs": [
     10,
@@ -60,9 +61,10 @@
     87,
     91,
     96,
-    98
+    98,
+    104
   ],
-  "last_processed_pr": 94,
-  "last_release_type": "none",
-  "last_version": "0.10.1"
+  "last_processed_pr": 104,
+  "last_release_type": "minor",
+  "last_version": "0.11.0"
 }
