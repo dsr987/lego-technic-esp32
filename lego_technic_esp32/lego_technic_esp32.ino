@@ -214,8 +214,11 @@ void buildStatus(char *buf, size_t n) {
 // ---------- Инициализация ----------
 
 void setup() {
-  // Аппаратная Serial-отладка не используется.
-  // Диагностика доступна через Wi-Fi и веб-интерфейс.
+  // Временная диагностика FeatherWing доступна в Serial Monitor на 115200 baud.
+  Serial.begin(115200);
+  delay(200);
+  Serial.println();
+  Serial.println("[FW] LEGO Technic ESP32 boot; FeatherWing diagnostics enabled");
 
   // 1. Безопасное состояние единственного прямого TB6612FNG (каналы C/D).
   pinMode(TB_STBY, OUTPUT);
@@ -249,7 +252,7 @@ void setup() {
   // Инициализируем PCA9685 до OLED, чтобы создать общую блокировку Wire.
   // Отсутствующий FeatherWing не должен останавливать запуск Wi-Fi/OLED.
   const bool featherWingReady = i2cMotorBackendBegin(Wire);
-  (void)featherWingReady;
+  Serial.printf("[FW][PCA9685] setup result: %s\n", featherWingReady ? "READY" : "NOT READY");
 
   const bool displayLockAcquired = i2cMotorBackendLockSharedI2c(1000);
   oledAvailable = displayLockAcquired && display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
