@@ -15,6 +15,10 @@ static constexpr int FEEDBACK_RIGHT_MV  = 545;
 static constexpr int FEEDBACK_TOLERANCE_MV = 45;
 static constexpr int FEEDBACK_VALID_MIN_MV = 250;
 static constexpr int FEEDBACK_VALID_MAX_MV = 2200;
+static constexpr int FEEDBACK_ZONE_MIN_MV = 500;
+static constexpr int FEEDBACK_ZONE_MAX_MV = 1850;
+static constexpr int FEEDBACK_ZONE_HYSTERESIS_MV = 25;
+static constexpr int FEEDBACK_ZONE_BOUNDARIES_MV[] = {635, 780, 990, 1375};
 
 static constexpr int POSITION_MOTOR_SPEED = 70; // 100% пользовательской настройки
 static constexpr int SLOW_APPROACH_SPEED_PERCENT = 50;
@@ -42,6 +46,7 @@ static unsigned long lastMotorRampMs = 0;
 static int appliedMotorSpeed = 0;
 static bool filterReady = false;
 static uint8_t invalidReadCount = 0;
+static int feedbackZone = (int)PositionalServoFeedbackZone::Unknown;
 static unsigned long lastFeedbackSampleMs = 0;
 static int speedPercent = 50;
 
@@ -61,6 +66,36 @@ static void unlockController() {
   }
 }
 
+static void updateFeedbackZone(int voltageMv) {
+  if (voltageMv < FEEDBACK_ZONE_MIN_MV || voltageMv > FEEDBACK_ZONE_MAX_MV) {
+    feedbackZone = (int)PositionalServoFeedbackZone::Unknown;
+    return;
+  }
+
+  int candidateZone = 0;
+  while (candidateZone < 4 &&
+         voltageMv >= FEEDBACK_ZONE_BOUNDARIES_MV[candidateZone]) {
+    ++candidateZone;
+  }
+
+  if (feedbackZone < 0 || feedbackZone > 4 ||
+      feedbackZone == (int)PositionalServoFeedbackZone::Unknown) {
+    feedbackZone = candidateZone;
+    return;
+  }
+
+  while (feedbackZone < candidateZone && feedbackZone < 4 &&
+         voltageMv >= FEEDBACK_ZONE_BOUNDARIES_MV[feedbackZone] +
+                          FEEDBACK_ZONE_HYSTERESIS_MV) {
+    ++feedbackZone;
+  }
+  while (feedbackZone > candidateZone && feedbackZone > 0 &&
+         voltageMv < FEEDBACK_ZONE_BOUNDARIES_MV[feedbackZone - 1] -
+                         FEEDBACK_ZONE_HYSTERESIS_MV) {
+    --feedbackZone;
+  }
+}
+
 static int readFeedbackMillivolts() {
   const int rawMv = (int)analogReadMilliVolts(SERVO_FEEDBACK_PIN);
   if (!filterReady) {
@@ -70,6 +105,7 @@ static int readFeedbackMillivolts() {
     // Небольшой IIR-фильтр подавляет шум ADC, не добавляя заметной задержки.
     filteredVoltageMv = (filteredVoltageMv * 3 + rawMv) / 4;
   }
+  updateFeedbackZone(filteredVoltageMv);
   return filteredVoltageMv;
 }
 
@@ -351,6 +387,7 @@ void positionalServoGetStatus(PositionalServoStatus &status) {
   status.targetValid = false;
   status.feedbackValid = false;
   status.targetReached = false;
+  status.feedbackZone = PositionalServoFeedbackZone::Unknown;
 
   if (controllerMutex == nullptr) return;
 
@@ -363,6 +400,7 @@ void positionalServoGetStatus(PositionalServoStatus &status) {
         : PositionalServoTarget::Center)
       : PositionalServoTarget::Center;
   status.feedbackMv = currentMv;
+  status.feedbackZone = (PositionalServoFeedbackZone)feedbackZone;
   status.targetMv = targetVoltageMv;
   status.targetValid = targetValid;
   status.feedbackValid = feedbackIsValid(currentMv);
