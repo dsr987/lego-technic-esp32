@@ -368,6 +368,15 @@ void positionalServoSetSpeedPercent(int percent) {
   if (controllerMutex == nullptr) return;
   lockController();
   speedPercent = constrain(percent, 10, 100);
+
+  // При уменьшении ограничения немедленно снижаем уже применённую скорость.
+  // Это не позволяет старому PWM временно превышать новое значение настройки.
+  const int maxSpeed = max(1, (POSITION_MOTOR_SPEED * speedPercent + 50) / 100);
+  if (state == PositionalServoState::Moving && abs(appliedMotorSpeed) > maxSpeed) {
+    appliedMotorSpeed = movementDirection > 0 ? -maxSpeed : maxSpeed;
+    applyMotorC(appliedMotorSpeed);
+    updateDriverStandby();
+  }
   unlockController();
 }
 
