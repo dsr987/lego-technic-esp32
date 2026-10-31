@@ -1624,7 +1624,7 @@ function applyMotorModeUI(ch){
       var output=$('serial-log'); if(!output)return;
       serialLogAfter=Number(data.latest)||serialLogAfter;
       if(data.lines&&data.lines.length){if(output.textContent==='Журнал пока пуст.')output.textContent='';data.lines.forEach(function(line){output.textContent+='['+line.id+'] '+line.text+(line.text.endsWith('\n')?'':'\n');});output.scrollTop=output.scrollHeight;}
-      $('serial-status').textContent='Связь активна · буфер до 24 записей';
+      $('serial-status').textContent='Связь активна · буфер до 64 записей';
     }).catch(function(){$('serial-status').textContent='Нет связи с журналом ESP32';}).finally(function(){serialLogRequestActive=false;});
   }
   $('btn-monitor').onclick=function(){vibrateClick();serialMonitorActive=true;$('btn-tank').classList.remove('active');$('btn-classic').classList.remove('active');$('btn-monitor').classList.add('active');$('tank-panel').classList.add('hidden');$('classic-panel').classList.add('hidden');$('monitor-panel').classList.remove('hidden');pollSerialLog();};

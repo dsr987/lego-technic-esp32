@@ -17,4 +17,4 @@ void applyMotorF(int val);
 
 // Общее управление драйверами
 void updateDriverStandby();
-void stopAll();
+void stopAll(const char *reason);

@@ -26,6 +26,7 @@
  *
  * CHANGELOG_VERSION: 0.13.0
  * CHANGELOG_START
+ * - Увеличен буфер Web Serial Monitor до 64 записей; добавлена диагностика причин общей остановки моторов.
  * - Учтены изменения PR #117: добавлен Wi-Fi-монитор диагностических сообщений ESP32 и скорректирована калибровка напряжения батареи. ([PR #118](https://github.com/dsr987/lego-technic-esp32/pull/118))
  * - Восстановлена запись об исправлении направления PF-сервопривода на канале C и плавном наборе скорости.
  * CHANGELOG_END
@@ -219,7 +220,7 @@ void buildStatus(char *buf, size_t n) {
 
 // ---------- Диагностический журнал для Web GUI ----------
 namespace {
-constexpr uint8_t SERIAL_LOG_CAPACITY = 24;
+constexpr uint8_t SERIAL_LOG_CAPACITY = 64;
 constexpr size_t SERIAL_LOG_LINE_LENGTH = 128;
 struct SerialLogEntry { uint32_t id; char text[SERIAL_LOG_LINE_LENGTH]; };
 SerialLogEntry serialLogEntries[SERIAL_LOG_CAPACITY];
@@ -264,24 +265,45 @@ void serialLogPrintf(const char *format, ...) {
   appendSerialLog(line);
 }
 String serialLogReadJson(uint32_t afterId) {
-  SerialLogEntry snapshot[SERIAL_LOG_CAPACITY];
-  uint8_t count; uint32_t latestId;
+  uint8_t count;
+  uint32_t latestId;
   portENTER_CRITICAL(&serialLogMux);
-  count = serialLogCount; latestId = serialLogNextId - 1;
-  const uint8_t oldest = static_cast<uint8_t>((serialLogWriteIndex + SERIAL_LOG_CAPACITY - serialLogCount) % SERIAL_LOG_CAPACITY);
-  for (uint8_t i = 0; i < count; ++i) snapshot[i] = serialLogEntries[(oldest + i) % SERIAL_LOG_CAPACITY];
+  count = serialLogCount;
+  latestId = serialLogNextId - 1;
   portEXIT_CRITICAL(&serialLogMux);
-  String json; json.reserve(256 + static_cast<size_t>(count) * 220);
-  json = "{\"latest\":"; json += String(latestId); json += ",\"lines\":[";
+
+  String json;
+  json.reserve(256 + static_cast<size_t>(count) * 220);
+  json = "{\"latest\":";
+  json += String(latestId);
+  json += ",\"lines\":[";
+
+  // Копируем по одной записи: большой снимок кольцевого буфера не занимает стек
+  // задачи AsyncWebServer. Если запись успела перезаписаться во время чтения,
+  // пропускаем её по проверке id.
+  const uint32_t firstId = latestId >= count ? latestId - count + 1 : 1;
   bool first = true;
-  for (uint8_t i = 0; i < count; ++i) {
-    if (snapshot[i].id <= afterId) continue;
+  for (uint32_t id = firstId; id <= latestId; ++id) {
+    if (id <= afterId) continue;
+
+    SerialLogEntry entry;
+    const uint8_t index = static_cast<uint8_t>((id - 1) % SERIAL_LOG_CAPACITY);
+    portENTER_CRITICAL(&serialLogMux);
+    entry = serialLogEntries[index];
+    portEXIT_CRITICAL(&serialLogMux);
+    if (entry.id != id) continue;
+
     if (!first) json += ',';
     first = false;
-    json += "{\"id\":"; json += String(snapshot[i].id); json += ",\"text\":";
-    appendJsonString(json, snapshot[i].text); json += '}';
+    json += "{\"id\":";
+    json += String(entry.id);
+    json += ",\"text\":";
+    appendJsonString(json, entry.text);
+    json += '}';
   }
-  json += "]}"; return json;
+
+  json += "]}";
+  return json;
 }
 
 // ---------- Инициализация ----------
@@ -404,7 +426,7 @@ void setup() {
   server.begin();
 
   // 10. Приводим моторы и руль в начальное состояние.
-  stopAll();
+  stopAll("startup");
 
   // Первичное обновление данных мониторинга.
   updateStatus();
@@ -438,7 +460,7 @@ void loop() {
         engineSimOn;
     if (outputsActive &&
         (unsigned long)(millis() - lastCmdMillis) > CMD_TIMEOUT_MS) {
-      stopAll();
+      stopAll("watchdog timeout");
     }
   }
 

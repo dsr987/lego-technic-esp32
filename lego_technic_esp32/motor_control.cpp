@@ -145,7 +145,8 @@ void updateDriverStandby() {
 
 // ---------- Аварийная остановка ----------
 
-void stopAll() {
+void stopAll(const char *reason) {
+  serialLogPrintf("[FW][STOP] reason=%s\n", reason ? reason : "unspecified");
   // Отменяем автоматическое позиционирование C перед общей остановкой.
   positionalServoCancel();
 
