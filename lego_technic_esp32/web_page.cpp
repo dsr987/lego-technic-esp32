@@ -527,7 +527,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="brand-info" id="brand-info">
         <div class="brand-title">LEGO TECHNIC ESP32</div>
         <div class="brand-sub"><span class="dot"></span><span id="ip-addr">192.168.4.1</span></div>
-        <div class="brand-ver">0.11.2 · beta</div>
+        <div class="brand-ver">0.11.3 · beta</div>
       </div>
       <div class="brand-monitor hidden" id="brand-monitor" aria-live="polite">
         <code id="telemetry">{"ch":"—","val":0}</code>
