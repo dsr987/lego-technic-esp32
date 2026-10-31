@@ -1366,6 +1366,9 @@ function applyMotorModeUI(ch){
     button.addEventListener('click',function(){
       if(motorModes.C!==2 || !ws || ws.readyState!==WebSocket.OPEN) return;
       txWS({posC:button.getAttribute('data-position-target')});
+      document.querySelectorAll('[data-position-target]').forEach(function(item){item.classList.remove('position-reached');});
+      var positionStatus=$('position-servo-status');
+      if(positionStatus){positionStatus.textContent='Команда отправлена';positionStatus.classList.remove('error');}
       vibrateClick();
     });
   });
