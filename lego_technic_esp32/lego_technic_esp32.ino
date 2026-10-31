@@ -222,7 +222,7 @@ void buildStatus(char *buf, size_t n) {
 // ---------- Диагностический журнал для Web GUI ----------
 namespace {
 constexpr uint8_t SERIAL_LOG_CAPACITY = 24;
-constexpr size_t SERIAL_LOG_LINE_LENGTH = 192;
+constexpr size_t SERIAL_LOG_LINE_LENGTH = 128;
 struct SerialLogEntry { uint32_t id; char text[SERIAL_LOG_LINE_LENGTH]; };
 SerialLogEntry serialLogEntries[SERIAL_LOG_CAPACITY];
 uint8_t serialLogWriteIndex = 0, serialLogCount = 0;
@@ -244,9 +244,9 @@ void appendJsonString(String &json, const char *value) {
     switch (*p) {
       case '"': json += "\\\""; break;
       case '\\': json += "\\\\\\\\"; break;
-      case '\\n': json += "\\n"; break;
-      case '\\r': json += "\\r"; break;
-      case '\\t': json += "\\t"; break;
+      case '\n': json += "\\n"; break;
+      case '\r': json += "\\r"; break;
+      case '\t': json += "\\t"; break;
       default: if (*p >= 0x20) json += static_cast<char>(*p); break;
     }
   }
