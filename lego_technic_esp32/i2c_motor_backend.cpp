@@ -78,7 +78,7 @@ bool writeRegister(uint8_t reg, uint8_t value) {
 
   if (regWritten != 1 || valueWritten != 1 || status != 0) {
     Serial.printf("[FW][PCA9685][ERROR] I2C write reg=0x%02X value=0x%02X regBytes=%u valueBytes=%u endStatus=%u\n",
-                  reg, value, regWritten, valueWritten, status);
+                  reg, value, static_cast<unsigned>(regWritten), static_cast<unsigned>(valueWritten), static_cast<unsigned>(status));
     backendReady = false;
     return false;
   }
@@ -98,7 +98,7 @@ bool readRegister(uint8_t reg, uint8_t &value) {
   const uint8_t txStatus = motorWire->endTransmission(false);
   if (regWritten != 1 || txStatus != 0) {
     Serial.printf("[FW][PCA9685][ERROR] I2C register select reg=0x%02X bytes=%u endStatus=%u\n",
-                  reg, regWritten, txStatus);
+                  reg, static_cast<unsigned>(regWritten), static_cast<unsigned>(txStatus));
     backendReady = false;
     return false;
   }
@@ -106,7 +106,7 @@ bool readRegister(uint8_t reg, uint8_t &value) {
   const uint8_t received = motorWire->requestFrom(I2C_MOTOR_WING_ADDRESS, static_cast<uint8_t>(1));
   if (received != 1 || motorWire->available() < 1) {
     Serial.printf("[FW][PCA9685][ERROR] I2C read reg=0x%02X received=%u available=%d\n",
-                  reg, received, motorWire->available());
+                  reg, static_cast<unsigned>(received), motorWire->available());
     backendReady = false;
     return false;
   }
@@ -136,7 +136,7 @@ bool writePwm(uint8_t channel, uint16_t on, uint16_t off) {
 
   if (written != sizeof(buffer) || status != 0) {
     Serial.printf("[FW][PCA9685][ERROR] PWM write channel=%u bytes=%u expected=%u endStatus=%u\n",
-                  channel, static_cast<unsigned>(written), static_cast<unsigned>(sizeof(buffer)), status);
+                  static_cast<unsigned>(channel), static_cast<unsigned>(written), static_cast<unsigned>(sizeof(buffer)), static_cast<unsigned>(status));
     backendReady = false;
     return false;
   }
@@ -170,20 +170,20 @@ bool setMotorDirection(uint8_t index, int8_t direction) {
 
 bool initializePca9685() {
   Serial.printf("[FW][PCA9685] Initializing at I2C address 0x%02X, target PWM=%u Hz\n",
-                I2C_MOTOR_WING_ADDRESS, MOTOR_PWM_FREQUENCY_HZ);
+                static_cast<unsigned>(I2C_MOTOR_WING_ADDRESS), static_cast<unsigned>(MOTOR_PWM_FREQUENCY_HZ));
   uint8_t oldMode = 0;
   if (!readRegister(PCA9685_MODE1, oldMode)) {
     Serial.println("[FW][PCA9685][ERROR] Failed to read MODE1; initialization aborted");
     return false;
   }
-  Serial.printf("[FW][PCA9685] MODE1 before init: 0x%02X\n", oldMode);
+  Serial.printf("[FW][PCA9685] MODE1 before init: 0x%02X\n", static_cast<unsigned>(oldMode));
 
   const uint8_t sleepMode = static_cast<uint8_t>((oldMode & 0x7F) | 0x10);
   const float adjustedFrequency = MOTOR_PWM_FREQUENCY_HZ * 0.9f;
   const float prescaleValue =
       25000000.0f / 4096.0f / adjustedFrequency - 1.0f;
   const uint8_t prescale = static_cast<uint8_t>(prescaleValue + 0.5f);
-  Serial.printf("[FW][PCA9685] Calculated PRESCALE: %u\n", prescale);
+  Serial.printf("[FW][PCA9685] Calculated PRESCALE: %u\n", static_cast<unsigned>(prescale));
 
   if (!writeRegister(PCA9685_MODE1, sleepMode) ||
       !writeRegister(PCA9685_PRESCALE, prescale) ||
@@ -274,7 +274,7 @@ bool i2cMotorBackendSetMotor(I2CMotorChannel channel, int speedPercent) {
   if (!backendReady || index >= MOTOR_COUNT) {
     if (!rejectedCommandLogged) {
       Serial.printf("[FW][PCA9685][WARN] Motor command rejected: channel=%u backendReady=%s\n",
-                    index, backendReady ? "true" : "false");
+                    static_cast<unsigned>(index), backendReady ? "true" : "false");
       rejectedCommandLogged = true;
     }
     return false;
@@ -315,7 +315,7 @@ bool i2cMotorBackendSetMotor(I2CMotorChannel channel, int speedPercent) {
   lastDirection[index] = direction;
   if (lastReportedSpeed[index] != speedPercent) {
     Serial.printf("[FW][PCA9685][CMD] %s speed=%d%% direction=%s pwm=%u\n",
-                  motorName(index), speedPercent, direction > 0 ? "forward" : "reverse", pwm);
+                  motorName(index), speedPercent, direction > 0 ? "forward" : "reverse", static_cast<unsigned>(pwm));
     lastReportedSpeed[index] = speedPercent;
   }
   return true;
