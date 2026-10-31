@@ -2,7 +2,7 @@
  * LEGO Technic ESP32
  * Main Arduino sketch: filename and containing directory must match.
  * Shared module implementations remain in their dedicated .cpp/.h files.
- * Версия разработки: 0.13.1
+ * Версия разработки: 0.13.2
  *
  * Текущий выпуск: калибровка измерения напряжения батареи и управление PF-сервоприводом.
  * В проекте также доступны обновлённый Web GUI и OLED Update 2.0.
@@ -25,9 +25,9 @@
  * - Рабочая панель OLED показывает режим, процент заряда и напряжение батареи, количество подключённых клиентов Wi-Fi и предупреждение о низком заряде.
  * - Если инициализация OLED не удалась, прошивка продолжает запуск без попыток выводить данные на недоступный дисплей.
  *
- * CHANGELOG_VERSION: 0.13.1
+ * CHANGELOG_VERSION: 0.13.2
  * CHANGELOG_START
- * - Увеличен буфер Web Serial Monitor до 64 записей; добавлена диагностика причин общей остановки моторов. ([PR #120](https://github.com/dsr987/lego-technic-esp32/pull/120))\n * - Управление FeatherWing переведено на официальную Adafruit Motor Shield V2 Library.
+ * - Управление моторами Adafruit Motor FeatherWing переведено на официальную библиотеку Adafruit Motor Shield V2. ([PR #122](https://github.com/dsr987/lego-technic-esp32/pull/122))
  * CHANGELOG_END
  *
  * тестовый запуск сборки
