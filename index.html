@@ -234,6 +234,19 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 #classic-panel.motor-count-4 #field-D .slim-wrap{height:var(--sh)!important;min-height:var(--sh)!important;max-height:var(--sh)!important;flex:0 0 var(--sh);margin:0;box-sizing:border-box}
 #classic-panel.motor-count-4 #field-B .slim-wrap.hidden{display:flex!important;opacity:0}
 #classic-panel.motor-count-4 #field-B .eng-label{background:rgba(245,158,11,.18);border-color:#f59e0b;color:#fbbf24}
+/* В режимах 5/6 B использует тот же центрирующий контейнер, что и в режиме 4. */
+#classic-panel.motor-count-5 #field-B .slim-container,
+#classic-panel.motor-count-6 #field-B .slim-container{width:100%;height:var(--sh)!important;min-height:var(--sh)!important;max-height:var(--sh)!important;flex:0 0 var(--sh);margin-top:0!important;box-sizing:border-box}
+#classic-panel.motor-count-5 #field-B .slim-container>.slim-wrap,
+#classic-panel.motor-count-5 #field-B #eng-label,
+#classic-panel.motor-count-6 #field-B .slim-container>.slim-wrap,
+#classic-panel.motor-count-6 #field-B #eng-label{top:0;bottom:0;height:100%!important;min-height:0;max-height:100%;box-sizing:border-box}
+#classic-panel.motor-count-5 #field-B .slim-wrap.hidden,
+#classic-panel.motor-count-6 #field-B .slim-wrap.hidden{display:flex!important;opacity:0}
+#classic-panel.motor-count-5 #field-B .slim-wrap,
+#classic-panel.motor-count-6 #field-B .slim-wrap{width:100%;height:var(--sh)!important;min-height:var(--sh)!important;max-height:var(--sh)!important;padding:0;overflow:hidden;box-sizing:border-box}
+#classic-panel.motor-count-5 #field-B .slim-wrap input,
+#classic-panel.motor-count-6 #field-B .slim-wrap input{width:calc(var(--sh) - 12px)!important;height:var(--T)!important;max-width:calc(var(--sh) - 12px);transform:rotate(-90deg);transform-origin:center;flex:none}
 /* В четырёхмоторном режиме не меняем сетку классической панели:
    газ A, машина и правая колонка остаются на тех же координатах. */
 #classic-panel.motor-count-4 .side-stack{flex:1}
