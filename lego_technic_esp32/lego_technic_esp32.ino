@@ -192,7 +192,7 @@ void buildStatus(char *buf, size_t n) {
     "\"cfgA\":%d,\"cfgB\":%d,\"cfgC\":%d,\"cfgD\":%d,\"cfgE\":%d,\"cfgF\":%d,"
     "\"tr\":%d,\"md\":%d,"
     "\"pfstate\":%d,\"pfmv\":%d,\"pftarget\":%d,"
-    "\"pfhas\":%d,\"pfvalid\":%d,\"pfdone\":%d,\"pfs\":%d}",
+    "\"pfhas\":%d,\"pfvalid\":%d,\"pfdone\":%d,\"pfs\":%d,\"pfzone\":%d}",
     battV,
     battPct,
     wifiRssi,
@@ -227,7 +227,8 @@ void buildStatus(char *buf, size_t n) {
     positionalStatus.targetValid ? 1 : 0,
     positionalStatus.feedbackValid ? 1 : 0,
     positionalStatus.targetReached ? 1 : 0,
-    positionalServoGetSpeedPercent()
+    positionalServoGetSpeedPercent(),
+    (int)positionalStatus.feedbackZone
   );
 }
 
