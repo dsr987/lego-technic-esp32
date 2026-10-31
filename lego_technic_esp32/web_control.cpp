@@ -44,6 +44,7 @@ extern bool engineSimOn;
 
 extern int steerCenterUs;
 extern int steerMaxAngleDeg;
+extern int pfServoSpeedPercent;
 
 // ---------- Функции из других модулей ----------
 
@@ -108,6 +109,15 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
       if (!doc["cfgF"].is<int>() || doc["cfgF"].as<int>() < 0 || doc["cfgF"].as<int>() > 1 || motorFVal != 0) return;
       motorModeF = (uint8_t)doc["cfgF"].as<int>(); saveMotorModeF(motorModeF);
     }
+    return;
+  }
+
+  // Настройка максимальной скорости PF Servo. Изменение действует и во время движения.
+  if (doc.containsKey("pfSpeed")) {
+    if (doc.size() != 1 || !doc["pfSpeed"].is<int>()) return;
+    pfServoSpeedPercent = constrain(doc["pfSpeed"].as<int>(), 10, 100);
+    positionalServoSetSpeedPercent(pfServoSpeedPercent);
+    savePfServoSpeedPercent(pfServoSpeedPercent);
     return;
   }
 
