@@ -26,7 +26,7 @@
  *
  * CHANGELOG_VERSION: 0.13.1
  * CHANGELOG_START
- * - Увеличен буфер Web Serial Monitor до 64 записей; добавлена диагностика причин общей остановки моторов. ([PR #120](https://github.com/dsr987/lego-technic-esp32/pull/120))
+ * - Увеличен буфер Web Serial Monitor до 64 записей; добавлена диагностика причин общей остановки моторов. ([PR #120](https://github.com/dsr987/lego-technic-esp32/pull/120))\n * - Управление FeatherWing переведено на официальную Adafruit Motor Shield V2 Library.
  * CHANGELOG_END
  *
  * тестовый запуск сборки
