@@ -248,7 +248,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 #classic-panel.motor-count-5 #field-B .slim-wrap,
 #classic-panel.motor-count-6 #field-B .slim-wrap{width:100%;height:var(--sh)!important;min-height:var(--sh)!important;max-height:var(--sh)!important;padding:0;overflow:hidden;box-sizing:border-box}
 #classic-panel.motor-count-5 #field-B .slim-wrap input,
-#classic-panel.motor-count-6 #field-B .slim-wrap input{width:calc(var(--sh) - 12px)!important;height:var(--T)!important;max-width:calc(var(--sh) - 12px);transform:rotate(-90deg) scale(.72,.765);transform-origin:center;flex:none}
+#classic-panel.motor-count-6 #field-B .slim-wrap input{width:calc(var(--sh) - 12px)!important;height:var(--T)!important;max-width:calc(var(--sh) - 12px);transform:rotate(-90deg);transform-origin:center;flex:none}
 /* В четырёхмоторном режиме не меняем сетку классической панели:
    газ A, машина и правая колонка остаются на тех же координатах. */
 #classic-panel.motor-count-4 .side-stack{flex:1}
