@@ -171,6 +171,9 @@ void applyLeds() {
 
 // Статус GUI: батарея, Wi-Fi, режим, количество клиентов, конфигурация и ресурсы ESP32.
 void buildStatus(char *buf, size_t n) {
+  PositionalServoStatus positionalStatus;
+  positionalServoGetStatus(positionalStatus);
+
   const int trimOffsetUs = steerCenterUs - 1500;
   const int steerTrimDegrees = trimOffsetUs >= 0
       ? (trimOffsetUs * 180 + 500) / 1000
@@ -185,7 +188,9 @@ void buildStatus(char *buf, size_t n) {
     "\"ra\":%d,\"rb\":%d,\"rc\":%d,\"rd\":%d,\"re\":%d,\"rf\":%d,"
     "\"lf\":%d,\"lr\":%d,\"es\":%d,"
     "\"cfgA\":%d,\"cfgB\":%d,\"cfgC\":%d,\"cfgD\":%d,\"cfgE\":%d,\"cfgF\":%d,"
-    "\"tr\":%d,\"md\":%d}",
+    "\"tr\":%d,\"md\":%d,"
+    "\"pfstate\":%d,\"pfmv\":%d,\"pftarget\":%d,"
+    "\"pfhas\":%d,\"pfvalid\":%d,\"pfdone\":%d}",
     battV,
     battPct,
     wifiRssi,
@@ -213,7 +218,13 @@ void buildStatus(char *buf, size_t n) {
     (int)motorModeE,
     (int)motorModeF,
     steerTrimDegrees,
-    steerMaxAngleDeg
+    steerMaxAngleDeg,
+    (int)positionalStatus.state,
+    positionalStatus.feedbackMv,
+    (int)positionalStatus.target,
+    positionalStatus.targetValid ? 1 : 0,
+    positionalStatus.feedbackValid ? 1 : 0,
+    positionalStatus.targetReached ? 1 : 0
   );
 }
 
