@@ -8,6 +8,7 @@
 #include "steering_control.h"
 #include "preferences_manager.h"
 #include "positional_servo.h"
+#include "display_control.h"
 
 // ---------- Состояние, объявленное в lego_technic_esp32.ino ----------
 
@@ -74,6 +75,15 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     lastCmdMillis = millis();
 
     if (client) client->text("{\"reset\":1}");
+    return;
+  }
+
+  // Управление OLED действует только до перезагрузки и не записывается в NVS.
+  if (doc.containsKey("oled")) {
+    if (doc.size() != 1 || !doc["oled"].is<int>()) return;
+    const int requestedState = doc["oled"].as<int>();
+    if (requestedState != 0 && requestedState != 1) return;
+    setOledDisplayEnabled(requestedState == 1);
     return;
   }
 
