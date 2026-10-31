@@ -1,5 +1,9 @@
 # История версий
 
+## 0.13.3 — 2026-10-31
+### Изменено
+- Добавлено отображение фактического состояния и достигнутой позиции PF-сервопривода. ([PR #124](https://github.com/dsr987/lego-technic-esp32/pull/124))
+
 ## 0.13.2 — 2026-10-31
 ### Изменено
 - Управление моторами Adafruit Motor FeatherWing переведено на официальную библиотеку Adafruit Motor Shield V2. ([PR #122](https://github.com/dsr987/lego-technic-esp32/pull/122))
