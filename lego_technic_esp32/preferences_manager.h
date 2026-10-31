@@ -16,6 +16,7 @@ void saveMotorModeF(uint8_t value);
 // Настройки рулевого управления
 void saveSteeringCenter(int value);
 void saveSteeringMaxAngle(int value);
+void savePfServoSpeedPercent(int value);
 
 // Реверс моторов
 void saveReverseA(bool value);
