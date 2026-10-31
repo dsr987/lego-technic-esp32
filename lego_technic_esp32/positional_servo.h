@@ -31,4 +31,6 @@ bool positionalServoRequest(PositionalServoTarget target);
 void positionalServoUpdate();
 void positionalServoCancel();
 bool positionalServoIsMoving();
+void positionalServoSetSpeedPercent(int percent);
+int positionalServoGetSpeedPercent();
 void positionalServoGetStatus(PositionalServoStatus &status);
