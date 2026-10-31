@@ -832,6 +832,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     </div>
 
     <div class="block">
+      <h3>Экран</h3>
+      <div class="line"><span>OLED-дисплей</span><span class="grow"></span><button class="hold-btn active" id="oled-toggle-btn" type="button" aria-pressed="true">ВКЛ</button></div>
+      <div style="font-size:10px;line-height:1.45;color:var(--muted)">По умолчанию включён. Состояние действует до перезагрузки и не сохраняется в памяти устройства.</div>
+    </div>
+
+    <div class="block">
       <h3>Классический режим</h3>
       <div class="line" style="flex-direction:column;align-items:stretch;gap:8px">
         <label for="motor-count-select" style="font-size:12px;color:var(--text)">Количество приводов</label>
@@ -1112,6 +1118,14 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 
   var mode=0, rev={A:0,B:0,C:0,D:0,E:0,F:0}, led={F:0,R:0};
   var motorModes={A:0,B:0,C:2,D:0,E:0,F:0}, heldMotorButtons={}, motorRampTimers={};
+  var oledEnabled=true;
+  function updateOledButton(){
+    var button=$('oled-toggle-btn');
+    if(!button) return;
+    button.textContent=oledEnabled?'ВКЛ':'ВЫКЛ';
+    button.classList.toggle('active',oledEnabled);
+    button.setAttribute('aria-pressed',String(oledEnabled));
+  }
   var eng=false, auxMode=false, trim=0;
   var drive=0, auxB=0, auxD=0, steer=0;
   var motorCount = Math.min(6, +(localStorage.getItem("lcc_motor_count") || 3));
@@ -1337,6 +1351,7 @@ function applyMotorModeUI(ch){
            if(typeof d.cfgA!=='undefined'){motorModes.A=Number(d.cfgA)||0;applyMotorModeUI('A');}
            if(typeof d.cfgB!=='undefined'){motorModes.B=Number(d.cfgB)||0;applyMotorModeUI('B');}
            motorModes.C=2; applyMotorModeUI('C');
+          if(typeof d.oled!=='undefined'){oledEnabled=Number(d.oled)===1;updateOledButton();}
            if(typeof d.cfgD!=='undefined'){motorModes.D=Number(d.cfgD)||0;applyMotorModeUI('D');}
            if(typeof d.cfgE!=='undefined'){motorModes.E=Number(d.cfgE)||0;applyMotorModeUI('E');}
            if(typeof d.cfgF!=='undefined'){motorModes.F=Number(d.cfgF)||0;applyMotorModeUI('F');}
@@ -1940,6 +1955,17 @@ function applyMotorModeUI(ch){
       txWS(obj);
     });
   });
+
+  $('oled-toggle-btn').onclick=function(){
+    if(!ws || ws.readyState!==WebSocket.OPEN){
+      addDiagnosticEvent('Нет связи с ESP32: состояние экрана не изменено', 'warning');
+      return;
+    }
+    oledEnabled=!oledEnabled;
+    updateOledButton();
+    txWS({oled:oledEnabled?1:0});
+  };
+  updateOledButton();
 
   document.querySelectorAll('.hold-btn').forEach(function(b){
     b.addEventListener('click', function(){
