@@ -916,6 +916,14 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       </div>
     </div>
     <div class="block">
+      <h3>Настройки PF Servo</h3>
+      <div class="line">
+        <span>Макс. скорость</span><span class="grow"></span>
+        <input class="num" id="pf-speed-input" type="number" min="10" max="100" step="1" value="50">
+        <span>%</span>
+      </div>
+    </div>
+    <div class="block">
       <h3>Реверс моторов</h3>
       <div class="line"><span>Канал A</span><span class="grow"></span><button class="rev-btn" data-ch="A" type="button">⇄</button></div>
       <div class="line"><span>Канал B</span><span class="grow"></span><button class="rev-btn" data-ch="B" type="button">⇄</button></div>
@@ -1426,8 +1434,9 @@ function applyMotorModeUI(ch){
           if(typeof d.lr !== 'undefined') { led.R = !!d.lr; updateLedUI('R'); }
           if(typeof d.es !== 'undefined') { eng = !!d.es; updateEngUI(); applyEngGate(); }
           if(typeof d.tr !== 'undefined') { trim = d.tr; $('val-trim').textContent = trim+'°'; }
-          // Не перезаписываем поле во время ввода: статус приходит каждую секунду.
+          // Не перезаписываем числовые поля, пока пользователь их редактирует.
           if(typeof d.md !== 'undefined' && document.activeElement !== $('maxdeg-input')) { $('maxdeg-input').value = d.md; }
+          if(typeof d.pfs !== 'undefined' && document.activeElement !== $('pf-speed-input')) { $('pf-speed-input').value = d.pfs; }
         }
       }catch(err){}
     };
@@ -2089,6 +2098,13 @@ function applyMotorModeUI(ch){
   $('trimP').onclick=function(){ vibrateClick(); trim=Math.min(45,trim+1); $('val-trim').textContent=trim+'°'; txWS({trim:trim}); };
   $('maxdeg-input').onchange=function(){ vibrateClick(); var deg=Math.max(5,Math.min(135,Number(this.value)||45)); this.value=deg; txWS({maxdeg:deg}); };
   $('maxdeg-input').onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); this.blur(); } };
+  $('pf-speed-input').onchange=function(){
+    vibrateClick();
+    var percent=Math.max(10,Math.min(100,Math.round(Number(this.value)||50)));
+    this.value=percent;
+    txWS({pfSpeed:percent});
+  };
+  $('pf-speed-input').onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); this.blur(); } };
   var resetPending = false;
   $('reset-settings-btn').onclick=function(){
     if(!window.confirm('Сбросить все настройки устройства и интерфейса? Действие нельзя отменить.')) return;
