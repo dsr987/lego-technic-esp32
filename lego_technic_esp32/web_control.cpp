@@ -88,10 +88,6 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     } else if (doc.containsKey("cfgB")) {
       if (!doc["cfgB"].is<int>() || doc["cfgB"].as<int>() < 0 || doc["cfgB"].as<int>() > 1 || motorBVal != 0) return;
       motorModeB = (uint8_t)doc["cfgB"].as<int>(); saveMotorModeB(motorModeB);
-    } else if (doc.containsKey("cfgC")) {
-      if (!doc["cfgC"].is<int>() || doc["cfgC"].as<int>() < 0 || doc["cfgC"].as<int>() > 2 || motorCVal != 0) return;
-      positionalServoCancel();
-      motorModeC = (uint8_t)doc["cfgC"].as<int>(); saveMotorModeC(motorModeC);
     } else if (doc.containsKey("cfgD")) {
       if (!doc["cfgD"].is<int>() || doc["cfgD"].as<int>() < 0 || doc["cfgD"].as<int>() > 1 || motorDVal != 0) return;
       motorModeD = (uint8_t)doc["cfgD"].as<int>(); saveMotorModeD(motorModeD);
