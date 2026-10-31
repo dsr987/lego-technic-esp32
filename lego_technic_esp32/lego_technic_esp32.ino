@@ -51,7 +51,9 @@
 #include "battery_monitor.h"
 #include "display_control.h"
 #include "steering_control.h"
+#include "positional_servo.h"
 #include "preferences_manager.h"
+#include "i2c_motor_backend.h"
 
 // ============================================================
 // НАСТРОЙКИ ДОСТУПА — МЕНЯТЬ ЗДЕСЬ
@@ -74,9 +76,9 @@ constexpr char OTA_PASSWORD[] = "admin";
 
 // ---------- Периферия ----------
 
-#define SERVO_PIN 27
-#define OLED_SDA  25
-#define OLED_SCL  26
+// SERVO_PIN, I2C_SDA и I2C_SCL определены в hardware_config.h.
+#define OLED_SDA  I2C_SDA
+#define OLED_SCL  I2C_SCL
 
 // ---------- Режим и состояние системы ----------
 
@@ -111,6 +113,8 @@ int motorAVal = 0;
 int motorBVal = 0;
 int motorCVal = 0;
 int motorDVal = 0;
+int motorEVal = 0;
+int motorFVal = 0;
 int servoVal  = 0;
 
 // ---------- Настройки реверса ----------
@@ -119,18 +123,21 @@ bool reverseA = false;
 bool reverseB = false;
 bool reverseC = false;
 bool reverseD = false;
+bool reverseE = false;
+bool reverseF = false;
 
 // Режимы управления каналами: 0 — слайдер, 1 — кнопки, 2 — позиционный (только C).
 uint8_t motorModeA = 0;
 uint8_t motorModeB = 0;
 uint8_t motorModeC = 0;
 uint8_t motorModeD = 0;
+uint8_t motorModeE = 0;
+uint8_t motorModeF = 0;
 
 // ---------- Состояние света ----------
 
 // Состояния сохранены для совместимости с интерфейсом.
-// GPIO для фар пока не назначены: GPIO32 и GPIO33
-// используются вторым TB6612FNG.
+// GPIO для фар пока не назначены; GPIO32 и GPIO33 свободны в Hardware pre2.0.
 bool ledFrontOn = false;
 bool ledRearOn  = false;
 
@@ -148,9 +155,7 @@ void applyLeds() {
   /*
    * Временно пустая функция.
    *
-   * GPIO32 и GPIO33 используются вторым TB6612FNG:
-   * GPIO32 — TB2_BIN1
-   * GPIO33 — TB2_BIN2
+   * GPIO32 и GPIO33 пока не назначены.
    *
    * После выбора отдельных GPIO для фар здесь
    * будет реализовано управление светом.
@@ -172,9 +177,9 @@ void buildStatus(char *buf, size_t n) {
     "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,"
     "\"m\":%d,\"c\":%d,\"sta\":%d,"
     "\"up\":%lu,\"heap\":%lu,\"minh\":%lu,\"lb\":%d,"
-    "\"ra\":%d,\"rb\":%d,\"rc\":%d,\"rd\":%d,"
+    "\"ra\":%d,\"rb\":%d,\"rc\":%d,\"rd\":%d,\"re\":%d,\"rf\":%d,"
     "\"lf\":%d,\"lr\":%d,\"es\":%d,"
-    "\"cfgA\":%d,\"cfgB\":%d,\"cfgC\":%d,\"cfgD\":%d,"
+    "\"cfgA\":%d,\"cfgB\":%d,\"cfgC\":%d,\"cfgD\":%d,\"cfgE\":%d,\"cfgF\":%d,"
     "\"tr\":%d,\"md\":%d}",
     battV,
     battPct,
@@ -190,6 +195,8 @@ void buildStatus(char *buf, size_t n) {
     reverseB ? 1 : 0,
     reverseC ? 1 : 0,
     reverseD ? 1 : 0,
+    reverseE ? 1 : 0,
+    reverseF ? 1 : 0,
     ledFrontOn ? 1 : 0,
     ledRearOn ? 1 : 0,
     engineSimOn ? 1 : 0,
@@ -197,6 +204,8 @@ void buildStatus(char *buf, size_t n) {
     (int)motorModeB,
     (int)motorModeC,
     (int)motorModeD,
+    (int)motorModeE,
+    (int)motorModeF,
     steerTrimDegrees,
     steerMaxAngleDeg
   );
@@ -208,61 +217,45 @@ void setup() {
   // Аппаратная Serial-отладка не используется.
   // Диагностика доступна через Wi-Fi и веб-интерфейс.
 
-  // 1. Безопасное состояние драйверов.
-  // Оба TB6612FNG выключены до завершения настройки.
+  // 1. Безопасное состояние единственного прямого TB6612FNG (каналы C/D).
   pinMode(TB_STBY, OUTPUT);
   digitalWrite(TB_STBY, LOW);
 
-  // 2. Настройка входов направления четырёх моторов.
   pinMode(TB_AIN1, OUTPUT);
   pinMode(TB_AIN2, OUTPUT);
-
   pinMode(TB_BIN1, OUTPUT);
   pinMode(TB_BIN2, OUTPUT);
 
-  pinMode(TB2_AIN1, OUTPUT);
-  pinMode(TB2_AIN2, OUTPUT);
-
-  pinMode(TB2_BIN1, OUTPUT);
-  pinMode(TB2_BIN2, OUTPUT);
-
-  // Устанавливаем безопасное начальное состояние входов.
   digitalWrite(TB_AIN1, LOW);
   digitalWrite(TB_AIN2, LOW);
-
   digitalWrite(TB_BIN1, LOW);
   digitalWrite(TB_BIN2, LOW);
 
-  digitalWrite(TB2_AIN1, LOW);
-  digitalWrite(TB2_AIN2, LOW);
-
-  digitalWrite(TB2_BIN1, LOW);
-  digitalWrite(TB2_BIN2, LOW);
-
-  // 3. Настройка четырёх PWM-каналов.
-  // Частота 5 кГц, разрешение 8 бит.
-  // LEDC-каналы и GPIO определены в hardware_config.h.
-
-  ledcSetup(LEDC_CH_A, 5000, 8);
-  ledcAttachPin(TB_PWMA, LEDC_CH_A);
-
-  ledcSetup(LEDC_CH_B, 5000, 8);
-  ledcAttachPin(TB_PWMB, LEDC_CH_B);
-
+  // Каналы C/D используют прямой PWM ESP32. A/B/E/F идут через PCA9685.
   ledcSetup(LEDC_CH_C, 5000, 8);
-  ledcAttachPin(TB2_PWMA, LEDC_CH_C);
-
+  ledcAttachPin(TB_PWMA, LEDC_CH_C);
   ledcSetup(LEDC_CH_D, 5000, 8);
-  ledcAttachPin(TB2_PWMB, LEDC_CH_D);
+  ledcAttachPin(TB_PWMB, LEDC_CH_D);
 
   // 4. Инициализация рулевого сервопривода.
   steerServo.setPeriodHertz(50);
   // Positional servo: allow the full calibrated pulse range for up to 270-degree steering.
   steerServo.attach(SERVO_PIN, 500, 2500);
 
-  // 5. Инициализация OLED-дисплея.
+  // 5. Запуск общей I2C-шины для OLED и PCA9685 FeatherWing.
   Wire.begin(OLED_SDA, OLED_SCL);
-  oledAvailable = display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  Wire.setTimeOut(50);
+
+  // Инициализируем PCA9685 до OLED, чтобы создать общую блокировку Wire.
+  // Отсутствующий FeatherWing не должен останавливать запуск Wi-Fi/OLED.
+  const bool featherWingReady = i2cMotorBackendBegin(Wire);
+  (void)featherWingReady;
+
+  const bool displayLockAcquired = i2cMotorBackendLockSharedI2c(1000);
+  oledAvailable = displayLockAcquired && display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+  if (displayLockAcquired) {
+    i2cMotorBackendUnlockSharedI2c();
+  }
 
   if (oledAvailable) {
     // Фирменная заставка появляется только после успешного определения OLED.
@@ -277,6 +270,9 @@ void setup() {
   // prefs.begin() обязательно выполняется до loadPreferences().
   prefs.begin("cfg", false);
   loadPreferences();
+
+  // Аналоговая обратная связь позиционного мотора C (GPIO35).
+  positionalServoBegin();
 
   // Свет пока не управляется физически, функция оставлена
   // для совместимости с веб-командами.
@@ -340,6 +336,9 @@ void setup() {
 
 void loop() {
 
+  // Автопозиционирование C выполняется независимо от частоты WebSocket heartbeat.
+  positionalServoUpdate();
+
   // Единственная защита управления: остановить выходы, если пакет с командами
   // и heartbeat не поступал более 500 мс. Повторная проверка исключает гонку
   // с асинхронным WebSocket-обработчиком, который мог обновить метку между чтениями.
@@ -348,8 +347,10 @@ void loop() {
   if ((unsigned long)(watchdogNow - lastCommandAt) > CMD_TIMEOUT_MS) {
     const bool outputsActive = motorAVal != 0 ||
         motorBVal != 0 ||
-        motorCVal != 0 ||
+        (motorCVal != 0 && !positionalServoIsMoving()) ||
         motorDVal != 0 ||
+        motorEVal != 0 ||
+        motorFVal != 0 ||
         servoVal != 0 ||
         engineSimOn;
     if (outputsActive &&

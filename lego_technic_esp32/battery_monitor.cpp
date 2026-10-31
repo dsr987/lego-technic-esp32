@@ -6,8 +6,8 @@
 #include "motor_control.h"
 #include "battery_monitor.h"
 
-// GPIO34 — вход измерения напряжения батареи
-#define BATT_PIN 34
+// GPIO34 — вход измерения напряжения батареи (определён в hardware_config.h).
+#include "hardware_config.h"
 
 // Коэффициент делителя напряжения: отношение V_ADC / V_battery.
 // Он описывает физическую резистивную схему и не является калибровочной поправкой.

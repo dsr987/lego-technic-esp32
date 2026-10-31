@@ -1,28 +1,28 @@
-
 #pragma once
 
-// ---------- TB6612FNG №1 — моторы A и B ----------
-#define TB_STBY   4
+// ---------- TB6612FNG — моторы C и D, Hardware 2.0 ----------
+#define TB_STBY   25
 
-#define TB_AIN1   16
-#define TB_AIN2   17
-#define TB_PWMA   18
+#define TB_AIN1   18
+#define TB_AIN2   19
+#define TB_PWMA   23
 
-#define TB_BIN1   19
-#define TB_BIN2   21
-#define TB_PWMB   22
+#define TB_BIN1   17
+#define TB_BIN2   16
+#define TB_PWMB   4
 
-// ---------- TB6612FNG №2 — моторы C и D ----------
-#define TB2_AIN1  13
-#define TB2_AIN2  14
-#define TB2_PWMA  23
+// ---------- Сервоприводы и аналоговые входы ----------
+#define SERVO_PIN           27
+#define BATT_PIN            34
+#define SERVO_FEEDBACK_PIN  35
 
-#define TB2_BIN1  32
-#define TB2_BIN2  33
-#define TB2_PWMB  2
+// Исторический делитель батареи Hardware 1.0: Rверх=100 кОм, Rниз=39 кОм.
+// Внешняя подтяжка обратной связи позиционного сервопривода: GPIO35 -> GND, 10 кОм.
 
-// ---------- Каналы LEDC ----------
-#define LEDC_CH_A 4
-#define LEDC_CH_B 5
+// ---------- I2C: OLED + PCA9685 FeatherWing ----------
+#define I2C_SDA   21
+#define I2C_SCL   22
+
+// ---------- Каналы LEDC для TB6612FNG C/D ----------
 #define LEDC_CH_C 6
 #define LEDC_CH_D 7

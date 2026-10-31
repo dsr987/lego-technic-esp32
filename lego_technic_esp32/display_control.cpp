@@ -9,6 +9,7 @@
 #include "battery_monitor.h"
 #include "display_control.h"
 #include "display_assets.h"
+#include "i2c_motor_backend.h"
 
 // Дисплей, WebSocket и признак успешной инициализации объявлены в lego_technic_esp32.ino.
 extern Adafruit_SSD1306 display;
@@ -22,6 +23,13 @@ extern Mode currentMode;
 static bool startupAnimationActive = false;
 static unsigned long startupAnimationStartedAt = 0;
 static int lastStartupDotCount = 0;
+
+// Все физические передачи буфера OLED сериализуются с PCA9685 на общей Wire.
+static void flushDisplay() {
+  if (!i2cMotorBackendLockSharedI2c(250)) return;
+  display.display();
+  i2cMotorBackendUnlockSharedI2c();
+}
 
 // ---------- Компактный пиксельный шрифт 4x5 ----------
 // Нужен только для строки клиентов: 5 пикселей на символ позволяют
@@ -138,7 +146,7 @@ void showBootLogo() {
     OLED_BOOT_HEIGHT,
     SSD1306_WHITE
   );
-  display.display();
+  flushDisplay();
 }
 
 void showInitialisingScreen() {
@@ -150,7 +158,7 @@ void showInitialisingScreen() {
   display.setTextWrap(false);
   display.setCursor(19, 28);
   display.print("Initialising");
-  display.display();
+  flushDisplay();
 }
 
 void startDisplayStartupAnimation() {
@@ -182,7 +190,7 @@ bool updateDisplayStartup() {
     for (int i = 0; i < dotCount; i++) {
       display.print('.');
     }
-    display.display();
+    flushDisplay();
     lastStartupDotCount = dotCount;
   }
 
@@ -248,7 +256,7 @@ void updateDisplay() {
   // При подтверждённом низком заряде заменяем панель состояния предупреждением.
   if (lowBattCount >= 3) {
     drawLowBatteryScreen();
-    display.display();
+    flushDisplay();
     return;
   }
 
@@ -278,5 +286,5 @@ void updateDisplay() {
   snprintf(clientText, sizeof(clientText), "clients: %u", static_cast<unsigned int>(ws.count()));
   drawCompactText(78, 53, clientText);
 
-  display.display();
+  flushDisplay();
 }
