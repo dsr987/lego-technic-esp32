@@ -1321,7 +1321,7 @@ function applyMotorModeUI(ch){
           if(typeof d.rf !== 'undefined') { rev.F = !!d.rf; updateRevUI('F'); }
            if(typeof d.cfgA!=='undefined'){motorModes.A=Number(d.cfgA)||0;applyMotorModeUI('A');}
            if(typeof d.cfgB!=='undefined'){motorModes.B=Number(d.cfgB)||0;applyMotorModeUI('B');}
-           if(typeof d.cfgC!=='undefined'){motorModes.C=Number(d.cfgC)||0;applyMotorModeUI('C');}
+           motorModes.C=2; applyMotorModeUI('C');
            if(typeof d.cfgD!=='undefined'){motorModes.D=Number(d.cfgD)||0;applyMotorModeUI('D');}
            if(typeof d.cfgE!=='undefined'){motorModes.E=Number(d.cfgE)||0;applyMotorModeUI('E');}
            if(typeof d.cfgF!=='undefined'){motorModes.F=Number(d.cfgF)||0;applyMotorModeUI('F');}
