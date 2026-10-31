@@ -16,6 +16,7 @@
  * - ESP32Servo
  * - Preferences
  * - ElegantOTA
+ * - Adafruit Motor Shield V2 Library 1.1.4
  *
  * История предыдущего выпуска:
  * 0.9.0 — OLED Update 2.0 ([PR #10](https://github.com/dsr987/lego-technic-esp32/pull/10))
