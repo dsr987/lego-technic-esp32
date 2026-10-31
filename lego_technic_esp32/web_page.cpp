@@ -821,14 +821,14 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     <div class="block">
       <h3>Классический режим</h3>
       <div class="line" style="flex-direction:column;align-items:stretch;gap:8px">
-        <label for="motor-count-select" style="font-size:12px;color:var(--text)">Количество моторов</label>
+        <label for="motor-count-select" style="font-size:12px;color:var(--text)">Количество приводов</label>
         <select id="motor-count-select">
           <option value="1">1 мотор — A</option>
           <option value="2">2 мотора — A + B</option>
-          <option value="3" selected>3 мотора — A + B + C</option>
-          <option value="4">4 мотора — A + B + C + D</option>
-          <option value="5">5 моторов — A + B + C + D + E</option>
-          <option value="6">6 моторов — A + B + C + D + E + F</option>
+          <option value="3" selected>2 мотора + PF Серво — A + B + C</option>
+          <option value="4">3 мотора + PF Серво — A + B + C + D</option>
+          <option value="5">4 мотора + PF Серво — A + B + C + D + E</option>
+          <option value="6">5 моторов + PF Серво — A + B + C + D + E + F</option>
         </select>
         <div style="font-size:10px;line-height:1.45">Настройка влияет на классический интерфейс. Танковый режим не меняется.</div>
         <label for="drive-axle-select" style="font-size:12px;color:var(--text)">Ведущая ось для подсветки</label>
@@ -848,7 +848,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <div class="line"><label for="motor-mode-D">Канал D</label><span class="grow"></span><select id="motor-mode-D" data-motor-mode="D"><option value="0">Слайдер</option><option value="1">Кнопки</option></select></div>
       <div class="line"><label for="motor-mode-E">Канал E</label><span class="grow"></span><select id="motor-mode-E" data-motor-mode="E"><option value="0">Слайдер</option><option value="1">Кнопки</option></select></div>
       <div class="line"><label for="motor-mode-F">Канал F</label><span class="grow"></span><select id="motor-mode-F" data-motor-mode="F"><option value="0">Слайдер</option><option value="1">Кнопки</option></select></div>
-      <div style="font-size:10px;line-height:1.45;color:var(--muted)">Настройки сохраняются в ESP32. Перед сменой режима остановите соответствующий мотор. Позиционный режим C перемещает механизм к выбранной цели.</div>
+      <div style="font-size:10px;line-height:1.45;color:var(--muted)">Настройки сохраняются в ESP32. Перед сменой режима остановите соответствующий мотор. Канал C закреплён за PF Серво и не требует настройки.</div>
     </div>
     <div class="block">
       <h3>Виброотклик (Haptic)</h3>
