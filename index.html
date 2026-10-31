@@ -497,6 +497,12 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   box-sizing: border-box;
 }
 
+.serial-monitor{width:100%;height:100%;min-height:0;display:flex;flex-direction:column;gap:8px;text-align:left}
+.serial-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex:none}
+.serial-toolbar strong{display:block;font-size:13px;color:var(--text)}
+.serial-toolbar span{display:block;font-size:10px;color:var(--muted);margin-top:3px}
+#serial-log{flex:1;min-height:0;overflow:auto;margin:0;padding:10px;border-radius:10px;background:#07111f;color:#b8f7d4;border:1px solid var(--border);font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:620px){.mode-btn{padding:6px 7px;font-size:10px}.mode-switch{gap:1px}.serial-toolbar strong{font-size:11px}}
 </style>
 </head>
 <body>
@@ -534,6 +540,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     <div class="mode-switch">
       <button id="btn-tank" class="mode-btn active" type="button">🛡 Танковый</button>
       <button id="btn-classic" class="mode-btn" type="button">🚗 Классический</button>
+      <button id="btn-monitor" class="mode-btn" type="button">▤ Монитор</button>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
       <div class="hstats">
@@ -806,6 +813,10 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     </div>
   </main>
 
+
+  <main id="monitor-panel" class="panel hidden" aria-label="Монитор порта">
+    <section class="serial-monitor"><div class="serial-toolbar"><div><strong>Монитор порта</strong><span id="serial-status">Ожидание сообщений…</span></div><button id="serial-clear" class="mode-btn" type="button">Очистить окно</button></div><pre id="serial-log" role="log" aria-live="polite">Журнал пока пуст.</pre></section>
+  </main>
 
 </div>
 
@@ -1586,6 +1597,9 @@ function applyMotorModeUI(ch){
     
     $('tank-panel').classList.toggle('hidden', m!==0);
     $('classic-panel').classList.toggle('hidden', m!==1);
+    serialMonitorActive = false;
+    $('monitor-panel').classList.add('hidden');
+    $('btn-monitor').classList.remove('active');
 
     if(m!==1 && eng){
       eng=false;
@@ -1599,6 +1613,21 @@ function applyMotorModeUI(ch){
   }
   $('btn-tank').onclick=function(){ switchMode(0); };
   $('btn-classic').onclick=function(){ switchMode(1); };
+
+  var serialMonitorActive=false, serialLogAfter=0, serialLogRequestActive=false;
+  function pollSerialLog(){
+    if(!serialMonitorActive || serialLogRequestActive) return;
+    serialLogRequestActive=true;
+    fetch('/logs?after='+serialLogAfter,{cache:'no-store'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();}).then(function(data){
+      var output=$('serial-log'); if(!output)return;
+      serialLogAfter=Number(data.latest)||serialLogAfter;
+      if(data.lines&&data.lines.length){if(output.textContent==='Журнал пока пуст.')output.textContent='';data.lines.forEach(function(line){output.textContent+='['+line.id+'] '+line.text+(line.text.endsWith('\n')?'':'\n');});output.scrollTop=output.scrollHeight;}
+      $('serial-status').textContent='Связь активна · буфер до 24 записей';
+    }).catch(function(){$('serial-status').textContent='Нет связи с журналом ESP32';}).finally(function(){serialLogRequestActive=false;});
+  }
+  $('btn-monitor').onclick=function(){vibrateClick();serialMonitorActive=true;$('btn-tank').classList.remove('active');$('btn-classic').classList.remove('active');$('btn-monitor').classList.add('active');$('tank-panel').classList.add('hidden');$('classic-panel').classList.add('hidden');$('monitor-panel').classList.remove('hidden');pollSerialLog();};
+  $('serial-clear').onclick=function(){$('serial-log').textContent='';pollSerialLog();};
+  setInterval(pollSerialLog,1000);
 
   function zeroAll(){
     drive=auxB=auxD=steer=0;

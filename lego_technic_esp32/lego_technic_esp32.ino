@@ -28,12 +28,16 @@
  * CHANGELOG_START
  * - Добавлено ручное включение и выключение OLED из настроек Web GUI; по умолчанию экран включён. ([PR #114](https://github.com/dsr987/lego-technic-esp32/pull/114))
  * - Исправлено направление PF-сервопривода на канале C и добавлен плавный набор скорости.
+ * - Добавлен Web-монитор диагностических сообщений ESP32 через Wi-Fi без подключения USB-UART.
+ * - Скорректирован BATT_CALIBRATION_FACTOR до 1.0733 по контрольному измерению 7.50 В / 8.05 В.
  * CHANGELOG_END
  *
  * тестовый запуск сборки
  */
 
 #include <Arduino.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
@@ -55,6 +59,7 @@
 #include "positional_servo.h"
 #include "preferences_manager.h"
 #include "i2c_motor_backend.h"
+#include "serial_log.h"
 
 // ============================================================
 // НАСТРОЙКИ ДОСТУПА — МЕНЯТЬ ЗДЕСЬ
@@ -214,14 +219,81 @@ void buildStatus(char *buf, size_t n) {
   );
 }
 
+// ---------- Диагностический журнал для Web GUI ----------
+namespace {
+constexpr uint8_t SERIAL_LOG_CAPACITY = 24;
+constexpr size_t SERIAL_LOG_LINE_LENGTH = 128;
+struct SerialLogEntry { uint32_t id; char text[SERIAL_LOG_LINE_LENGTH]; };
+SerialLogEntry serialLogEntries[SERIAL_LOG_CAPACITY];
+uint8_t serialLogWriteIndex = 0, serialLogCount = 0;
+uint32_t serialLogNextId = 1;
+portMUX_TYPE serialLogMux = portMUX_INITIALIZER_UNLOCKED;
+void appendSerialLog(const char *message) {
+  if (!message) return;
+  portENTER_CRITICAL(&serialLogMux);
+  SerialLogEntry &entry = serialLogEntries[serialLogWriteIndex];
+  entry.id = serialLogNextId++;
+  snprintf(entry.text, sizeof(entry.text), "%s", message);
+  serialLogWriteIndex = static_cast<uint8_t>((serialLogWriteIndex + 1) % SERIAL_LOG_CAPACITY);
+  if (serialLogCount < SERIAL_LOG_CAPACITY) ++serialLogCount;
+  portEXIT_CRITICAL(&serialLogMux);
+}
+void appendJsonString(String &json, const char *value) {
+  json += '"';
+  for (const unsigned char *p = reinterpret_cast<const unsigned char *>(value); *p; ++p) {
+    switch (*p) {
+      case '"': json += "\\\""; break;
+      case '\\': json += "\\\\"; break;
+      case '\n': json += "\\n"; break;
+      case '\r': json += "\\r"; break;
+      case '\t': json += "\\t"; break;
+      default: if (*p >= 0x20) json += static_cast<char>(*p); break;
+    }
+  }
+  json += '"';
+}
+}
+void serialLogBegin(unsigned long baudRate) { Serial.begin(baudRate); }
+void serialLogPrintln(const char *message) {
+  Serial.println(message ? message : "");
+  appendSerialLog(message ? message : "");
+}
+void serialLogPrintf(const char *format, ...) {
+  if (!format) return;
+  char line[SERIAL_LOG_LINE_LENGTH];
+  va_list args; va_start(args, format); vsnprintf(line, sizeof(line), format, args); va_end(args);
+  Serial.print(line);
+  appendSerialLog(line);
+}
+String serialLogReadJson(uint32_t afterId) {
+  SerialLogEntry snapshot[SERIAL_LOG_CAPACITY];
+  uint8_t count; uint32_t latestId;
+  portENTER_CRITICAL(&serialLogMux);
+  count = serialLogCount; latestId = serialLogNextId - 1;
+  const uint8_t oldest = static_cast<uint8_t>((serialLogWriteIndex + SERIAL_LOG_CAPACITY - serialLogCount) % SERIAL_LOG_CAPACITY);
+  for (uint8_t i = 0; i < count; ++i) snapshot[i] = serialLogEntries[(oldest + i) % SERIAL_LOG_CAPACITY];
+  portEXIT_CRITICAL(&serialLogMux);
+  String json; json.reserve(256 + static_cast<size_t>(count) * 220);
+  json = "{\"latest\":"; json += String(latestId); json += ",\"lines\":[";
+  bool first = true;
+  for (uint8_t i = 0; i < count; ++i) {
+    if (snapshot[i].id <= afterId) continue;
+    if (!first) json += ',';
+    first = false;
+    json += "{\"id\":"; json += String(snapshot[i].id); json += ",\"text\":";
+    appendJsonString(json, snapshot[i].text); json += '}';
+  }
+  json += "]}"; return json;
+}
+
 // ---------- Инициализация ----------
 
 void setup() {
   // Временная диагностика FeatherWing доступна в Serial Monitor на 115200 baud.
-  Serial.begin(115200);
+  serialLogBegin(115200);
   delay(200);
-  Serial.println();
-  Serial.println("[FW] LEGO Technic ESP32 boot; FeatherWing diagnostics enabled");
+  serialLogPrintln("");
+  serialLogPrintln("[FW] LEGO Technic ESP32 boot; FeatherWing diagnostics enabled");
 
   // 1. Безопасное состояние единственного прямого TB6612FNG (каналы C/D).
   pinMode(TB_STBY, OUTPUT);
@@ -255,7 +327,7 @@ void setup() {
   // Инициализируем PCA9685 до OLED, чтобы создать общую блокировку Wire.
   // Отсутствующий FeatherWing не должен останавливать запуск Wi-Fi/OLED.
   const bool featherWingReady = i2cMotorBackendBegin(Wire);
-  Serial.printf("[FW][PCA9685] setup result: %s\n", featherWingReady ? "READY" : "NOT READY");
+  serialLogPrintf("[FW][PCA9685] setup result: %s\n", featherWingReady ? "READY" : "NOT READY");
 
   const bool displayLockAcquired = i2cMotorBackendLockSharedI2c(1000);
   oledAvailable = displayLockAcquired && display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
@@ -294,6 +366,13 @@ void setup() {
   // Главная страница веб-интерфейса.
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *req) {
     req->send_P(200, "text/html", PAGE_HTML);
+  });
+
+  // Диагностический буфер доступен через Wi-Fi, без USB-UART.
+  server.on("/logs", HTTP_GET, [](AsyncWebServerRequest *req) {
+    uint32_t after = 0;
+    if (req->hasParam("after")) after = static_cast<uint32_t>(req->getParam("after")->value().toInt());
+    req->send(200, "application/json; charset=utf-8", serialLogReadJson(after));
   });
 
   /*
