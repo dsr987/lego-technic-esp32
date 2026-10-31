@@ -6,6 +6,7 @@
 #include "steering_control.h"
 #include "positional_servo.h"
 #include "i2c_motor_backend.h"
+#include "serial_log.h"
 
 // Состояние объявлено и определяется в lego_technic_esp32.ino
 extern uint8_t motorModeC;
@@ -145,7 +146,8 @@ void updateDriverStandby() {
 
 // ---------- Аварийная остановка ----------
 
-void stopAll() {
+void stopAll(const char *reason) {
+  serialLogPrintf("[FW][STOP] reason=%s\n", reason ? reason : "unspecified");
   // Отменяем автоматическое позиционирование C перед общей остановкой.
   positionalServoCancel();
 

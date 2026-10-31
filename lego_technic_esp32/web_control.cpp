@@ -70,7 +70,7 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     prefs.clear();
     loadPreferences(); // Defaults: center 1500 us, max angle 45 deg, reversals/lights off.
     engineSimOn = false;
-    stopAll();
+    stopAll("web reset");
     applyLeds();
     lastCmdMillis = millis();
 
@@ -188,7 +188,7 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     lastCmdMillis = millis();
     currentMode = static_cast<Mode>(requestedMode);
     engineSimOn = false;
-    stopAll();
+    stopAll("mode change");
     return;
   }
 
