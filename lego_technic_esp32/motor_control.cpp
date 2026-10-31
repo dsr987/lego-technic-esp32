@@ -95,7 +95,7 @@ void applyMotorC(int val) {
     TB_AIN1,
     TB_AIN2,
     LEDC_CH_C,
-    (motorModeC == 2 || reverseC) ? -motorCVal : motorCVal
+    (motorModeC == 2) ? motorCVal : (reverseC ? -motorCVal : motorCVal)
   );
 }
 
