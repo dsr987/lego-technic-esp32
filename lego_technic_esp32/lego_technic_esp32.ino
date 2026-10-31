@@ -2,7 +2,7 @@
  * LEGO Technic ESP32
  * Main Arduino sketch: filename and containing directory must match.
  * Shared module implementations remain in their dedicated .cpp/.h files.
- * Версия разработки: 0.11.3
+ * Версия разработки: 0.12.0
  *
  * Текущий выпуск: калибровка измерения напряжения батареи.
  * В проекте также доступны обновлённый Web GUI и OLED Update 2.0.
@@ -24,9 +24,9 @@
  * - Рабочая панель OLED показывает режим, процент заряда и напряжение батареи, количество подключённых клиентов Wi-Fi и предупреждение о низком заряде.
  * - Если инициализация OLED не удалась, прошивка продолжает запуск без попыток выводить данные на недоступный дисплей.
  *
- * CHANGELOG_VERSION: 0.11.3
+ * CHANGELOG_VERSION: 0.12.0
  * CHANGELOG_START
- * - Канал C закреплён за позиционным PF-сервоприводом; конфигурирование канала C удалено из интерфейса и прошивки. ([PR #111](https://github.com/dsr987/lego-technic-esp32/pull/111))
+ * - Добавлено ручное включение и выключение OLED из настроек Web GUI; по умолчанию экран включён. ([PR #114](https://github.com/dsr987/lego-technic-esp32/pull/114))
  * CHANGELOG_END
  *
  * тестовый запуск сборки
