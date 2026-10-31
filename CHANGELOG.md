@@ -1,5 +1,9 @@
 # История версий
 
+## 0.13.2 — 2026-10-31
+### Изменено
+- Управление моторами Adafruit Motor FeatherWing переведено на официальную библиотеку Adafruit Motor Shield V2. ([PR #122](https://github.com/dsr987/lego-technic-esp32/pull/122))
+
 ## 0.13.1 — 2026-10-31
 ### Изменено
 - Увеличен буфер Web Serial Monitor до 64 записей; добавлена диагностика причин общей остановки моторов. ([PR #120](https://github.com/dsr987/lego-technic-esp32/pull/120))
