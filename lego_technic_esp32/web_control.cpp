@@ -69,7 +69,8 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     }
 
     prefs.clear();
-    loadPreferences(); // Defaults: center 1500 us, max angle 45 deg, reversals/lights off.
+    loadPreferences(); // Defaults: center 1500 us, max angle 45 deg, PF Servo speed 50%, reversals/lights off.
+    positionalServoSetSpeedPercent(pfServoSpeedPercent);
     engineSimOn = false;
     stopAll("web reset");
     applyLeds();
