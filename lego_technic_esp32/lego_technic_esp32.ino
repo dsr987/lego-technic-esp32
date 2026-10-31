@@ -111,6 +111,7 @@ AsyncWebSocket ws("/ws");
 volatile unsigned long lastCmdMillis = 0; // Последняя команда управления или пакет heartbeat с актуальными значениями
 const unsigned long CMD_TIMEOUT_MS = 500;
 unsigned long lastDisplayStatusMillis = 0;
+unsigned long lastWebStatusMillis = 0;
 
 // ---------- Текущие значения каналов ----------
 
@@ -153,6 +154,7 @@ bool engineSimOn = false;
 
 int steerCenterUs    = 1500;
 int steerMaxAngleDeg = 45;
+int pfServoSpeedPercent = 50;
 
 // ---------- Свет ----------
 
@@ -190,7 +192,7 @@ void buildStatus(char *buf, size_t n) {
     "\"cfgA\":%d,\"cfgB\":%d,\"cfgC\":%d,\"cfgD\":%d,\"cfgE\":%d,\"cfgF\":%d,"
     "\"tr\":%d,\"md\":%d,"
     "\"pfstate\":%d,\"pfmv\":%d,\"pftarget\":%d,"
-    "\"pfhas\":%d,\"pfvalid\":%d,\"pfdone\":%d}",
+    "\"pfhas\":%d,\"pfvalid\":%d,\"pfdone\":%d,\"pfs\":%d}",
     battV,
     battPct,
     wifiRssi,
@@ -224,7 +226,8 @@ void buildStatus(char *buf, size_t n) {
     (int)positionalStatus.target,
     positionalStatus.targetValid ? 1 : 0,
     positionalStatus.feedbackValid ? 1 : 0,
-    positionalStatus.targetReached ? 1 : 0
+    positionalStatus.targetReached ? 1 : 0,
+    positionalServoGetSpeedPercent()
   );
 }
 
@@ -381,6 +384,7 @@ void setup() {
 
   // Аналоговая обратная связь позиционного мотора C (GPIO35).
   positionalServoBegin();
+  positionalServoSetSpeedPercent(pfServoSpeedPercent);
 
   // Свет пока не управляется физически, функция оставлена
   // для совместимости с веб-командами.
@@ -477,6 +481,17 @@ void loop() {
   // Анимация запуска обновляется без блокировки WebSocket, OTA и watchdog.
   const bool startupAnimating = updateDisplayStartup();
 
+  // Телеметрия веб-интерфейса обновляется независимо от ADC и цикла OLED.
+  // positionalServoGetStatus() читает только последнее измерение, не запускает ADC.
+  if ((unsigned long)(millis() - lastWebStatusMillis) >= 100) {
+    lastWebStatusMillis = millis();
+    if (ws.count() > 0) {
+      char buf[384];
+      buildStatus(buf, sizeof(buf));
+      ws.textAll(buf);
+    }
+  }
+
   // Периодическое обновление мониторинга и OLED.
   if (millis() - lastDisplayStatusMillis > 1000) {
     lastDisplayStatusMillis = millis();
@@ -486,12 +501,6 @@ void loop() {
       updateDisplay();
     }
 
-    // Отправляем актуальный статус подключённым клиентам.
-    if (ws.count() > 0) {
-      char buf[384];
-      buildStatus(buf, sizeof(buf));
-      ws.textAll(buf);
-    }
   }
 
   // Обслуживание OTA и очистка отключившихся клиентов.
