@@ -243,7 +243,7 @@ void appendJsonString(String &json, const char *value) {
   for (const unsigned char *p = reinterpret_cast<const unsigned char *>(value); *p; ++p) {
     switch (*p) {
       case '"': json += "\\\""; break;
-      case '\\\\': json += "\\\\\\\\"; break;
+      case '\\': json += "\\\\\\\\"; break;
       case '\\n': json += "\\n"; break;
       case '\\r': json += "\\r"; break;
       case '\\t': json += "\\t"; break;
