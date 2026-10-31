@@ -36,6 +36,8 @@
  */
 
 #include <Arduino.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
@@ -219,7 +221,7 @@ void buildStatus(char *buf, size_t n) {
 
 // ---------- Диагностический журнал для Web GUI ----------
 namespace {
-constexpr uint8_t SERIAL_LOG_CAPACITY = 48;
+constexpr uint8_t SERIAL_LOG_CAPACITY = 24;
 constexpr size_t SERIAL_LOG_LINE_LENGTH = 192;
 struct SerialLogEntry { uint32_t id; char text[SERIAL_LOG_LINE_LENGTH]; };
 SerialLogEntry serialLogEntries[SERIAL_LOG_CAPACITY];
@@ -242,9 +244,9 @@ void appendJsonString(String &json, const char *value) {
     switch (*p) {
       case '"': json += "\\\""; break;
       case '\\\\': json += "\\\\\\\\"; break;
-      case '\\n': json += "\\\\n"; break;
-      case '\\r': json += "\\\\r"; break;
-      case '\\t': json += "\\\\t"; break;
+      case '\\n': json += "\\n"; break;
+      case '\\r': json += "\\r"; break;
+      case '\\t': json += "\\t"; break;
       default: if (*p >= 0x20) json += static_cast<char>(*p); break;
     }
   }
@@ -272,13 +274,13 @@ String serialLogReadJson(uint32_t afterId) {
   for (uint8_t i = 0; i < count; ++i) snapshot[i] = serialLogEntries[(oldest + i) % SERIAL_LOG_CAPACITY];
   portEXIT_CRITICAL(&serialLogMux);
   String json; json.reserve(256 + static_cast<size_t>(count) * 220);
-  json = "{\\\"latest\\\":"; json += String(latestId); json += ",\\\"lines\\\":[";
+  json = "{\"latest\":"; json += String(latestId); json += ",\"lines\":[";
   bool first = true;
   for (uint8_t i = 0; i < count; ++i) {
     if (snapshot[i].id <= afterId) continue;
     if (!first) json += ',';
     first = false;
-    json += "{\\\"id\\\":"; json += String(snapshot[i].id); json += ",\\\"text\\\":";
+    json += "{\"id\":"; json += String(snapshot[i].id); json += ",\"text\":";
     appendJsonString(json, snapshot[i].text); json += '}';
   }
   json += "]}"; return json;
