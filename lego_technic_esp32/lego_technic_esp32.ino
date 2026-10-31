@@ -90,6 +90,7 @@ Preferences prefs;
 // OLED-дисплей
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
 bool oledAvailable = false;
+volatile bool oledDisplayEnabled = true; // Всегда включён после запуска; состояние не сохраняется.
 
 // Рулевой сервопривод
 Servo steerServo;
@@ -176,7 +177,7 @@ void buildStatus(char *buf, size_t n) {
     n,
     "{\"st\":1,\"v\":%.2f,\"p\":%d,\"r\":%d,"
     "\"m\":%d,\"c\":%d,\"sta\":%d,"
-    "\"up\":%lu,\"heap\":%lu,\"minh\":%lu,\"lb\":%d,"
+    "\"up\":%lu,\"heap\":%lu,\"minh\":%lu,\"lb\":%d,\"oled\":%d,"
     "\"ra\":%d,\"rb\":%d,\"rc\":%d,\"rd\":%d,\"re\":%d,\"rf\":%d,"
     "\"lf\":%d,\"lr\":%d,\"es\":%d,"
     "\"cfgA\":%d,\"cfgB\":%d,\"cfgC\":%d,\"cfgD\":%d,\"cfgE\":%d,\"cfgF\":%d,"
@@ -191,6 +192,7 @@ void buildStatus(char *buf, size_t n) {
     (unsigned long)ESP.getFreeHeap(),
     (unsigned long)ESP.getMinFreeHeap(),
     lowBattCount,
+    oledDisplayEnabled ? 1 : 0,
     reverseA ? 1 : 0,
     reverseB ? 1 : 0,
     reverseC ? 1 : 0,

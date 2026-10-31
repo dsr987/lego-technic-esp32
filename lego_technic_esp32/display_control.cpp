@@ -15,6 +15,7 @@
 extern Adafruit_SSD1306 display;
 extern AsyncWebSocket ws;
 extern bool oledAvailable;
+extern volatile bool oledDisplayEnabled;
 
 // Режим работы объявлен в lego_technic_esp32.ino.
 extern Mode currentMode;
@@ -26,9 +27,24 @@ static int lastStartupDotCount = 0;
 
 // Все физические передачи буфера OLED сериализуются с PCA9685 на общей Wire.
 static void flushDisplay() {
-  if (!i2cMotorBackendLockSharedI2c(250)) return;
+  if (!oledDisplayEnabled || !i2cMotorBackendLockSharedI2c(250)) return;
+  // Повторно включаем контроллер при каждом обновлении: экран не гаснет сам по таймеру.
+  display.ssd1306_command(SSD1306_DISPLAYON);
   display.display();
   i2cMotorBackendUnlockSharedI2c();
+}
+
+bool setOledDisplayEnabled(bool enabled) {
+  if (!oledAvailable) {
+    oledDisplayEnabled = enabled;
+    return true;
+  }
+  if (!i2cMotorBackendLockSharedI2c(250)) return false;
+  oledDisplayEnabled = enabled;
+  display.ssd1306_command(enabled ? SSD1306_DISPLAYON : SSD1306_DISPLAYOFF);
+  if (enabled) display.display();
+  i2cMotorBackendUnlockSharedI2c();
+  return true;
 }
 
 // ---------- Компактный пиксельный шрифт 4x5 ----------
@@ -247,7 +263,7 @@ static void drawLowBatteryScreen() {
 // ---------- Рабочая панель OLED Update 2.0 ----------
 
 void updateDisplay() {
-  if (!oledAvailable) return;
+  if (!oledAvailable || !oledDisplayEnabled) return;
 
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
