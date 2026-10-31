@@ -79,7 +79,7 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
 
   // Смена конфигурации не отправляет команду мотору и допускается только на остановленном канале.
   if (doc.containsKey("cfgA") || doc.containsKey("cfgB") ||
-      doc.containsKey("cfgC") || doc.containsKey("cfgD") ||
+      doc.containsKey("cfgD") ||
       doc.containsKey("cfgE") || doc.containsKey("cfgF")) {
     if (doc.size() != 1) return;
     if (doc.containsKey("cfgA")) {
