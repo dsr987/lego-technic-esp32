@@ -129,7 +129,7 @@ bool reverseF = false;
 // Режимы управления каналами: 0 — слайдер, 1 — кнопки, 2 — позиционный (только C).
 uint8_t motorModeA = 0;
 uint8_t motorModeB = 0;
-uint8_t motorModeC = 0;
+uint8_t motorModeC = 2;
 uint8_t motorModeD = 0;
 uint8_t motorModeE = 0;
 uint8_t motorModeF = 0;
@@ -202,7 +202,7 @@ void buildStatus(char *buf, size_t n) {
     engineSimOn ? 1 : 0,
     (int)motorModeA,
     (int)motorModeB,
-    (int)motorModeC,
+    2,
     (int)motorModeD,
     (int)motorModeE,
     (int)motorModeF,

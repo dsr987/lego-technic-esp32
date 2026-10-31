@@ -769,11 +769,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
               </div>
             </div>
             <div class="field" id="field-C">
-              <div class="row"><label>Мотор C</label><span class="val a" id="val-C">0%</span></div>
-              <div class="slim-wrap">
-                <input data-mode-slider="C" type="range" class="slim" id="slider-C" min="-100" max="100" value="0" style="width:100%">
-
-
+              <div class="row"><label>PF Серво</label></div>
+              <div class="motor-mode-controls motor-position-controls horizontal active" data-mode-controls="C" data-control-mode="position">
+                <button type="button" class="motor-dir-btn" data-position-target="left" data-position-label="left" aria-label="Позиционный сервопривод C: влево" title="Переместить влево">◀ ВЛЕВО</button>
+                <button type="button" class="motor-dir-btn" data-position-target="center" data-position-label="center" aria-label="Позиционный сервопривод C: в центр" title="Переместить в центр">ЦЕНТР</button>
+                <button type="button" class="motor-dir-btn" data-position-target="right" data-position-label="right" aria-label="Позиционный сервопривод C: вправо" title="Переместить вправо">ВПРАВО ▶</button>
               </div>
             </div>
             <div class="field" id="field-D">
@@ -834,14 +834,14 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     <div class="block">
       <h3>Классический режим</h3>
       <div class="line" style="flex-direction:column;align-items:stretch;gap:8px">
-        <label for="motor-count-select" style="font-size:12px;color:var(--text)">Количество моторов</label>
+        <label for="motor-count-select" style="font-size:12px;color:var(--text)">Количество приводов</label>
         <select id="motor-count-select">
           <option value="1">1 мотор — A</option>
           <option value="2">2 мотора — A + B</option>
-          <option value="3" selected>3 мотора — A + B + C</option>
-          <option value="4">4 мотора — A + B + C + D</option>
-          <option value="5">5 моторов — A + B + C + D + E</option>
-          <option value="6">6 моторов — A + B + C + D + E + F</option>
+          <option value="3" selected>2 мотора + PF Серво — A + B + C</option>
+          <option value="4">3 мотора + PF Серво — A + B + C + D</option>
+          <option value="5">4 мотора + PF Серво — A + B + C + D + E</option>
+          <option value="6">5 моторов + PF Серво — A + B + C + D + E + F</option>
         </select>
         <div style="font-size:10px;line-height:1.45">Настройка влияет на классический интерфейс. Танковый режим не меняется.</div>
         <label for="drive-axle-select" style="font-size:12px;color:var(--text)">Ведущая ось для подсветки</label>
@@ -857,11 +857,11 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <h3>Управление моторами</h3>
       <div class="line"><label for="motor-mode-A">Канал A</label><span class="grow"></span><select id="motor-mode-A" data-motor-mode="A"><option value="0">Слайдер</option><option value="1">Кнопки</option></select></div>
       <div class="line"><label for="motor-mode-B">Канал B</label><span class="grow"></span><select id="motor-mode-B" data-motor-mode="B"><option value="0">Слайдер</option><option value="1">Кнопки</option></select></div>
-      <div class="line"><label for="motor-mode-C">Канал C</label><span class="grow"></span><select id="motor-mode-C" data-motor-mode="C"><option value="0">Слайдер</option><option value="1">Кнопки</option><option value="2">Позиционный мотор</option></select></div>
+      <div class="line"><label>Канал C</label><span class="grow"></span><strong>PF Серво</strong></div>
       <div class="line"><label for="motor-mode-D">Канал D</label><span class="grow"></span><select id="motor-mode-D" data-motor-mode="D"><option value="0">Слайдер</option><option value="1">Кнопки</option></select></div>
       <div class="line"><label for="motor-mode-E">Канал E</label><span class="grow"></span><select id="motor-mode-E" data-motor-mode="E"><option value="0">Слайдер</option><option value="1">Кнопки</option></select></div>
       <div class="line"><label for="motor-mode-F">Канал F</label><span class="grow"></span><select id="motor-mode-F" data-motor-mode="F"><option value="0">Слайдер</option><option value="1">Кнопки</option></select></div>
-      <div style="font-size:10px;line-height:1.45;color:var(--muted)">Настройки сохраняются в ESP32. Перед сменой режима остановите соответствующий мотор. Позиционный режим C перемещает механизм к выбранной цели.</div>
+      <div style="font-size:10px;line-height:1.45;color:var(--muted)">Настройки сохраняются в ESP32. Перед сменой режима остановите соответствующий мотор. Канал C закреплён за PF Серво и не требует настройки.</div>
     </div>
     <div class="block">
       <h3>Виброотклик (Haptic)</h3>
@@ -899,7 +899,6 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       <h3>Реверс моторов</h3>
       <div class="line"><span>Канал A</span><span class="grow"></span><button class="rev-btn" data-ch="A" type="button">⇄</button></div>
       <div class="line"><span>Канал B</span><span class="grow"></span><button class="rev-btn" data-ch="B" type="button">⇄</button></div>
-      <div class="line" id="reverse-row-C"><span>Канал C</span><span class="grow"></span><button class="rev-btn" data-ch="C" type="button">⇄</button></div>
       <div class="line"><span>Канал D</span><span class="grow"></span><button class="rev-btn" data-ch="D" type="button">⇄</button></div>
       <div class="line"><span>Канал E</span><span class="grow"></span><button class="rev-btn" data-ch="E" type="button">⇄</button></div>
       <div class="line"><span>Канал F</span><span class="grow"></span><button class="rev-btn" data-ch="F" type="button">⇄</button></div>
@@ -1112,9 +1111,9 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   }
 
   var mode=0, rev={A:0,B:0,C:0,D:0,E:0,F:0}, led={F:0,R:0};
-  var motorModes={A:0,B:0,C:0,D:0,E:0,F:0}, heldMotorButtons={}, motorRampTimers={};
+  var motorModes={A:0,B:0,C:2,D:0,E:0,F:0}, heldMotorButtons={}, motorRampTimers={};
   var eng=false, auxMode=false, trim=0;
-  var drive=0, auxB=0, auxC=0, auxD=0, steer=0;
+  var drive=0, auxB=0, auxD=0, steer=0;
   var motorCount = Math.min(6, +(localStorage.getItem("lcc_motor_count") || 3));
   // Это настройка только визуальной подсветки, не маршрутизация команд мотора A.
   var savedDrivenAxle = localStorage.getItem('lcc_driven_axle');
@@ -1162,6 +1161,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
   }
 
 function applyMotorModeUI(ch){
+    if(ch==='C') motorModes.C=2;
     var selectedMode=motorModes[ch]||0;
     document.querySelectorAll('[data-mode-slider="'+ch+'"]').forEach(function(el){el.classList.toggle('hidden',selectedMode!==0);});
     document.querySelectorAll('[data-mode-controls="'+ch+'"]').forEach(function(el){
@@ -1171,7 +1171,7 @@ function applyMotorModeUI(ch){
     var select=$('motor-mode-'+ch); if(select) select.value=String(selectedMode);
     var reverseRow=$('reverse-row-'+ch); if(reverseRow) reverseRow.classList.toggle('hidden',ch==='C'&&selectedMode===2);
   }
-  function applyAllMotorModeUI(){['A','B','C','D','E','F'].forEach(applyMotorModeUI);}
+  function applyAllMotorModeUI(){['A','B','D','E','F'].forEach(applyMotorModeUI); applyMotorModeUI('C');}
   function createMotorControls(){
     document.querySelectorAll('[data-mode-slider]').forEach(function(slider){
       var ch=slider.getAttribute('data-mode-slider'), parent=slider.parentElement;
@@ -1203,6 +1203,14 @@ function applyMotorModeUI(ch){
   }
   createMotorControls();
   function updateMotorControlOrientations(){
+    var fixedServoControls=document.querySelector('[data-mode-controls="C"]');
+    if(fixedServoControls){
+      var servoVertical=motorCount>=4;
+      fixedServoControls.classList.toggle('vertical',servoVertical);
+      fixedServoControls.classList.toggle('horizontal',!servoVertical);
+      var servoLabels={left:servoVertical?'▲':'◀ ВЛЕВО',center:servoVertical?'●':'ЦЕНТР',right:servoVertical?'▼':'ВПРАВО ▶'};
+      fixedServoControls.querySelectorAll('[data-position-label]').forEach(function(button){button.textContent=servoLabels[button.getAttribute('data-position-label')];});
+    }
     document.querySelectorAll('[data-mode-slider]').forEach(function(slider){
       var ch=slider.getAttribute('data-mode-slider');
       var vertical=slider.classList.contains('slider-v')||(slider.classList.contains('slim')&&motorCount>=4);
@@ -1227,10 +1235,10 @@ function applyMotorModeUI(ch){
   }
   
   updateMotorControlOrientations();
-  document.querySelectorAll('[data-motor-mode]').forEach(function(select){
+  document.querySelectorAll('[data-motor-mode]:not([data-motor-mode="C"])').forEach(function(select){
     select.addEventListener('change',function(){
       var ch=this.getAttribute('data-motor-mode'), next=Number(this.value);
-      var max=ch==='C'?2:1;
+      var max=1;
       if(!Number.isInteger(next)||next<0||next>max||lastSent[ch]!==0){
         this.value=String(motorModes[ch]||0);
         if(lastSent[ch]!==0) window.alert('Сначала остановите мотор '+ch+', затем меняйте режим.');
@@ -1328,7 +1336,7 @@ function applyMotorModeUI(ch){
           if(typeof d.rf !== 'undefined') { rev.F = !!d.rf; updateRevUI('F'); }
            if(typeof d.cfgA!=='undefined'){motorModes.A=Number(d.cfgA)||0;applyMotorModeUI('A');}
            if(typeof d.cfgB!=='undefined'){motorModes.B=Number(d.cfgB)||0;applyMotorModeUI('B');}
-           if(typeof d.cfgC!=='undefined'){motorModes.C=Number(d.cfgC)||0;applyMotorModeUI('C');}
+           motorModes.C=2; applyMotorModeUI('C');
            if(typeof d.cfgD!=='undefined'){motorModes.D=Number(d.cfgD)||0;applyMotorModeUI('D');}
            if(typeof d.cfgE!=='undefined'){motorModes.E=Number(d.cfgE)||0;applyMotorModeUI('E');}
            if(typeof d.cfgF!=='undefined'){motorModes.F=Number(d.cfgF)||0;applyMotorModeUI('F');}
@@ -1544,7 +1552,6 @@ function applyMotorModeUI(ch){
     if(motorCount < 6){ if($('slider-F')) $('slider-F').value=0; if($('val-F')) $('val-F').textContent='0%'; txWS({ch:'F',val:0}); }
     if(motorCount < 5){ if($('slider-E')) $('slider-E').value=0; if($('val-E')) $('val-E').textContent='0%'; txWS({ch:'E',val:0}); }
     if(motorCount < 4){ auxD=0; if($('slider-D')) $('slider-D').value=0; if($('val-D')) $('val-D').textContent='0%'; txWS({ch:'D',val:0}); }
-    if(motorCount < 3){ auxC=0; if($('slider-C')) $('slider-C').value=0; if($('val-C')) $('val-C').textContent='0%'; txWS({ch:'C',val:0}); }
     if(motorCount < 2){
       eng=false; auxMode=false; auxB=0;
       if($('slider-aux')) $('slider-aux').value=0;
@@ -1581,10 +1588,10 @@ function applyMotorModeUI(ch){
   $('btn-classic').onclick=function(){ switchMode(1); };
 
   function zeroAll(){
-    drive=auxB=auxC=auxD=steer=0;
+    drive=auxB=auxD=steer=0;
     ['A','B','C','D','E','F'].forEach(function(ch){ clearHoldState(ch); });
-    ['slider-left','slider-right','slider-drive','slider-aux','slider-C','slider-D','slider-steer'].forEach(function(id){ var e=$(id); if(e) e.value=0; });
-    ['val-left','val-right','val-drive','val-aux','val-C','val-D','val-steer'].forEach(function(id){ var e=$(id); if(e) e.textContent='0%'; });
+    ['slider-left','slider-right','slider-drive','slider-aux','slider-D','slider-steer'].forEach(function(id){ var e=$(id); if(e) e.value=0; });
+    ['val-left','val-right','val-drive','val-aux','val-D','val-steer'].forEach(function(id){ var e=$(id); if(e) e.textContent='0%'; });
 
     // Фары намеренно не трогаем — привязаны к физическому выходу, не к режиму.
     txWS({ch:'A', val:0}); txWS({ch:'B', val:0}); txWS({ch:'C', val:0}); txWS({ch:'D', val:0}); txWS({ch:'E', val:0}); txWS({ch:'F', val:0}); txWS({ch:'S', val:0});
@@ -1605,7 +1612,7 @@ function applyMotorModeUI(ch){
   }
 
   function paintCar(){
-    var A=drive, S=steer, B=auxB, C=auxC;
+    var A=drive, S=steer, B=auxB, C=0;
     // Поворотники используют те же элементы, что и штатная подсветка фар,
     // чтобы не создавать отдельные SVG-слои со смещёнными координатами.
     paintTurnSignals();
@@ -1758,7 +1765,6 @@ function applyMotorModeUI(ch){
       if(dash) dash.classList.remove('hide');
       pan.classList.remove('open');
       if(!eng){ auxB=0; var slB=$('slider-aux'); if(slB) slB.value=0; $('val-aux').textContent='0%'; txWS({ch:'B',val:0}); }
-      auxC=0; var slC=$('slider-C'); if(slC) slC.value=0; $('val-C').textContent='0%'; txWS({ch:'C',val:0});
       auxD=0; var slD=$('slider-D'); if(slD) slD.value=0; $('val-D').textContent='0%'; txWS({ch:'D',val:0});
     }
     paintCar();
@@ -1890,19 +1896,6 @@ function applyMotorModeUI(ch){
   bindSpring($('slider-aux'), 'B', function(v){
     if(eng) return;
     auxB=v; $('val-aux').textContent=v+'%'; txWS({ch:'B',val:v}); 
-    paintCar();
-  });
-
-  $('slider-C').oninput=function(){
-    cancelSpring(this);
-    auxC=+this.value; 
-    handleInputHold('C', auxC);
-    $('val-C').textContent=auxC+'%'; txWS({ch:'C',val:auxC}); 
-    paintCar();
-    if ((auxC === 100 || auxC === -100) && hapticMode === 'all') vibrateEdge();
-  };
-  bindSpring($('slider-C'), 'C', function(v){
-    auxC=v; $('val-C').textContent=v+'%'; txWS({ch:'C',val:v}); 
     paintCar();
   });
 
