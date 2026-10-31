@@ -293,6 +293,7 @@ jobs:
             "Adafruit SSD1306" \
             "Adafruit GFX Library" \
             "Adafruit BusIO" \
+            "Adafruit Motor Shield V2 Library@1.1.4" \
             "ESP32Servo" \
             "ElegantOTA@3.1.0"
 
