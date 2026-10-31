@@ -10,5 +10,8 @@ void showInitialisingScreen();
 void startDisplayStartupAnimation();
 bool updateDisplayStartup();
 
+// Временно включить или выключить OLED без сохранения состояния в NVS.
+bool setOledDisplayEnabled(bool enabled);
+
 // Обновление рабочего экрана OLED.
 void updateDisplay();
