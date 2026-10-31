@@ -1336,6 +1336,9 @@ function applyMotorModeUI(ch){
     var hasTarget=Number(data.pfhas)===1;
     var targetReached=Number(data.pfdone)===1;
     var target=Number(data.pftarget);
+    var zone=Number(data.pfzone);
+    var zoneNames=['Правое положение','Переход к центру','Центр','Переход к левому','Левое положение','Вне калиброванного диапазона'];
+    var zoneText=zoneNames[zone]||'Положение не определено';
     var voltageText=Number.isFinite(voltage)?(voltage/1000).toFixed(2)+' В':'';
 
     status.classList.remove('error');
@@ -1350,11 +1353,11 @@ function applyMotorModeUI(ch){
       return;
     }
     if(state===1){
-      status.textContent='Перемещение · '+voltageText;
+      status.textContent='Перемещение · '+zoneText+' · '+voltageText;
       return;
     }
     if(state===2){
-      status.textContent='Смена направления · '+voltageText;
+      status.textContent='Смена направления · '+zoneText+' · '+voltageText;
       return;
     }
     if(state===0 && hasTarget && targetReached){
@@ -1364,10 +1367,10 @@ function applyMotorModeUI(ch){
         var activeButton=document.querySelector('[data-position-target="'+targetName+'"]');
         if(activeButton) activeButton.classList.add('position-reached');
       }
-      status.textContent='Позиция достигнута · '+voltageText;
+      status.textContent='Позиция достигнута · '+zoneText+' · '+voltageText;
       return;
     }
-    status.textContent=(hasTarget?'Остановлен · ':'Ожидание команды · ')+voltageText;
+    status.textContent=(hasTarget?'Остановлен · ':'Ожидание команды · ')+zoneText+' · '+voltageText;
   }
 
   document.querySelectorAll('[data-position-target]').forEach(function(button){
