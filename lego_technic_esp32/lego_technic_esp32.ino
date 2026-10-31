@@ -2,7 +2,7 @@
  * LEGO Technic ESP32
  * Main Arduino sketch: filename and containing directory must match.
  * Shared module implementations remain in their dedicated .cpp/.h files.
- * Версия разработки: 0.11.1
+ * Версия разработки: 0.11.2
  *
  * Текущий выпуск: калибровка измерения напряжения батареи.
  * В проекте также доступны обновлённый Web GUI и OLED Update 2.0.
@@ -24,9 +24,9 @@
  * - Рабочая панель OLED показывает режим, процент заряда и напряжение батареи, количество подключённых клиентов Wi-Fi и предупреждение о низком заряде.
  * - Если инициализация OLED не удалась, прошивка продолжает запуск без попыток выводить данные на недоступный дисплей.
  *
- * CHANGELOG_VERSION: 0.11.1
+ * CHANGELOG_VERSION: 0.11.2
  * CHANGELOG_START
- * - Обновлён `BATT_DIVIDER_FACTOR` с 0.2680 до 0.2857 для делителя 100 кОм / 40 кОм. ([PR #106](https://github.com/dsr987/lego-technic-esp32/pull/106))
+ * - Исправлено смещение вниз слайдера мотора B в 5- и 6-моторной конфигурациях классического режима. ([PR #110](https://github.com/dsr987/lego-technic-esp32/pull/110))
  * CHANGELOG_END
  *
  * тестовый запуск сборки
