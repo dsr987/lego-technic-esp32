@@ -90,7 +90,7 @@ Preferences prefs;
 // OLED-дисплей
 Adafruit_SSD1306 display(128, 64, &Wire, -1);
 bool oledAvailable = false;
-bool oledDisplayEnabled = true; // Всегда включён после запуска; состояние не сохраняется.
+volatile bool oledDisplayEnabled = true; // Всегда включён после запуска; состояние не сохраняется.
 
 // Рулевой сервопривод
 Servo steerServo;
