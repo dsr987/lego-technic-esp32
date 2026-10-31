@@ -566,7 +566,7 @@ def check_battery_calibration() -> None:
 
     checks = (
         ("BATT_DIVIDER_FACTOR 0.2857", "physical battery divider factor is explicit"),
-        ("BATT_CALIBRATION_FACTOR = 1.0000f", "separate default calibration multiplier"),
+        ("BATT_CALIBRATION_FACTOR = 1.0733f", "field-calibrated battery multiplier"),
         ("(vAdc / BATT_DIVIDER_FACTOR) * BATT_CALIBRATION_FACTOR", "calibration multiplier is applied to measured voltage"),
         ("tools/calibrate_battery.py", "source comment points to the calibration calculator"),
     )
