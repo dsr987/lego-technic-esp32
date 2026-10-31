@@ -17,6 +17,8 @@ static constexpr int FEEDBACK_VALID_MIN_MV = 250;
 static constexpr int FEEDBACK_VALID_MAX_MV = 2200;
 
 static constexpr int POSITION_MOTOR_SPEED = 70;
+static constexpr int POSITION_MOTOR_RAMP_STEP = 5;
+static constexpr unsigned long POSITION_MOTOR_RAMP_INTERVAL_MS = 20;
 static constexpr unsigned long UPDATE_INTERVAL_MS = 10;
 static constexpr unsigned long POSITION_TIMEOUT_MS = 3000;
 static constexpr unsigned long STALL_TIMEOUT_MS = 1200;
@@ -39,6 +41,8 @@ static unsigned long lastUpdateMs = 0;
 static unsigned long movementStartMs = 0;
 static unsigned long lastProgressMs = 0;
 static unsigned long directionChangeStartMs = 0;
+static unsigned long lastMotorRampMs = 0;
+static int appliedMotorSpeed = 0;
 static bool filterReady = false;
 static uint8_t invalidReadCount = 0;
 
@@ -81,6 +85,7 @@ static void stopPositionMotor() {
   applyMotorC(0);
   updateDriverStandby();
   movementDirection = 0;
+  appliedMotorSpeed = 0;
   state = PositionState::Idle;
 }
 
@@ -88,6 +93,7 @@ static void setPositionFault() {
   applyMotorC(0);
   updateDriverStandby();
   movementDirection = 0;
+  appliedMotorSpeed = 0;
   state = PositionState::Fault;
 }
 
@@ -106,11 +112,11 @@ static void startPositionMotor(unsigned long now) {
   lastProgressMs = now;
   lastUpdateMs = now;
   state = PositionState::Moving;
+  appliedMotorSpeed = 0;
+  lastMotorRampMs = now;
 
-  // applyMotorC() инвертирует знак в режиме C=2, сохраняя ориентацию UI.
-  applyMotorC(movementDirection > 0
-      ? -POSITION_MOTOR_SPEED
-      : POSITION_MOTOR_SPEED);
+  // Запускаем привод с нулевой мощностью; дальнейший набор скорости выполняется в loop().
+  applyMotorC(0);
   updateDriverStandby();
 }
 
@@ -238,6 +244,21 @@ void positionalServoUpdate() {
     return;
   }
   lastUpdateMs = now;
+
+  // Плавно увеличиваем PWM от 0 до рабочего значения за ~280 мс.
+  if ((unsigned long)(now - lastMotorRampMs) >= POSITION_MOTOR_RAMP_INTERVAL_MS) {
+    lastMotorRampMs = now;
+    const int targetSpeed = movementDirection > 0
+        ? -POSITION_MOTOR_SPEED
+        : POSITION_MOTOR_SPEED;
+    if (appliedMotorSpeed < targetSpeed) {
+      appliedMotorSpeed = min(appliedMotorSpeed + POSITION_MOTOR_RAMP_STEP, targetSpeed);
+    } else if (appliedMotorSpeed > targetSpeed) {
+      appliedMotorSpeed = max(appliedMotorSpeed - POSITION_MOTOR_RAMP_STEP, targetSpeed);
+    }
+    applyMotorC(appliedMotorSpeed);
+    updateDriverStandby();
+  }
 
   const int currentMv = readFeedbackMillivolts();
   if (!feedbackIsValid(currentMv)) {
