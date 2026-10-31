@@ -26,6 +26,7 @@ extern bool ledRearOn;
 
 extern int steerCenterUs;
 extern int steerMaxAngleDeg;
+extern int pfServoSpeedPercent;
 
 
 // ---------- Загрузка настроек ----------
@@ -58,6 +59,7 @@ void loadPreferences() {
   // Clamp persisted calibration to the supported symmetric steering range.
   steerCenterUs = constrain(prefs.getInt("steer_c", 1500), 1250, 1750);
   steerMaxAngleDeg = constrain(prefs.getInt("steer_a", 45), 5, 135);
+  pfServoSpeedPercent = constrain((int)prefs.getUChar("pfspd", 50), 10, 100);
 }
 
 
@@ -69,6 +71,10 @@ void saveSteeringCenter(int value) {
 
 void saveSteeringMaxAngle(int value) {
   prefs.putInt("steer_a", value);
+}
+
+void savePfServoSpeedPercent(int value) {
+  prefs.putUChar("pfspd", (uint8_t)constrain(value, 10, 100));
 }
 
 

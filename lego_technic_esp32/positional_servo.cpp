@@ -15,8 +15,15 @@ static constexpr int FEEDBACK_RIGHT_MV  = 545;
 static constexpr int FEEDBACK_TOLERANCE_MV = 45;
 static constexpr int FEEDBACK_VALID_MIN_MV = 250;
 static constexpr int FEEDBACK_VALID_MAX_MV = 2200;
+static constexpr int FEEDBACK_ZONE_MIN_MV = 500;
+static constexpr int FEEDBACK_ZONE_MAX_MV = 1850;
+static constexpr int FEEDBACK_ZONE_HYSTERESIS_MV = 25;
+static constexpr int FEEDBACK_ZONE_BOUNDARIES_MV[] = {635, 780, 990, 1375};
 
-static constexpr int POSITION_MOTOR_SPEED = 70;
+static constexpr int POSITION_MOTOR_SPEED = 70; // 100% пользовательской настройки
+static constexpr int SLOW_APPROACH_SPEED_PERCENT = 50;
+static constexpr int SLOW_APPROACH_WINDOW_MV = 150;
+static constexpr unsigned long FEEDBACK_SAMPLE_INTERVAL_MS = 10;
 static constexpr int POSITION_MOTOR_RAMP_STEP = 5;
 static constexpr unsigned long POSITION_MOTOR_RAMP_INTERVAL_MS = 20;
 static constexpr unsigned long UPDATE_INTERVAL_MS = 10;
@@ -39,6 +46,9 @@ static unsigned long lastMotorRampMs = 0;
 static int appliedMotorSpeed = 0;
 static bool filterReady = false;
 static uint8_t invalidReadCount = 0;
+static int feedbackZone = (int)PositionalServoFeedbackZone::Unknown;
+static unsigned long lastFeedbackSampleMs = 0;
+static int speedPercent = 50;
 
 // WebSocket callbacks run in the AsyncTCP task while positionalServoUpdate()
 // runs in loop(). A mutex protects controller state and all C-channel writes.
@@ -56,6 +66,36 @@ static void unlockController() {
   }
 }
 
+static void updateFeedbackZone(int voltageMv) {
+  if (voltageMv < FEEDBACK_ZONE_MIN_MV || voltageMv > FEEDBACK_ZONE_MAX_MV) {
+    feedbackZone = (int)PositionalServoFeedbackZone::Unknown;
+    return;
+  }
+
+  int candidateZone = 0;
+  while (candidateZone < 4 &&
+         voltageMv >= FEEDBACK_ZONE_BOUNDARIES_MV[candidateZone]) {
+    ++candidateZone;
+  }
+
+  if (feedbackZone < 0 || feedbackZone > 4 ||
+      feedbackZone == (int)PositionalServoFeedbackZone::Unknown) {
+    feedbackZone = candidateZone;
+    return;
+  }
+
+  while (feedbackZone < candidateZone && feedbackZone < 4 &&
+         voltageMv >= FEEDBACK_ZONE_BOUNDARIES_MV[feedbackZone] +
+                          FEEDBACK_ZONE_HYSTERESIS_MV) {
+    ++feedbackZone;
+  }
+  while (feedbackZone > candidateZone && feedbackZone > 0 &&
+         voltageMv < FEEDBACK_ZONE_BOUNDARIES_MV[feedbackZone - 1] -
+                         FEEDBACK_ZONE_HYSTERESIS_MV) {
+    --feedbackZone;
+  }
+}
+
 static int readFeedbackMillivolts() {
   const int rawMv = (int)analogReadMilliVolts(SERVO_FEEDBACK_PIN);
   if (!filterReady) {
@@ -65,6 +105,7 @@ static int readFeedbackMillivolts() {
     // Небольшой IIR-фильтр подавляет шум ADC, не добавляя заметной задержки.
     filteredVoltageMv = (filteredVoltageMv * 3 + rawMv) / 4;
   }
+  updateFeedbackZone(filteredVoltageMv);
   return filteredVoltageMv;
 }
 
@@ -129,6 +170,8 @@ void positionalServoBegin() {
 
   filterReady = false;
   invalidReadCount = 0;
+  lastFeedbackSampleMs = 0;
+  speedPercent = 50;
   state = PositionalServoState::Idle;
   movementDirection = 0;
   targetValid = false;
@@ -145,7 +188,7 @@ bool positionalServoRequest(PositionalServoTarget target) {
   if (controllerMutex == nullptr) return false;
   lockController();
 
-  const int currentMv = readFeedbackMillivolts();
+  const int currentMv = filteredVoltageMv;
   if (!feedbackIsValid(currentMv)) {
     setPositionFault();
     unlockController();
@@ -202,20 +245,24 @@ void positionalServoUpdate() {
   if (controllerMutex == nullptr) return;
   lockController();
 
+  const unsigned long now = millis();
+  if ((unsigned long)(now - lastFeedbackSampleMs) >= FEEDBACK_SAMPLE_INTERVAL_MS) {
+    lastFeedbackSampleMs = now;
+    readFeedbackMillivolts();
+  }
+
   if (state != PositionalServoState::Moving &&
       state != PositionalServoState::WaitingForDirectionChange) {
     unlockController();
     return;
   }
-
-  const unsigned long now = millis();
   if (state == PositionalServoState::WaitingForDirectionChange) {
     if ((unsigned long)(now - directionChangeStartMs) < DIRECTION_DEADTIME_MS) {
       unlockController();
       return;
     }
 
-    const int currentMv = readFeedbackMillivolts();
+    const int currentMv = filteredVoltageMv;
     if (!feedbackIsValid(currentMv)) {
       if (++invalidReadCount >= 3) setPositionFault();
       unlockController();
@@ -244,9 +291,12 @@ void positionalServoUpdate() {
   // Плавно увеличиваем PWM от 0 до рабочего значения за ~280 мс.
   if ((unsigned long)(now - lastMotorRampMs) >= POSITION_MOTOR_RAMP_INTERVAL_MS) {
     lastMotorRampMs = now;
-    const int targetSpeed = movementDirection > 0
-        ? -POSITION_MOTOR_SPEED
-        : POSITION_MOTOR_SPEED;
+    const int configuredSpeed = max(1, (POSITION_MOTOR_SPEED * speedPercent + 50) / 100);
+    const int remainingMv = abs(targetVoltageMv - filteredVoltageMv);
+    const int phaseSpeed = remainingMv <= SLOW_APPROACH_WINDOW_MV
+        ? max(1, (configuredSpeed * SLOW_APPROACH_SPEED_PERCENT + 50) / 100)
+        : configuredSpeed;
+    const int targetSpeed = movementDirection > 0 ? -phaseSpeed : phaseSpeed;
     if (appliedMotorSpeed < targetSpeed) {
       appliedMotorSpeed = min(appliedMotorSpeed + POSITION_MOTOR_RAMP_STEP, targetSpeed);
     } else if (appliedMotorSpeed > targetSpeed) {
@@ -256,7 +306,7 @@ void positionalServoUpdate() {
     updateDriverStandby();
   }
 
-  const int currentMv = readFeedbackMillivolts();
+  const int currentMv = filteredVoltageMv;
   if (!feedbackIsValid(currentMv)) {
     if (++invalidReadCount >= 3) setPositionFault();
     unlockController();
@@ -314,6 +364,30 @@ bool positionalServoIsMoving() {
   return moving;
 }
 
+void positionalServoSetSpeedPercent(int percent) {
+  if (controllerMutex == nullptr) return;
+  lockController();
+  speedPercent = constrain(percent, 10, 100);
+
+  // При уменьшении ограничения немедленно снижаем уже применённую скорость.
+  // Это не позволяет старому PWM временно превышать новое значение настройки.
+  const int maxSpeed = max(1, (POSITION_MOTOR_SPEED * speedPercent + 50) / 100);
+  if (state == PositionalServoState::Moving && abs(appliedMotorSpeed) > maxSpeed) {
+    appliedMotorSpeed = movementDirection > 0 ? -maxSpeed : maxSpeed;
+    applyMotorC(appliedMotorSpeed);
+    updateDriverStandby();
+  }
+  unlockController();
+}
+
+int positionalServoGetSpeedPercent() {
+  if (controllerMutex == nullptr) return 50;
+  lockController();
+  const int value = speedPercent;
+  unlockController();
+  return value;
+}
+
 void positionalServoGetStatus(PositionalServoStatus &status) {
   status.state = PositionalServoState::Fault;
   status.target = PositionalServoTarget::Center;
@@ -322,11 +396,12 @@ void positionalServoGetStatus(PositionalServoStatus &status) {
   status.targetValid = false;
   status.feedbackValid = false;
   status.targetReached = false;
+  status.feedbackZone = PositionalServoFeedbackZone::Unknown;
 
   if (controllerMutex == nullptr) return;
 
   lockController();
-  const int currentMv = readFeedbackMillivolts();
+  const int currentMv = filteredVoltageMv;
   status.state = state;
   status.target = targetValid
       ? (targetVoltageMv == FEEDBACK_LEFT_MV ? PositionalServoTarget::Left
@@ -334,6 +409,7 @@ void positionalServoGetStatus(PositionalServoStatus &status) {
         : PositionalServoTarget::Center)
       : PositionalServoTarget::Center;
   status.feedbackMv = currentMv;
+  status.feedbackZone = (PositionalServoFeedbackZone)feedbackZone;
   status.targetMv = targetVoltageMv;
   status.targetValid = targetValid;
   status.feedbackValid = feedbackIsValid(currentMv);
