@@ -6,6 +6,7 @@
 #include "steering_control.h"
 #include "positional_servo.h"
 #include "i2c_motor_backend.h"
+#include "serial_log.h"
 
 // Состояние объявлено и определяется в lego_technic_esp32.ino
 extern uint8_t motorModeC;
