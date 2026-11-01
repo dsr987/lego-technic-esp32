@@ -5,6 +5,7 @@
 #include "hardware_config.h"
 #include "motor_control.h"
 #include "positional_servo.h"
+#include "serial_log.h"
 
 // Значения напряжения получены измерением существующего механизма.
 // Это стартовая калибровка; перед эксплуатацией требуется сверка по ADC ESP32.
@@ -37,6 +38,8 @@ static bool targetValid = false;
 static int targetVoltageMv = FEEDBACK_CENTER_MV;
 static int movementDirection = 0;
 static int filteredVoltageMv = 0;
+static int rawFeedbackMv = 0;
+static unsigned long lastDiagnosticLogMs = 0;
 static int progressReferenceMv = 0;
 static unsigned long lastUpdateMs = 0;
 static unsigned long movementStartMs = 0;
@@ -98,6 +101,7 @@ static void updateFeedbackZone(int voltageMv) {
 
 static int readFeedbackMillivolts() {
   const int rawMv = (int)analogReadMilliVolts(SERVO_FEEDBACK_PIN);
+  rawFeedbackMv = rawMv;
   if (!filterReady) {
     filteredVoltageMv = rawMv;
     filterReady = true;
@@ -117,6 +121,13 @@ static bool feedbackIsValid(int voltageMv) {
 }
 
 static void stopPositionMotor() {
+  const bool wasMoving = state == PositionalServoState::Moving ||
+      state == PositionalServoState::WaitingForDirectionChange;
+  if (wasMoving) {
+    serialLogPrintf("[PF][STOP] target=%dmV feedback=%dmV raw=%dmV elapsed=%lums\n",
+        targetVoltageMv, filteredVoltageMv, rawFeedbackMv,
+        (unsigned long)(millis() - movementStartMs));
+  }
   applyMotorC(0);
   updateDriverStandby();
   movementDirection = 0;
@@ -124,7 +135,11 @@ static void stopPositionMotor() {
   state = PositionalServoState::Idle;
 }
 
-static void setPositionFault() {
+static void setPositionFault(const char *reason) {
+  serialLogPrintf("[PF][FAULT] reason=%s state=%d feedback=%dmV raw=%dmV target=%dmV elapsed=%lums noProgress=%lums pwm=%d\n",
+      reason ? reason : "unknown", (int)state, filteredVoltageMv, rawFeedbackMv,
+      targetVoltageMv, (unsigned long)(millis() - movementStartMs),
+      (unsigned long)(millis() - lastProgressMs), appliedMotorSpeed);
   applyMotorC(0);
   updateDriverStandby();
   movementDirection = 0;
@@ -190,13 +205,16 @@ bool positionalServoRequest(PositionalServoTarget target) {
 
   const int currentMv = filteredVoltageMv;
   if (!feedbackIsValid(currentMv)) {
-    setPositionFault();
+    setPositionFault("invalid feedback before request");
     unlockController();
     return false;
   }
 
   targetVoltageMv = targetVoltage(target);
   targetValid = true;
+  serialLogPrintf("[PF][REQUEST] target=%d targetMv=%d feedback=%dmV raw=%dmV speed=%d%% state=%d\n",
+      (int)target, targetVoltageMv, filteredVoltageMv, rawFeedbackMv,
+      speedPercent, (int)state);
   invalidReadCount = 0;
 
   const int difference = targetVoltageMv - currentMv;
@@ -237,6 +255,10 @@ bool positionalServoRequest(PositionalServoTarget target) {
   }
 
   startPositionMotor(now);
+  lastDiagnosticLogMs = now;
+  serialLogPrintf("[PF][START] direction=%s feedback=%dmV raw=%dmV target=%dmV\n",
+      movementDirection > 0 ? "LEFT" : "RIGHT", filteredVoltageMv,
+      rawFeedbackMv, targetVoltageMv);
   unlockController();
   return true;
 }
@@ -256,6 +278,17 @@ void positionalServoUpdate() {
     unlockController();
     return;
   }
+  if (state == PositionalServoState::Moving &&
+      (unsigned long)(now - lastDiagnosticLogMs) >= 100) {
+    lastDiagnosticLogMs = now;
+    serialLogPrintf("[PF][MOVE] direction=%s feedback=%dmV raw=%dmV target=%dmV pwm=%d remaining=%dmV elapsed=%lums noProgress=%lums heap=%lu\n",
+        movementDirection > 0 ? "LEFT" : "RIGHT", filteredVoltageMv,
+        rawFeedbackMv, targetVoltageMv, appliedMotorSpeed,
+        abs(targetVoltageMv - filteredVoltageMv),
+        (unsigned long)(now - movementStartMs),
+        (unsigned long)(now - lastProgressMs), (unsigned long)ESP.getFreeHeap());
+  }
+
   if (state == PositionalServoState::WaitingForDirectionChange) {
     if ((unsigned long)(now - directionChangeStartMs) < DIRECTION_DEADTIME_MS) {
       unlockController();
@@ -264,7 +297,7 @@ void positionalServoUpdate() {
 
     const int currentMv = filteredVoltageMv;
     if (!feedbackIsValid(currentMv)) {
-      if (++invalidReadCount >= 3) setPositionFault();
+      if (++invalidReadCount >= 3) setPositionFault("invalid feedback while reversing");
       unlockController();
       return;
     }
@@ -308,7 +341,7 @@ void positionalServoUpdate() {
 
   const int currentMv = filteredVoltageMv;
   if (!feedbackIsValid(currentMv)) {
-    if (++invalidReadCount >= 3) setPositionFault();
+    if (++invalidReadCount >= 3) setPositionFault("invalid feedback while moving");
     unlockController();
     return;
   }
@@ -333,7 +366,8 @@ void positionalServoUpdate() {
 
   if ((unsigned long)(now - movementStartMs) >= POSITION_TIMEOUT_MS ||
       (unsigned long)(now - lastProgressMs) >= STALL_TIMEOUT_MS) {
-    setPositionFault();
+    setPositionFault((unsigned long)(now - movementStartMs) >= POSITION_TIMEOUT_MS
+        ? "movement timeout" : "no progress timeout");
   }
 
   unlockController();
@@ -347,6 +381,9 @@ void positionalServoCancel() {
   lockController();
   if (state == PositionalServoState::Moving ||
       state == PositionalServoState::WaitingForDirectionChange) {
+    serialLogPrintf("[PF][CANCEL] feedback=%dmV raw=%dmV target=%dmV elapsed=%lums\n",
+        filteredVoltageMv, rawFeedbackMv, targetVoltageMv,
+        (unsigned long)(millis() - movementStartMs));
     applyMotorC(0);
     updateDriverStandby();
   }

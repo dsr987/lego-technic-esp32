@@ -9,6 +9,7 @@
 #include "preferences_manager.h"
 #include "positional_servo.h"
 #include "display_control.h"
+#include "serial_log.h"
 
 // ---------- Состояние, объявленное в lego_technic_esp32.ino ----------
 
@@ -325,6 +326,9 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
 
     bool requestedEngineSim = doc["eng"].as<int>() == 1;
     engineSimOn = requestedEngineSim && currentMode == MODE_CAR;
+    serialLogPrintf("[ENG][WS] request=%s mode=%d accepted=%s A=%d B=%d\n",
+        requestedEngineSim ? "ON" : "OFF", (int)currentMode,
+        engineSimOn ? "YES" : "NO", motorAVal, motorBVal);
 
     if (!engineSimOn) {
       motorBVal = 0;

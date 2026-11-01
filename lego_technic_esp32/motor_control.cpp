@@ -68,7 +68,12 @@ void applyMotorA(int val) {
     );
 
     int actualB = reverseB ? -aux : aux;
+    const int previousB = motorBVal;
     motorBVal = actualB;
+    if (previousB != actualB) {
+      serialLogPrintf("[ENG][OUTPUT] throttleA=%d motorB=%d reverseB=%d\n",
+          motorAVal, actualB, reverseB ? 1 : 0);
+    }
 
     i2cMotorBackendSetMotor(I2CMotorChannel::B, actualB);
   }
@@ -78,7 +83,12 @@ void applyMotorA(int val) {
 // ---------- Мотор B ----------
 
 void applyMotorB(int val) {
+  const int previousB = motorBVal;
   motorBVal = constrain(val, -100, 100);
+  if (!engineSimOn && previousB != motorBVal) {
+    serialLogPrintf("[MOTOR B][MANUAL] command=%d reverse=%d\n",
+        motorBVal, reverseB ? 1 : 0);
+  }
 
   i2cMotorBackendSetMotor(
     I2CMotorChannel::B,
