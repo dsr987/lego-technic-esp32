@@ -29,10 +29,10 @@ TwoWire *backendWire = nullptr;
 constexpr uint8_t MOTOR_PWM_PINS[MOTOR_COUNT] = {8, 13, 2, 7};
 constexpr uint8_t MOTOR_IN1_PINS[MOTOR_COUNT] = {10, 11, 4, 5};
 constexpr uint8_t MOTOR_IN2_PINS[MOTOR_COUNT] = {9, 12, 3, 6};
-constexpr uint8_t PCA9685_MODE1 = 0x00;
+constexpr uint8_t REG_PCA9685_MODE1 = 0x00;
 constexpr uint8_t PCA9685_MODE2 = 0x01;
 constexpr uint8_t PCA9685_LED0_ON_L = 0x06;
-constexpr uint8_t PCA9685_PRESCALE = 0xFE;
+constexpr uint8_t REG_PCA9685_PRESCALE = 0xFE;
 
 const char *motorName(uint8_t index) {
   static const char *NAMES[MOTOR_COUNT] = {"A/M1", "B/M2", "E/M3", "F/M4"};
@@ -97,9 +97,9 @@ void logPca9685MotorState(uint8_t motorIndex) {
   uint8_t mode1 = 0;
   uint8_t mode2 = 0;
   uint8_t prescale = 0;
-  const bool mode1Ok = readPca9685Register(PCA9685_MODE1, mode1);
+  const bool mode1Ok = readPca9685Register(REG_PCA9685_MODE1, mode1);
   const bool mode2Ok = readPca9685Register(PCA9685_MODE2, mode2);
-  const bool prescaleOk = readPca9685Register(PCA9685_PRESCALE, prescale);
+  const bool prescaleOk = readPca9685Register(REG_PCA9685_PRESCALE, prescale);
 
   serialLogPrintf(
       "[FW][PCA9685][READBACK] %s MODE1=%s0x%02X MODE2=%s0x%02X PRESCALE=%s0x%02X\n",
