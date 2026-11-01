@@ -248,17 +248,6 @@ bool positionalServoRequest(PositionalServoTarget target) {
     return true;
   }
 
-  if (state == PositionalServoState::Moving &&
-      (unsigned long)(now - lastDiagnosticLogMs) >= 100) {
-    lastDiagnosticLogMs = now;
-    serialLogPrintf("[PF][MOVE] direction=%s feedback=%dmV raw=%dmV target=%dmV pwm=%d remaining=%dmV elapsed=%lums noProgress=%lums heap=%lu\n",
-        movementDirection > 0 ? "LEFT" : "RIGHT", filteredVoltageMv,
-        rawFeedbackMv, targetVoltageMv, appliedMotorSpeed,
-        abs(targetVoltageMv - filteredVoltageMv),
-        (unsigned long)(now - movementStartMs),
-        (unsigned long)(now - lastProgressMs), (unsigned long)ESP.getFreeHeap());
-  }
-
   if (state == PositionalServoState::WaitingForDirectionChange) {
     // Цель изменилась, но направление осталось прежним: сохраняем deadtime.
     unlockController();
@@ -289,6 +278,17 @@ void positionalServoUpdate() {
     unlockController();
     return;
   }
+  if (state == PositionalServoState::Moving &&
+      (unsigned long)(now - lastDiagnosticLogMs) >= 100) {
+    lastDiagnosticLogMs = now;
+    serialLogPrintf("[PF][MOVE] direction=%s feedback=%dmV raw=%dmV target=%dmV pwm=%d remaining=%dmV elapsed=%lums noProgress=%lums heap=%lu\n",
+        movementDirection > 0 ? "LEFT" : "RIGHT", filteredVoltageMv,
+        rawFeedbackMv, targetVoltageMv, appliedMotorSpeed,
+        abs(targetVoltageMv - filteredVoltageMv),
+        (unsigned long)(now - movementStartMs),
+        (unsigned long)(now - lastProgressMs), (unsigned long)ESP.getFreeHeap());
+  }
+
   if (state == PositionalServoState::WaitingForDirectionChange) {
     if ((unsigned long)(now - directionChangeStartMs) < DIRECTION_DEADTIME_MS) {
       unlockController();
