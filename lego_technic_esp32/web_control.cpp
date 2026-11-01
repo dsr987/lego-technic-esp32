@@ -9,6 +9,7 @@
 #include "preferences_manager.h"
 #include "positional_servo.h"
 #include "display_control.h"
+#include "serial_log.h"
 
 // ---------- Состояние, объявленное в lego_technic_esp32.ino ----------
 
