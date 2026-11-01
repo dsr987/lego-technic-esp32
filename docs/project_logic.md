@@ -48,7 +48,7 @@
 
 Таким образом, текущий код использует четыре канала FeatherWing (A/B/E/F) и два канала отдельного TB6612FNG (C/D). Это не схема «два прямых TB6612FNG для A–D» из старой Hardware 1.5.
 
-FeatherWing управляется официальной библиотекой Adafruit Motor Shield V2.4, указанной в комментарии к прошивке как Adafruit Motor Shield V2 Library 1.1.4. Backend находится в `i2c_motor_backend.cpp`.
+FeatherWing управляется официальной библиотекой Adafruit Motor Shield V2, указанной в комментарии к прошивке как Adafruit Motor Shield V2 Library 1.1.4. Backend находится в `i2c_motor_backend.cpp`.
 
 ## 2. Распиновка ESP32
 
