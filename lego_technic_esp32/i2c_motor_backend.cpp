@@ -23,10 +23,94 @@ int16_t lastReportedSpeed[MOTOR_COUNT] = {127, 127, 127, 127};
 bool backendReady = false;
 bool rejectedCommandLogged = false;
 SemaphoreHandle_t backendMutex = nullptr;
+TwoWire *backendWire = nullptr;
+
+// Назначения выходов PCA9685 по таблице Adafruit Motor Shield V2.
+constexpr uint8_t MOTOR_PWM_PINS[MOTOR_COUNT] = {8, 13, 2, 7};
+constexpr uint8_t MOTOR_IN1_PINS[MOTOR_COUNT] = {10, 11, 4, 5};
+constexpr uint8_t MOTOR_IN2_PINS[MOTOR_COUNT] = {9, 12, 3, 6};
+constexpr uint8_t PCA9685_MODE1 = 0x00;
+constexpr uint8_t PCA9685_MODE2 = 0x01;
+constexpr uint8_t PCA9685_LED0_ON_L = 0x06;
+constexpr uint8_t PCA9685_PRESCALE = 0xFE;
 
 const char *motorName(uint8_t index) {
   static const char *NAMES[MOTOR_COUNT] = {"A/M1", "B/M2", "E/M3", "F/M4"};
   return index < MOTOR_COUNT ? NAMES[index] : "UNKNOWN";
+}
+
+bool readPca9685Register(uint8_t reg, uint8_t &value) {
+  if (backendWire == nullptr) {
+    return false;
+  }
+
+  backendWire->beginTransmission(I2C_MOTOR_WING_ADDRESS);
+  backendWire->write(reg);
+  const uint8_t txStatus = backendWire->endTransmission(false);
+  if (txStatus != 0) {
+    serialLogPrintf("[FW][PCA9685][READ ERROR] reg=0x%02X I2C tx=%u\n",
+                    static_cast<unsigned>(reg),
+                    static_cast<unsigned>(txStatus));
+    return false;
+  }
+
+  const uint8_t received = static_cast<uint8_t>(
+      backendWire->requestFrom(I2C_MOTOR_WING_ADDRESS, static_cast<uint8_t>(1)));
+  if (received != 1 || backendWire->available() < 1) {
+    serialLogPrintf("[FW][PCA9685][READ ERROR] reg=0x%02X received=%u\n",
+                    static_cast<unsigned>(reg),
+                    static_cast<unsigned>(received));
+    return false;
+  }
+
+  value = static_cast<uint8_t>(backendWire->read());
+  return true;
+}
+
+void logPca9685Channel(uint8_t motorIndex, const char *signal, uint8_t channel) {
+  const uint8_t firstRegister = static_cast<uint8_t>(PCA9685_LED0_ON_L + channel * 4);
+  uint8_t values[4] = {0, 0, 0, 0};
+  for (uint8_t i = 0; i < 4; ++i) {
+    if (!readPca9685Register(static_cast<uint8_t>(firstRegister + i), values[i])) {
+      serialLogPrintf("[FW][PCA9685][READBACK] %s %s CH%u unavailable\n",
+                      motorName(motorIndex), signal,
+                      static_cast<unsigned>(channel));
+      return;
+    }
+  }
+
+  const uint16_t on = static_cast<uint16_t>(
+      (static_cast<uint16_t>(values[1] & 0x0F) << 8) | values[0]);
+  const uint16_t off = static_cast<uint16_t>(
+      (static_cast<uint16_t>(values[3] & 0x0F) << 8) | values[2]);
+  const bool fullOn = (values[1] & 0x10) != 0;
+  const bool fullOff = (values[3] & 0x10) != 0;
+
+  serialLogPrintf(
+      "[FW][PCA9685][READBACK] %s %s CH%u ON=%03X OFF=%03X FULL_ON=%u FULL_OFF=%u\n",
+      motorName(motorIndex), signal, static_cast<unsigned>(channel),
+      static_cast<unsigned>(on), static_cast<unsigned>(off),
+      fullOn ? 1U : 0U, fullOff ? 1U : 0U);
+}
+
+void logPca9685MotorState(uint8_t motorIndex) {
+  uint8_t mode1 = 0;
+  uint8_t mode2 = 0;
+  uint8_t prescale = 0;
+  const bool mode1Ok = readPca9685Register(PCA9685_MODE1, mode1);
+  const bool mode2Ok = readPca9685Register(PCA9685_MODE2, mode2);
+  const bool prescaleOk = readPca9685Register(PCA9685_PRESCALE, prescale);
+
+  serialLogPrintf(
+      "[FW][PCA9685][READBACK] %s MODE1=%s0x%02X MODE2=%s0x%02X PRESCALE=%s0x%02X\n",
+      motorName(motorIndex), mode1Ok ? "" : "ERR/",
+      static_cast<unsigned>(mode1), mode2Ok ? "" : "ERR/",
+      static_cast<unsigned>(mode2), prescaleOk ? "" : "ERR/",
+      static_cast<unsigned>(prescale));
+
+  logPca9685Channel(motorIndex, "PWM", MOTOR_PWM_PINS[motorIndex]);
+  logPca9685Channel(motorIndex, "IN1", MOTOR_IN1_PINS[motorIndex]);
+  logPca9685Channel(motorIndex, "IN2", MOTOR_IN2_PINS[motorIndex]);
 }
 
 class BackendLock {
@@ -100,6 +184,7 @@ bool i2cMotorBackendBegin(TwoWire &wire) {
 
   backendReady = false;
   rejectedCommandLogged = false;
+  backendWire = &wire;
   for (uint8_t i = 0; i < MOTOR_COUNT; ++i) {
     motors[i] = nullptr;
     lastDirection[i] = 0;
@@ -157,6 +242,7 @@ bool i2cMotorBackendSetMotor(I2CMotorChannel channel, int speedPercent) {
     if (lastReportedSpeed[index] != 0) {
       serialLogPrintf("[FW][MOTOR SHIELD][CMD] %s speed=0%% (release)\n", motorName(index));
       lastReportedSpeed[index] = 0;
+      logPca9685MotorState(index);
     }
     return true;
   }
@@ -177,6 +263,9 @@ bool i2cMotorBackendSetMotor(I2CMotorChannel channel, int speedPercent) {
                     motorName(index), speedPercent, direction > 0 ? "forward" : "reverse",
                     static_cast<unsigned>(pwm));
     lastReportedSpeed[index] = speedPercent;
+    // Adafruit_MotorShield ignores I2C write status. Read the PCA9685 registers
+    // back so the log distinguishes a successful function call from delivered writes.
+    logPca9685MotorState(index);
   }
   return true;
 }
