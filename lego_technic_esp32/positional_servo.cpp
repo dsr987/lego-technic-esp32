@@ -5,6 +5,7 @@
 #include "hardware_config.h"
 #include "motor_control.h"
 #include "positional_servo.h"
+#include "serial_log.h"
 
 // Значения напряжения получены измерением существующего механизма.
 // Это стартовая калибровка; перед эксплуатацией требуется сверка по ADC ESP32.
@@ -37,6 +38,8 @@ static bool targetValid = false;
 static int targetVoltageMv = FEEDBACK_CENTER_MV;
 static int movementDirection = 0;
 static int filteredVoltageMv = 0;
+static int rawFeedbackMv = 0;
+static unsigned long lastDiagnosticLogMs = 0;
 static int progressReferenceMv = 0;
 static unsigned long lastUpdateMs = 0;
 static unsigned long movementStartMs = 0;
@@ -109,7 +112,7 @@ static int readFeedbackMillivolts() {
   return filteredVoltageMv;
 }
 
-static bool feedbackIsValid(int voltageMv) {
+static const char *targetName(PositionalServoTarget target) {\n  switch (target) {\n    case PositionalServoTarget::Left: return "LEFT";\n    case PositionalServoTarget::Right: return "RIGHT";\n    case PositionalServoTarget::Center: default: return "CENTER";\n  }\n}\n\nstatic const char *stateName(PositionalServoState value) {\n  switch (value) {\n    case PositionalServoState::Moving: return "MOVING";\n    case PositionalServoState::WaitingForDirectionChange: return "REVERSING";\n    case PositionalServoState::Fault: return "FAULT";\n    case PositionalServoState::Idle: default: return "IDLE";\n  }\n}\n\nstatic bool feedbackIsValid(int voltageMv) {
   // Обрыв при внешней подтяжке вниз даёт уровень около 0 В;
   // короткое замыкание на питание даёт уровень выше рабочего диапазона.
   return voltageMv >= FEEDBACK_VALID_MIN_MV &&
@@ -190,7 +193,7 @@ bool positionalServoRequest(PositionalServoTarget target) {
 
   const int currentMv = filteredVoltageMv;
   if (!feedbackIsValid(currentMv)) {
-    setPositionFault();
+    setPositionFault("invalid feedback before request");
     unlockController();
     return false;
   }
@@ -230,7 +233,7 @@ bool positionalServoRequest(PositionalServoTarget target) {
     return true;
   }
 
-  if (state == PositionalServoState::WaitingForDirectionChange) {
+  if (state == PositionalServoState::Moving &&\n      (unsigned long)(now - lastDiagnosticLogMs) >= 100) {\n    lastDiagnosticLogMs = now;\n    serialLogPrintf("[PF][MOVE] target=%s direction=%s feedback=%dmV raw=%dmV targetMv=%dmV pwm=%d remaining=%dmV elapsed=%lums noProgress=%lums heap=%lu\\n",\n        targetName(targetVoltageMv == FEEDBACK_LEFT_MV ? PositionalServoTarget::Left\n          : targetVoltageMv == FEEDBACK_RIGHT_MV ? PositionalServoTarget::Right\n          : PositionalServoTarget::Center),\n        movementDirection > 0 ? "LEFT" : "RIGHT", filteredVoltageMv, rawFeedbackMv,\n        targetVoltageMv, appliedMotorSpeed, abs(targetVoltageMv - filteredVoltageMv),\n        (unsigned long)(now - movementStartMs), (unsigned long)(now - lastProgressMs),\n        (unsigned long)ESP.getFreeHeap());\n  }\n\n  if (state == PositionalServoState::WaitingForDirectionChange) {
     // Цель изменилась, но направление осталось прежним: сохраняем deadtime.
     unlockController();
     return true;
@@ -264,7 +267,7 @@ void positionalServoUpdate() {
 
     const int currentMv = filteredVoltageMv;
     if (!feedbackIsValid(currentMv)) {
-      if (++invalidReadCount >= 3) setPositionFault();
+      if (++invalidReadCount >= 3) setPositionFault("invalid feedback while reversing");
       unlockController();
       return;
     }
@@ -308,7 +311,7 @@ void positionalServoUpdate() {
 
   const int currentMv = filteredVoltageMv;
   if (!feedbackIsValid(currentMv)) {
-    if (++invalidReadCount >= 3) setPositionFault();
+    if (++invalidReadCount >= 3) setPositionFault("invalid feedback while moving");
     unlockController();
     return;
   }
