@@ -1884,6 +1884,10 @@ function applyMotorModeUI(ch){
     if(motorCount<2 || mode!==1) return;
     vibrateClick();
     eng=!eng;
+    // B is driven by A while engine simulation is active. Clear the previous
+    // manual heartbeat value so it cannot restart B when simulation is disabled.
+    lastSent.B=0;
+    txWS({ch:"B",val:0});
     updateEngUI();
     applyEngGate();
     txWS({eng: eng?1:0});
