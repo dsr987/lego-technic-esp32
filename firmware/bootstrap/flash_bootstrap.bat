@@ -87,7 +87,7 @@ if not defined ESP32_PORT (
 echo.
 echo [5/5] Компиляция и прошивка загрузчика OTA в порт %ESP32_PORT%...
 echo Не отключай ESP32 от USB. Если загрузка не удалась, переведи плату в режим загрузки и повтори попытку.
-"%ARDUINO_CLI%" --config-file "%CONFIG_FILE%" compile --upload --fqbn esp32:esp32:esp32 --port "%ESP32_PORT%" "%SKETCH_DIR%"
+"%ARDUINO_CLI%" --config-file "%CONFIG_FILE%" compile --upload --fqbn esp32:esp32:esp32 --board-options PartitionScheme=min_spiffs --port "%ESP32_PORT%" "%SKETCH_DIR%"
 if errorlevel 1 goto :fail
 
 echo.
