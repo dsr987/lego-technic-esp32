@@ -96,7 +96,8 @@ jobs:
                 esac
 
                 case "$file" in
-                  firmware/bootstrap/LEGO_Technic_ESP32_Bootstrap/LEGO_Technic_ESP32_Bootstrap.ino)
+                  firmware/bootstrap/LEGO_Technic_ESP32_Bootstrap/LEGO_Technic_ESP32_Bootstrap.ino|\
+                  firmware/bootstrap/flash_bootstrap.bat)
                     bootstrap_changed=true
                     site=true
                     ;;
@@ -306,6 +307,7 @@ jobs:
 
           arduino-cli compile \
             --fqbn esp32:esp32:esp32 \
+            --board-options PartitionScheme=min_spiffs \
             --warnings default \
             --build-property "compiler.cpp.extra_flags=-DELEGANTOTA_USE_ASYNC_WEBSERVER=1" \
             --output-dir "$RUNNER_TEMP/esp32-build" \
