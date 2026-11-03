@@ -912,7 +912,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
       </div>
       <div class="line">
         <span>Макс.°</span><span class="grow"></span>
-        <input class="num" id="maxdeg-input" type="number" min="5" max="135" value="45">
+        <input class="num" id="maxdeg-input" type="number" min="45" max="90" value="45">
       </div>
     </div>
     <div class="block">
@@ -2101,9 +2101,9 @@ function applyMotorModeUI(ch){
   $('sbg').onclick=function(){ openS(false); };
   $('sheetBody').addEventListener('touchmove', function(e){ e.stopPropagation(); }, {passive:true});
 
-  $('trimM').onclick=function(){ vibrateClick(); trim=Math.max(-45,trim-1); $('val-trim').textContent=trim+'°'; txWS({trim:trim}); };
-  $('trimP').onclick=function(){ vibrateClick(); trim=Math.min(45,trim+1); $('val-trim').textContent=trim+'°'; txWS({trim:trim}); };
-  $('maxdeg-input').onchange=function(){ vibrateClick(); var deg=Math.max(5,Math.min(135,Number(this.value)||45)); this.value=deg; txWS({maxdeg:deg}); };
+  $('trimM').onclick=function(){ vibrateClick(); trim=Math.max(-90,trim-1); $('val-trim').textContent=trim+'°'; txWS({trim:trim}); };
+  $('trimP').onclick=function(){ vibrateClick(); trim=Math.min(90,trim+1); $('val-trim').textContent=trim+'°'; txWS({trim:trim}); };
+  $('maxdeg-input').onchange=function(){ vibrateClick(); var deg=Math.max(45,Math.min(90,Number(this.value)||45)); this.value=deg; txWS({maxdeg:deg}); };
   $('maxdeg-input').onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); this.blur(); } };
   $('pf-speed-input').onchange=function(){
     vibrateClick();
