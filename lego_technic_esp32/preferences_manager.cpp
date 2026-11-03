@@ -56,9 +56,10 @@ void loadPreferences() {
   ledFrontOn = prefs.getUChar("ledF", 0) != 0;
   ledRearOn  = prefs.getUChar("ledR", 0) != 0;
 
-  // Clamp persisted calibration to the supported symmetric steering range.
-  steerCenterUs = constrain(prefs.getInt("steer_c", 1500), 1250, 1750);
-  steerMaxAngleDeg = constrain(prefs.getInt("steer_a", 45), 5, 135);
+  // Center calibration is limited to +/-90 degrees around the default 1500 us.
+  // Keep persisted values inside the full 500..2500 us command range.
+  steerCenterUs = constrain(prefs.getInt("steer_c", 1500), 1000, 2000);
+  steerMaxAngleDeg = constrain(prefs.getInt("steer_a", 45), 45, 90);
   pfServoSpeedPercent = constrain((int)prefs.getUChar("pfspd", 50), 10, 100);
 }
 

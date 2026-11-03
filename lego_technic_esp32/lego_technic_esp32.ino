@@ -351,7 +351,7 @@ void setup() {
 
   // 4. Инициализация рулевого сервопривода.
   steerServo.setPeriodHertz(50);
-  // Positional servo: allow the full calibrated pulse range for up to 270-degree steering.
+  // Keep the full 500..2500 us command range for +/-90-degree center trim and steering.
   steerServo.attach(SERVO_PIN, 500, 2500);
 
   // 5. Запуск общей I2C-шины для OLED и PCA9685 FeatherWing.
