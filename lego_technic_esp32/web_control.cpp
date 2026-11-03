@@ -209,9 +209,9 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     if (!doc["trim"].is<int>()) return;
 
     lastCmdMillis = millis();
-    // Keep the calibrated center within the range that allows symmetric +/-135 degrees.
-    // trim is expressed in degrees relative to neutral (0 degrees).
-    const int trimDegrees = constrain(doc["trim"].as<int>(), -45, 45);
+    // Center calibration shifts the neutral position by up to +/-90 degrees.
+    // The 500..2500 us command range then retains room for +/-90-degree steering.
+    const int trimDegrees = constrain(doc["trim"].as<int>(), -90, 90);
     const int trimOffsetUs = (trimDegrees * 1000 + (trimDegrees >= 0 ? 90 : -90)) / 180;
     steerCenterUs = 1500 + trimOffsetUs;
 
@@ -225,7 +225,7 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     if (!doc["maxdeg"].is<int>()) return;
 
     lastCmdMillis = millis();
-    steerMaxAngleDeg = constrain(doc["maxdeg"].as<int>(), 5, 135);
+    steerMaxAngleDeg = constrain(doc["maxdeg"].as<int>(), 45, 90);
 
     saveSteeringMaxAngle(steerMaxAngleDeg);
     applySteer(servoVal);
