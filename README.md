@@ -64,7 +64,6 @@
 
 После обновления Factory заменится основной прошивкой LEGO Technic, а точка доступа станет `LegoTechnic`.
 
-
 ## Текущий статус
 **Текущая версия прошивки: 0.14.2**
 <a href="https://github.com/dsr987/lego-technic-esp32/blob/main/lego_technic_esp32/lego_technic_esp32.ino"><img src="https://img.shields.io/badge/Посмотреть-код-blue?style=for-the-badge" alt="Посмотреть код"></a>
