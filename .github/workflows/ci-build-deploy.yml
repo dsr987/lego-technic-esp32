@@ -7,7 +7,6 @@ on:
       - feature/four-dc-motors
     paths:
       - 'lego_technic_esp32/**'
-      - 'firmware/bootstrap/**'
       - 'tools/**'
       - '.github/workflows/**'
       - '.github/release-automation/**'
@@ -18,12 +17,6 @@ on:
       - 'CHANGELOG.md'
       - 'docs/**'
   workflow_dispatch:
-    inputs:
-      build_bootstrap:
-        description: "Скомпилировать и проверить загрузочный образ OTA (только при изменении загрузчика)"
-        required: false
-        type: boolean
-        default: false
 
 permissions:
   contents: write
@@ -52,7 +45,6 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           EVENT_BEFORE: ${{ github.event.before }}
-          BUILD_BOOTSTRAP_INPUT: ${{ inputs.build_bootstrap }}
         run: |
           set -euo pipefail
 
@@ -60,7 +52,6 @@ jobs:
           generated=false
           site=false
           workflow_changed=false
-          bootstrap_changed=false
 
           # Ручной запуск пересобирает основную прошивку и заново формирует файлы сайта.
           # Сборка отдельного загрузочного образа запускается только по запросу, поскольку main защищена.
@@ -69,9 +60,6 @@ jobs:
             generated=true
             site=true
             workflow_changed=true
-            if [[ "$BUILD_BOOTSTRAP_INPUT" == "true" ]]; then
-              bootstrap_changed=true
-            fi
           else
             before="$EVENT_BEFORE"
             if [[ -z "$before" || "$before" =~ ^0+$ ]]; then
@@ -80,7 +68,6 @@ jobs:
               generated=true
               site=true
               workflow_changed=true
-              bootstrap_changed=true
             else
               changed_files="$(git diff --name-only "$before" "$GITHUB_SHA")"
               echo "Изменённые файлы:"
@@ -92,14 +79,6 @@ jobs:
                 case "$file" in
                   lego_technic_esp32/*)
                     firmware=true
-                    ;;
-                esac
-
-                case "$file" in
-                  firmware/bootstrap/LEGO_Technic_ESP32_Bootstrap/LEGO_Technic_ESP32_Bootstrap.ino|\
-                  firmware/bootstrap/flash_bootstrap.bat)
-                    bootstrap_changed=true
-                    site=true
                     ;;
                 esac
 
@@ -117,7 +96,7 @@ jobs:
                 esac
 
                 case "$file" in
-                  index.html|README.md|CHANGELOG.md|docs/*|firmware/bootstrap/*)
+                  index.html|README.md|CHANGELOG.md|docs/*)
                     site=true
                     ;;
                   .github/workflows/ci-build-deploy.yml)
@@ -134,7 +113,6 @@ jobs:
             echo "generated=$generated"
             echo "site=$site"
             echo "workflow_changed=$workflow_changed"
-            echo "bootstrap_changed=$bootstrap_changed"
           } >> "$GITHUB_OUTPUT"
 
       - name: Настройка Python
@@ -209,10 +187,8 @@ jobs:
         shell: bash
         env:
           FIRMWARE_CHANGED: ${{ steps.changes.outputs.firmware }}
-          BOOTSTRAP_CHANGED: ${{ steps.changes.outputs.bootstrap_changed }}
           WORKFLOW_CHANGED: ${{ steps.changes.outputs.workflow_changed }}
           EVENT_NAME: ${{ github.event_name }}
-          BUILD_BOOTSTRAP_INPUT: ${{ inputs.build_bootstrap }}
           REF: ${{ github.ref }}
           EXISTING_FIRMWARE: ${{ steps.existing_firmware.outputs.exists }}
         run: |
@@ -227,30 +203,15 @@ jobs:
             app_build=false
           fi
 
-          # Обновляем загрузочный образ только при изменении его исходников или при
-          # явном запросе. Не связываем его с посторонними сборками основной прошивки.
-          if [[ "$BOOTSTRAP_CHANGED" == "true" || \
-                ( "$EVENT_NAME" == "workflow_dispatch" && "$BUILD_BOOTSTRAP_INPUT" == "true" ) ]]; then
-            bootstrap_build=true
-          else
-            bootstrap_build=false
-          fi
-
-          if [[ "$app_build" == "true" || "$bootstrap_build" == "true" ]]; then
-            toolchain=true
-          else
-            toolchain=false
-          fi
+          toolchain="$app_build"
 
           {
             echo "app_build=$app_build"
-            echo "bootstrap_build=$bootstrap_build"
             echo "toolchain=$toolchain"
           } >> "$GITHUB_OUTPUT"
 
           echo "Собирать основную прошивку: $app_build"
-          echo "Собирать загрузчик OTA: $bootstrap_build"
-          echo "Устанавливать/собирать инструментарий: $toolchain"
+          echo "Устанавливать инструментарий: $toolchain"
 
       - name: Установка pySerial для esptool
         if: ${{ steps.build_decision.outputs.toolchain == 'true' }}
@@ -365,7 +326,7 @@ jobs:
           cat > "$RUNNER_TEMP/firmware-artifact/README.txt" <<'EOF'
           build_firmware_for_esp32.bin is the compiled application image intended for OTA update of an already provisioned ESP32.
           The build-output directory contains additional Arduino CLI build files when they are available.
-          For initial USB flashing, use the matching bootloader, partition table and application files with their correct flash offsets. Do not assume the application-only BIN is a complete flash image.
+          For initial USB flashing, use the universal ESP32 Factory release and select the Extended partition layout.
           EOF
 
       - name: Подготовка безопасного имени артефакта
@@ -381,89 +342,6 @@ jobs:
           echo "branch=${safe_branch}" >> "$GITHUB_OUTPUT"
           echo "name=esp32-firmware-${safe_branch}-${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
           echo "Безопасное имя ветки для артефакта: ${safe_branch}"
-
-      - name: Компиляция загрузочной прошивки OTA
-        if: ${{ steps.build_decision.outputs.bootstrap_build == 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/bootstrap-build"
-
-          arduino-cli compile \
-            --fqbn esp32:esp32:esp32 \
-            --board-options PartitionScheme=min_spiffs \
-            --warnings default \
-            --build-property "compiler.cpp.extra_flags=-DELEGANTOTA_USE_ASYNC_WEBSERVER=1" \
-            --output-dir "$RUNNER_TEMP/bootstrap-build" \
-            firmware/bootstrap/LEGO_Technic_ESP32_Bootstrap
-
-      - name: Подготовка артефакта загрузчика OTA и готового бинарного файла
-        if: ${{ steps.build_decision.outputs.bootstrap_build == 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          mapfile -t bootstrap_bins < <(
-            find "$RUNNER_TEMP/bootstrap-build" \
-              -maxdepth 1 -type f -name '*.ino.bin' -print
-          )
-
-          if [[ "${#bootstrap_bins[@]}" -ne 1 ]]; then
-            echo "::error::Ожидался ровно один файл загрузчика *.ino.bin, найдено: ${#bootstrap_bins[@]}."
-            find "$RUNNER_TEMP/bootstrap-build" -maxdepth 1 -type f -printf '%f\n' || true
-            exit 1
-          fi
-
-          # Это только образ приложения. BAT-скрипт правильно компилирует и загружает
-          # весь скетч при первоначальной прошивке через USB.
-          mkdir -p firmware/bootstrap/prebuilt
-          cp "${bootstrap_bins[0]}" firmware/bootstrap/prebuilt/esp32_ota_bootstrap.bin
-
-          mkdir -p "$RUNNER_TEMP/bootstrap-artifact/source"
-          cp "${bootstrap_bins[0]}" "$RUNNER_TEMP/bootstrap-artifact/esp32_ota_bootstrap.bin"
-          cp firmware/bootstrap/README.md "$RUNNER_TEMP/bootstrap-artifact/README.md"
-          cp firmware/bootstrap/flash_bootstrap.bat "$RUNNER_TEMP/bootstrap-artifact/"
-          cp firmware/bootstrap/install_arduino_cli.ps1 "$RUNNER_TEMP/bootstrap-artifact/"
-          cp firmware/bootstrap/patch_elegantota.ps1 "$RUNNER_TEMP/bootstrap-artifact/"
-          cp firmware/bootstrap/LEGO_Technic_ESP32_Bootstrap/LEGO_Technic_ESP32_Bootstrap.ino \
-            "$RUNNER_TEMP/bootstrap-artifact/source/"
-          mkdir -p "$RUNNER_TEMP/bootstrap-artifact/build-output"
-          cp -a "$RUNNER_TEMP/bootstrap-build/." "$RUNNER_TEMP/bootstrap-artifact/build-output/"
-
-          cat > "$RUNNER_TEMP/bootstrap-artifact/ARTIFACT_INFO.txt" <<'EOF'
-          esp32_ota_bootstrap.bin is an application-only image, not a complete flash image for a blank ESP32.
-          Use flash_bootstrap.bat on Windows for first-time USB flashing. The script compiles the sketch and uses Arduino CLI to handle the flash layout.
-          This bootstrap uses the project's current Wi-Fi AP and OTA credentials; see README.md before distributing the firmware.
-          EOF
-
-      - name: Проверка готового бинарного файла загрузчика OTA
-        if: ${{ steps.build_decision.outputs.bootstrap_build == 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add firmware/bootstrap/prebuilt/esp32_ota_bootstrap.bin
-
-          if git diff --cached --quiet; then
-            echo "Готовый бинарный файл загрузчика не изменился."
-          elif [[ "$GITHUB_REF" == "refs/heads/main" ]]; then
-            echo "::error::The generated OTA bootstrap binary differs from the committed prebuilt image. Update firmware/bootstrap/prebuilt/esp32_ota_bootstrap.bin in a source PR; this workflow must not push directly to protected main."
-            exit 1
-          else
-            git commit -m "Update prebuilt ESP32 OTA bootstrap firmware"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
-          fi
-
-      - name: Загрузка артефакта загрузчика OTA
-        if: ${{ steps.build_decision.outputs.bootstrap_build == 'true' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: esp32-ota-bootstrap-${{ steps.artifact_name.outputs.branch }}-${{ github.run_number }}
-          path: ${{ runner.temp }}/bootstrap-artifact/
-          if-no-files-found: error
-          retention-days: 14
-          compression-level: 6
 
       - name: Загрузка артефакта прошивки
         if: ${{ steps.build_decision.outputs.app_build == 'true' || github.ref == 'refs/heads/main' }}
