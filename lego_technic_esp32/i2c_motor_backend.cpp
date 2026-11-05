@@ -25,7 +25,6 @@ unsigned long lastMotorWriteMs[MOTOR_COUNT] = {0, 0, 0, 0};
 bool backendReady = false;
 bool rejectedCommandLogged = false;
 SemaphoreHandle_t backendMutex = nullptr;
-TwoWire *backendWire = nullptr;
 
 // Счётчик ожидающих команд защищён отдельной короткой critical section.
 // Пока моторная команда ждёт I²C, OLED не начинает новую передачу.
@@ -134,7 +133,6 @@ bool i2cMotorBackendBegin(TwoWire &wire) {
 
   backendReady = false;
   rejectedCommandLogged = false;
-  backendWire = &wire;
   for (uint8_t i = 0; i < MOTOR_COUNT; ++i) {
     motors[i] = nullptr;
     lastDirection[i] = 0;
