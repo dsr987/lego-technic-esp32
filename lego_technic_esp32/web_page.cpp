@@ -508,6 +508,14 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .serial-toolbar span{display:block;font-size:10px;color:var(--muted);margin-top:3px}
 #serial-log{flex:1;min-height:0;overflow:auto;margin:0;padding:10px;border-radius:10px;background:#07111f;color:#b8f7d4;border:1px solid var(--border);font:11px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:620px){.mode-btn{padding:6px 7px;font-size:10px}.mode-switch{gap:1px}.serial-toolbar strong{font-size:11px}}
+
+/* Единая адаптивная геометрия полей дополнительных каналов B–F. */
+#classic-panel .side-top .field{min-width:0;box-sizing:border-box}
+#classic-panel .side-top .field>.row{width:100%;min-width:0;gap:4px;box-sizing:border-box}
+#classic-panel .side-top .field>.row label{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#classic-panel .side-top .field .slim-container,
+#classic-panel .side-top .field .slim-wrap{width:100%;min-width:0;box-sizing:border-box}
+#classic-panel .side-top .field .eng-label{padding:0 6px;box-sizing:border-box;overflow:hidden;overflow-wrap:anywhere}
 </style>
 </head>
 <body>
@@ -1149,6 +1157,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
     button.setAttribute('aria-pressed',String(oledEnabled));
   }
   var eng=false, auxMode=false, trim=0;
+  var engineSimPending=false, engineSimPendingValue=false, engineSimPendingUntil=0;
   var drive=0, auxB=0, auxD=0, steer=0;
   var motorCount = Math.min(6, +(localStorage.getItem("lcc_motor_count") || 3));
   // Это настройка только визуальной подсветки, не маршрутизация команд мотора A.
@@ -1435,7 +1444,26 @@ function applyMotorModeUI(ch){
            if(typeof d.cfgF!=='undefined'){motorModes.F=Number(d.cfgF)||0;applyMotorModeUI('F');}
           if(typeof d.lf !== 'undefined') { led.F = !!d.lf; updateLedUI('F'); }
           if(typeof d.lr !== 'undefined') { led.R = !!d.lr; updateLedUI('R'); }
-          if(typeof d.es !== 'undefined') { eng = !!d.es; updateEngUI(); applyEngGate(); }
+          if(typeof d.es !== 'undefined') {
+            var reportedEngineSim=!!d.es;
+            if(engineSimPending){
+              if(reportedEngineSim===engineSimPendingValue || Date.now()>=engineSimPendingUntil){
+                engineSimPending=false;
+              }
+            }
+            // Игнорируем запоздавший статус до подтверждения последней команды.
+            if(!engineSimPending && reportedEngineSim!==eng){
+              eng=reportedEngineSim;
+              if(!eng){
+                lastSent.B=0;
+                auxB=0;
+                $('slider-aux').value=0;
+                $('val-aux').textContent='0%';
+              }
+              updateEngUI();
+              applyEngGate();
+            }
+          }
           if(typeof d.tr !== 'undefined') { trim = d.tr; $('val-trim').textContent = trim+'°'; }
           // Не перезаписываем числовые поля, пока пользователь их редактирует.
           if(typeof d.md !== 'undefined' && document.activeElement !== $('maxdeg-input')) { $('maxdeg-input').value = d.md; }
@@ -1857,10 +1885,11 @@ function applyMotorModeUI(ch){
       auxB=engineBFromDrive();
       slB.value=auxB; $('val-aux').textContent=auxB+'%';
     } else {
+      // Не сбрасываем ручную скорость B при каждом пакете телеметрии.
+      // Сброс выполняется только при явном выключении имитации.
       wrap.classList.remove('hidden');
       lab.classList.remove('visible');
       slB.disabled=false;
-      auxB=0; slB.value=0; $('val-aux').textContent='0%';
     }
     paintCar();
   }
@@ -1886,10 +1915,19 @@ function applyMotorModeUI(ch){
     if(motorCount<2 || mode!==1) return;
     vibrateClick();
     eng=!eng;
-    // B is driven by A while engine simulation is active. Clear the previous
-    // manual heartbeat value so it cannot restart B when simulation is disabled.
+    engineSimPending=true;
+    engineSimPendingValue=eng;
+    engineSimPendingUntil=Date.now()+1500;
+
+    // Сначала обнуляем ручную команду B, чтобы heartbeat не восстановил
+    // старую скорость после переключения режима имитации.
     lastSent.B=0;
     txWS({ch:"B",val:0});
+    if(!eng){
+      auxB=0;
+      $('slider-aux').value=0;
+      $('val-aux').textContent='0%';
+    }
     updateEngUI();
     applyEngGate();
     txWS({eng: eng?1:0});
