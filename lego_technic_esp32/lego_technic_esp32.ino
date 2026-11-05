@@ -473,6 +473,9 @@ void setup() {
 
 void loop() {
 
+  // I²C-команда включения OLED обрабатывается только из loop(), не из AsyncTCP.
+  processDisplayControl();
+
   // Автопозиционирование C выполняется независимо от частоты WebSocket heartbeat.
   positionalServoUpdate();
 
