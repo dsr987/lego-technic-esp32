@@ -56,17 +56,40 @@ static int speedPercent = 50;
 // WebSocket callbacks run in the AsyncTCP task while positionalServoUpdate()
 // runs in loop(). A mutex protects controller state and all C-channel writes.
 static SemaphoreHandle_t controllerMutex = nullptr;
+static portMUX_TYPE cancelRequestMux = portMUX_INITIALIZER_UNLOCKED;
+static bool cancelRequested = false;
 
-static void lockController() {
-  if (controllerMutex != nullptr) {
-    xSemaphoreTake(controllerMutex, portMAX_DELAY);
-  }
+// Never let a WebSocket callback or the main loop wait forever for controller state.
+// WebSocket calls wait at most 10 ms; the control loop uses a zero-wait try-lock.
+static bool lockController(uint32_t timeoutMs = 10) {
+  return controllerMutex != nullptr &&
+      xSemaphoreTake(controllerMutex, pdMS_TO_TICKS(timeoutMs)) == pdTRUE;
 }
 
 static void unlockController() {
   if (controllerMutex != nullptr) {
     xSemaphoreGive(controllerMutex);
   }
+}
+
+static void requestControllerCancel() {
+  portENTER_CRITICAL(&cancelRequestMux);
+  cancelRequested = true;
+  portEXIT_CRITICAL(&cancelRequestMux);
+}
+
+static bool consumeControllerCancel() {
+  portENTER_CRITICAL(&cancelRequestMux);
+  const bool requested = cancelRequested;
+  cancelRequested = false;
+  portEXIT_CRITICAL(&cancelRequestMux);
+  return requested;
+}
+
+static void clearControllerCancel() {
+  portENTER_CRITICAL(&cancelRequestMux);
+  cancelRequested = false;
+  portEXIT_CRITICAL(&cancelRequestMux);
 }
 
 static void updateFeedbackZone(int voltageMv) {
@@ -179,7 +202,11 @@ void positionalServoBegin() {
     return;
   }
 
-  lockController();
+  if (!lockController(100)) {
+    state = PositionalServoState::Fault;
+    serialLogPrintln("[PF][FAULT] reason=controller mutex unavailable during initialization");
+    return;
+  }
   pinMode(SERVO_FEEDBACK_PIN, INPUT);
   analogSetPinAttenuation(SERVO_FEEDBACK_PIN, ADC_11db);
 
@@ -200,8 +227,11 @@ void positionalServoBegin() {
 }
 
 bool positionalServoRequest(PositionalServoTarget target) {
-  if (controllerMutex == nullptr) return false;
-  lockController();
+  if (!lockController()) {
+    serialLogPrintln("[PF][WARN] request rejected: controller busy");
+    return false;
+  }
+  clearControllerCancel();
 
   const int currentMv = filteredVoltageMv;
   if (!feedbackIsValid(currentMv)) {
@@ -264,8 +294,16 @@ bool positionalServoRequest(PositionalServoTarget target) {
 }
 
 void positionalServoUpdate() {
-  if (controllerMutex == nullptr) return;
-  lockController();
+  if (!lockController(0)) return;
+
+  if (consumeControllerCancel()) {
+    stopPositionMotor();
+    movementDirection = 0;
+    appliedMotorSpeed = 0;
+    state = PositionalServoState::Idle;
+    unlockController();
+    return;
+  }
 
   const unsigned long now = millis();
   if ((unsigned long)(now - lastFeedbackSampleMs) >= FEEDBACK_SAMPLE_INTERVAL_MS) {
@@ -378,7 +416,11 @@ void positionalServoCancel() {
     state = PositionalServoState::Idle;
     return;
   }
-  lockController();
+  if (!lockController()) {
+    requestControllerCancel();
+    return;
+  }
+  clearControllerCancel();
   if (state == PositionalServoState::Moving ||
       state == PositionalServoState::WaitingForDirectionChange) {
     serialLogPrintf("[PF][CANCEL] feedback=%dmV raw=%dmV target=%dmV elapsed=%lums\n",
@@ -393,8 +435,7 @@ void positionalServoCancel() {
 }
 
 bool positionalServoIsMoving() {
-  if (controllerMutex == nullptr) return false;
-  lockController();
+  if (!lockController(1)) return false;
   const bool moving = state == PositionalServoState::Moving ||
       state == PositionalServoState::WaitingForDirectionChange;
   unlockController();
@@ -402,8 +443,7 @@ bool positionalServoIsMoving() {
 }
 
 void positionalServoSetSpeedPercent(int percent) {
-  if (controllerMutex == nullptr) return;
-  lockController();
+  if (!lockController()) return;
   speedPercent = constrain(percent, 10, 100);
 
   // При уменьшении ограничения немедленно снижаем уже применённую скорость.
@@ -418,8 +458,7 @@ void positionalServoSetSpeedPercent(int percent) {
 }
 
 int positionalServoGetSpeedPercent() {
-  if (controllerMutex == nullptr) return 50;
-  lockController();
+  if (!lockController(1)) return 50;
   const int value = speedPercent;
   unlockController();
   return value;
@@ -435,9 +474,8 @@ void positionalServoGetStatus(PositionalServoStatus &status) {
   status.targetReached = false;
   status.feedbackZone = PositionalServoFeedbackZone::Unknown;
 
-  if (controllerMutex == nullptr) return;
+  if (!lockController(1)) return;
 
-  lockController();
   const int currentMv = filteredVoltageMv;
   status.state = state;
   status.target = targetValid
