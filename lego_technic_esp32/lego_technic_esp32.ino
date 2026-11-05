@@ -34,6 +34,7 @@
  */
 
 #include <Arduino.h>
+#include <esp_system.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <WiFi.h>
@@ -323,6 +324,7 @@ void setup() {
   serialLogBegin(115200);
   delay(200);
   serialLogPrintln("");
+  serialLogPrintf("[FW] reset_reason=%d\n", static_cast<int>(esp_reset_reason()));
   serialLogPrintln("[FW] LEGO Technic ESP32 boot; FeatherWing diagnostics enabled");
 
   // 1. Безопасное состояние единственного прямого TB6612FNG (каналы C/D).
