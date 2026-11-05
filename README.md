@@ -56,7 +56,7 @@
 
 Порядок установки:
 
-1. Скачай комплект из GitHub Actions artifact или GitHub Release репозитория [ESP32 Factory](https://github.com/dsr987/esp32-factory).
+1. Скачай комплект из GitHub Actions artifact успешной сборки репозитория [ESP32 Factory](https://github.com/dsr987/esp32-factory).
 2. Запусти `ESP32-Auto-Flasher.bat` и выбери **Factory Reset → Extended**. Эта операция полностью стирает Flash и устанавливает загрузчик, таблицу разделов и универсальную Factory.
 3. Подключись к Wi-Fi `ESP32`, пароль `12345678`.
 4. Открой `http://192.168.4.1/update`. Логин и пароль ElegantOTA: `admin` / `admin`.
