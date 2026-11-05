@@ -312,6 +312,7 @@ input.slim::-webkit-slider-thumb{width:22px;height:40px;margin-top:-13px;border-
 .motor-mode-controls.horizontal{flex-direction:row;width:100%;height:100%}
 .motor-dir-btn{flex:1;min-width:0;min-height:36px;border:1px solid var(--border);border-radius:9px;background:var(--panel2);color:var(--text);font:inherit;font-weight:800;touch-action:none;user-select:none;-webkit-user-select:none}
 .motor-dir-btn:active,.motor-dir-btn.pressed{background:var(--blue-dk);border-color:var(--blue);color:#fff}
+.motor-dir-btn:disabled{opacity:.55;cursor:wait}
 .motor-dir-btn.position-reached{background:rgba(16,185,129,.14);border-color:var(--emerald);color:var(--emerald);box-shadow:0 0 8px rgba(16,185,129,.22)}
 .position-servo-status{font-size:9px;color:var(--muted);font-variant-numeric:tabular-nums}
 .position-servo-status.error{color:var(--rose);font-weight:700}
@@ -1334,9 +1335,6 @@ function applyMotorModeUI(ch){
   function updatePositionServoUI(data){
     var status=$('position-servo-status');
     var buttons=document.querySelectorAll('[data-position-target]');
-    buttons.forEach(function(button){button.classList.remove('position-reached');});
-    if(!status) return;
-
     var state=Number(data.pfstate);
     var voltage=Number(data.pfmv);
     var feedbackValid=Number(data.pfvalid)===1;
@@ -1344,6 +1342,15 @@ function applyMotorModeUI(ch){
     var targetReached=Number(data.pfdone)===1;
     var target=Number(data.pftarget);
     var zone=Number(data.pfzone);
+    var targetNames=['left','center','right'];
+    var reachedTargetName=(state===0 && feedbackValid && hasTarget && targetReached)
+      ?targetNames[target]:null;
+    buttons.forEach(function(button){
+      button.classList.toggle('position-reached',
+        button.getAttribute('data-position-target')===reachedTargetName);
+    });
+    if(!status) return;
+
     var zoneNames=['Правое положение','Переход к центру','Центр','Переход к левому','Левое положение','Вне калиброванного диапазона'];
     var zoneText=zoneNames[zone]||'Положение не определено';
     var voltageText=Number.isFinite(voltage)?(voltage/1000).toFixed(2)+' В':'';
@@ -1368,22 +1375,33 @@ function applyMotorModeUI(ch){
       return;
     }
     if(state===0 && hasTarget && targetReached){
-      var targetNames=['left','center','right'];
-      var targetName=targetNames[target];
-      if(targetName){
-        var activeButton=document.querySelector('[data-position-target="'+targetName+'"]');
-        if(activeButton) activeButton.classList.add('position-reached');
-      }
       status.textContent='Позиция достигнута · '+zoneText+' · '+voltageText;
       return;
     }
     status.textContent=(hasTarget?'Остановлен · ':'Ожидание команды · ')+zoneText+' · '+voltageText;
   }
 
+  var pfServoCooldownUntil = 0;
+  var pfServoCooldownTimer = null;
+  function setPfServoButtonsDisabled(disabled){
+    document.querySelectorAll('[data-position-target]').forEach(function(button){
+      button.disabled=disabled;
+    });
+  }
   document.querySelectorAll('[data-position-target]').forEach(function(button){
     button.addEventListener('click',function(){
-      if(motorModes.C!==2 || !ws || ws.readyState!==WebSocket.OPEN) return;
+      if(motorModes.C!==2 || !ws || ws.readyState!==WebSocket.OPEN ||
+         Date.now()<pfServoCooldownUntil) return;
       txWS({posC:button.getAttribute('data-position-target')});
+      pfServoCooldownUntil=Date.now()+750;
+      setPfServoButtonsDisabled(true);
+      if(pfServoCooldownTimer!==null) clearTimeout(pfServoCooldownTimer);
+      pfServoCooldownTimer=setTimeout(function(){
+        if(Date.now()>=pfServoCooldownUntil){
+          setPfServoButtonsDisabled(false);
+          pfServoCooldownTimer=null;
+        }
+      },750);
       document.querySelectorAll('[data-position-target]').forEach(function(item){item.classList.remove('position-reached');});
       var positionStatus=$('position-servo-status');
       if(positionStatus){positionStatus.textContent='Команда отправлена';positionStatus.classList.remove('error');}
