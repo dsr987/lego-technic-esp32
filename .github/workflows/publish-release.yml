@@ -165,7 +165,7 @@ jobs:
             Версия: `${{ steps.version.outputs.value }}`.
             Исходный commit: `${{ github.event.workflow_run.head_sha }}`.
 
-            Файл `.ino.bin` предназначен для обновления уже настроенного контроллера через ElegantOTA. Для первоначальной прошивки новой платы через USB используйте инструкции в `firmware/bootstrap/`.
+            Файл `.ino.bin` предназначен для обновления уже настроенного контроллера через ElegantOTA. Для первоначальной прошивки новой платы через USB используйте [ESP32 Factory](https://github.com/dsr987/esp32-factory) и выберите профиль **Extended**.
 
             Контрольная сумма SHA-256 приложена отдельным файлом.
           files: |
