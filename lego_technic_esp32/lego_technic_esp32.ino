@@ -319,12 +319,31 @@ String serialLogReadJson(uint32_t afterId) {
 
 // ---------- Инициализация ----------
 
+static const char *resetReasonName(esp_reset_reason_t reason) {
+  switch (reason) {
+    case ESP_RST_UNKNOWN: return "UNKNOWN";
+    case ESP_RST_POWERON: return "POWERON";
+    case ESP_RST_EXT: return "EXTERNAL";
+    case ESP_RST_SW: return "SOFTWARE";
+    case ESP_RST_PANIC: return "PANIC";
+    case ESP_RST_INT_WDT: return "INT_WDT";
+    case ESP_RST_TASK_WDT: return "TASK_WDT";
+    case ESP_RST_WDT: return "WDT";
+    case ESP_RST_DEEPSLEEP: return "DEEPSLEEP";
+    case ESP_RST_BROWNOUT: return "BROWNOUT";
+    case ESP_RST_SDIO: return "SDIO";
+    default: return "OTHER";
+  }
+}
+
 void setup() {
   // Временная диагностика FeatherWing доступна в Serial Monitor на 115200 baud.
   serialLogBegin(115200);
   delay(200);
   serialLogPrintln("");
-  serialLogPrintf("[FW] reset_reason=%d\n", static_cast<int>(esp_reset_reason()));
+  const esp_reset_reason_t resetReason = esp_reset_reason();
+  serialLogPrintf("[FW] reset_reason=%d (%s)\n",
+      static_cast<int>(resetReason), resetReasonName(resetReason));
   serialLogPrintln("[FW] LEGO Technic ESP32 boot; FeatherWing diagnostics enabled");
 
   // 1. Безопасное состояние единственного прямого TB6612FNG (каналы C/D).
