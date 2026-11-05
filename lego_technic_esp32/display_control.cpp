@@ -24,14 +24,18 @@ extern Mode currentMode;
 static bool startupAnimationActive = false;
 static unsigned long startupAnimationStartedAt = 0;
 static int lastStartupDotCount = 0;
+static bool displaySnapshotValid = false;
+static int lastDisplayedBatteryPercent = -1;
+static int lastDisplayedVoltageTenths = -1;
+static bool lastDisplayedLowBattery = false;
 
-// Все физические передачи буфера OLED сериализуются с PCA9685 на общей Wire.
-static void flushDisplay() {
-  if (!oledDisplayEnabled || !i2cMotorBackendLockSharedI2c(250)) return;
-  // Повторно включаем контроллер при каждом обновлении: экран не гаснет сам по таймеру.
-  display.ssd1306_command(SSD1306_DISPLAYON);
+// OLED никогда не ждёт освобождения общей I²C: если шилд использует шину
+// или ждёт её, кадр остаётся в локальном буфере и будет отправлен позже.
+static bool flushDisplay() {
+  if (!oledDisplayEnabled || !i2cMotorBackendTryLockSharedI2c()) return false;
   display.display();
   i2cMotorBackendUnlockSharedI2c();
+  return true;
 }
 
 bool setOledDisplayEnabled(bool enabled) {
@@ -39,10 +43,11 @@ bool setOledDisplayEnabled(bool enabled) {
     oledDisplayEnabled = enabled;
     return true;
   }
-  if (!i2cMotorBackendLockSharedI2c(250)) return false;
+  if (!i2cMotorBackendTryLockSharedI2c()) return false;
   oledDisplayEnabled = enabled;
   display.ssd1306_command(enabled ? SSD1306_DISPLAYON : SSD1306_DISPLAYOFF);
   if (enabled) display.display();
+  displaySnapshotValid = false;
   i2cMotorBackendUnlockSharedI2c();
   return true;
 }
@@ -153,6 +158,7 @@ static void drawWifiIcon(int x, int y) {
 void showBootLogo() {
   if (!oledAvailable) return;
 
+  displaySnapshotValid = false;
   display.clearDisplay();
   display.drawBitmap(
     (128 - OLED_BOOT_WIDTH) / 2,
@@ -168,6 +174,7 @@ void showBootLogo() {
 void showInitialisingScreen() {
   if (!oledAvailable) return;
 
+  displaySnapshotValid = false;
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
   display.setTextSize(1);
@@ -182,6 +189,7 @@ void startDisplayStartupAnimation() {
 
   startupAnimationStartedAt = millis();
   lastStartupDotCount = 0;
+  displaySnapshotValid = false;
   startupAnimationActive = true;
 }
 
@@ -206,8 +214,9 @@ bool updateDisplayStartup() {
     for (int i = 0; i < dotCount; i++) {
       display.print('.');
     }
-    flushDisplay();
-    lastStartupDotCount = dotCount;
+    if (flushDisplay()) {
+      lastStartupDotCount = dotCount;
+    }
   }
 
   return true;
@@ -265,14 +274,31 @@ static void drawLowBatteryScreen() {
 void updateDisplay() {
   if (!oledAvailable || !oledDisplayEnabled) return;
 
+  // OLED показывает напряжение с точностью до 0,1 В. Передавать кадр
+  // повторно нет смысла, пока не изменился заряд, отображаемое напряжение
+  // или состояние критического предупреждения.
+  const int voltageTenths = static_cast<int>(battV * 10.0f + 0.5f);
+  const bool lowBattery = lowBattCount >= 3;
+  if (displaySnapshotValid &&
+      lastDisplayedBatteryPercent == battPct &&
+      lastDisplayedVoltageTenths == voltageTenths &&
+      lastDisplayedLowBattery == lowBattery) {
+    return;
+  }
+
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
   display.setTextWrap(false);
 
   // При подтверждённом низком заряде заменяем панель состояния предупреждением.
-  if (lowBattCount >= 3) {
+  if (lowBattery) {
     drawLowBatteryScreen();
-    flushDisplay();
+    if (flushDisplay()) {
+      lastDisplayedBatteryPercent = battPct;
+      lastDisplayedVoltageTenths = voltageTenths;
+      lastDisplayedLowBattery = lowBattery;
+      displaySnapshotValid = true;
+    }
     return;
   }
 
@@ -302,5 +328,10 @@ void updateDisplay() {
   snprintf(clientText, sizeof(clientText), "clients: %u", static_cast<unsigned int>(ws.count()));
   drawCompactText(78, 53, clientText);
 
-  flushDisplay();
+  if (flushDisplay()) {
+    lastDisplayedBatteryPercent = battPct;
+    lastDisplayedVoltageTenths = voltageTenths;
+    lastDisplayedLowBattery = lowBattery;
+    displaySnapshotValid = true;
+  }
 }
