@@ -20,8 +20,10 @@ bool i2cMotorBackendBegin(TwoWire &wire = Wire);
 bool i2cMotorBackendIsReady();
 
 // Общая блокировка Wire для дисплея и моторного backend.
-// Вызывать вокруг операций, которые физически обращаются к I²C.
+// Обычный lock нужен только для инициализации; OLED в рабочем цикле использует try-lock,
+// чтобы сразу уступить шину ожидающей команде моторного шилда.
 bool i2cMotorBackendLockSharedI2c(uint32_t timeoutMs = 250);
+bool i2cMotorBackendTryLockSharedI2c();
 void i2cMotorBackendUnlockSharedI2c();
 
 // Задаёт подписанную скорость в диапазоне -100..100.
