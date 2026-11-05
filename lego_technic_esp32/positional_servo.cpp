@@ -61,7 +61,7 @@ static bool cancelRequested = false;
 
 // Never let a WebSocket callback or the main loop wait forever for controller state.
 // The 2 ms default keeps contention bounded; the control loop uses a zero-wait try-lock.
-static bool lockController(uint32_t timeoutMs = 2) {
+static bool lockController(uint32_t timeoutMs = 10) {
   return controllerMutex != nullptr &&
       xSemaphoreTake(controllerMutex, pdMS_TO_TICKS(timeoutMs)) == pdTRUE;
 }
