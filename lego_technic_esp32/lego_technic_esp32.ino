@@ -72,10 +72,6 @@ constexpr char AP_PASSWORD[] = "12345678";
 constexpr char OTA_USERNAME[] = "admin";
 constexpr char OTA_PASSWORD[] = "admin";
 
-// ВАЖНО:
-// Такие же значения необходимо указать в файле
-// firmware/bootstrap/LEGO_Technic_ESP32_Bootstrap/
-// LEGO_Technic_ESP32_Bootstrap.ino
 // ============================================================
 
 // ---------- Периферия ----------

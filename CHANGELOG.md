@@ -164,9 +164,6 @@
 ## 0.5.26 — 2026-10-11
 ### Изменено
 - Настройки Wi-Fi и учётные данные ElegantOTA вынесены в отдельный блок в основном Arduino-скетче.
-- Настроено единообразное включение асинхронного режима ElegantOTA для основной и стартовой прошивок OTA Bootstrap.
-- Исправлена сборка OTA Bootstrap: добавлен необходимый параметр компиляции для совместимости ElegantOTA с AsyncWebServer.
-- Уточнена конфигурация GitHub Actions для сборки основной прошивки и OTA Bootstrap.
 - Удалены отдельные workflow Project Auditor и Check motor channels; статический аудит сохранён в Pull Request Validation.
 - Обновлена схема CI/CD в соответствии с текущей структурой GitHub Actions.
 
