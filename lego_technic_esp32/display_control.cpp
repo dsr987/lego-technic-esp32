@@ -28,6 +28,8 @@ static bool displaySnapshotValid = false;
 static int lastDisplayedBatteryPercent = -1;
 static int lastDisplayedVoltageTenths = -1;
 static bool lastDisplayedLowBattery = false;
+static portMUX_TYPE displayPowerMux = portMUX_INITIALIZER_UNLOCKED;
+static volatile int8_t requestedDisplayPower = -1;
 
 // OLED никогда не ждёт освобождения общей I²C: если шилд использует шину
 // или ждёт её, кадр остаётся в локальном буфере и будет отправлен позже.
@@ -39,17 +41,36 @@ static bool flushDisplay() {
 }
 
 bool setOledDisplayEnabled(bool enabled) {
-  if (!oledAvailable) {
-    oledDisplayEnabled = enabled;
-    return true;
-  }
-  if (!i2cMotorBackendTryLockSharedI2c()) return false;
   oledDisplayEnabled = enabled;
-  display.ssd1306_command(enabled ? SSD1306_DISPLAYON : SSD1306_DISPLAYOFF);
-  if (enabled) display.display();
-  displaySnapshotValid = false;
-  i2cMotorBackendUnlockSharedI2c();
+  if (!oledAvailable) return true;
+
+  // WebSocket callback only queues the request. All OLED I²C and buffer
+  // operations are performed later from loop(), never from AsyncTCP context.
+  portENTER_CRITICAL(&displayPowerMux);
+  requestedDisplayPower = enabled ? 1 : 0;
+  portEXIT_CRITICAL(&displayPowerMux);
   return true;
+}
+
+void processDisplayControl() {
+  if (!oledAvailable) return;
+
+  portENTER_CRITICAL(&displayPowerMux);
+  const int8_t initialRequest = requestedDisplayPower;
+  portEXIT_CRITICAL(&displayPowerMux);
+  if (initialRequest < 0 || !i2cMotorBackendTryLockSharedI2c()) return;
+
+  portENTER_CRITICAL(&displayPowerMux);
+  const int8_t request = requestedDisplayPower;
+  requestedDisplayPower = -1;
+  portEXIT_CRITICAL(&displayPowerMux);
+
+  if (request >= 0) {
+    display.ssd1306_command(request == 1 ? SSD1306_DISPLAYON : SSD1306_DISPLAYOFF);
+    if (request == 1) display.display();
+    displaySnapshotValid = false;
+  }
+  i2cMotorBackendUnlockSharedI2c();
 }
 
 // ---------- Компактный пиксельный шрифт 4x5 ----------
