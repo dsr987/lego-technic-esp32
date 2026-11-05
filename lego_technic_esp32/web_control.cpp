@@ -123,8 +123,12 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     return;
   }
 
-  // Команда автоматического позиционирования мотора C. Одно нажатие задаёт цель,
-  // движение продолжается автономно до достижения цели или срабатывания защиты.
+  // Команда автоматического позиционирования мотора C.
+  // Серверная защита дополняет блокировку кнопок в Web GUI и ограничивает
+  // частоту команд даже при нескольких одновременно подключённых клиентах.
+  static unsigned long lastPosCRequestMs = 0;
+  static bool posCRequestSeen = false;
+  constexpr unsigned long POS_C_COOLDOWN_MS = 750;
   if (doc.containsKey("posC")) {
     if (doc.size() != 1 || !doc["posC"].is<const char*>() || motorModeC != 2) return;
     const char* target = doc["posC"].as<const char*>();
@@ -138,6 +142,12 @@ void handleWsMessage(AsyncWebSocketClient *client, uint8_t *data, size_t len) {
     } else {
       return;
     }
+    if (posCRequestSeen &&
+        (unsigned long)(messageMillis - lastPosCRequestMs) < POS_C_COOLDOWN_MS) {
+      return;
+    }
+    posCRequestSeen = true;
+    lastPosCRequestMs = messageMillis;
     lastCmdMillis = messageMillis;
     positionalServoRequest(positionTarget);
     return;
