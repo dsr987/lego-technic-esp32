@@ -1,6 +1,8 @@
 ![Сборка, извлечение и публикация](https://github.com/dsr987/lego-technic-esp32/actions/workflows/ci-build-deploy.yml/badge.svg)
 
-![LEGO Technic ESP32 — историческая аппаратная ревизия 1.0](docs/hardware_1.0_banner.png)
+![LEGO Technic ESP32 — Hardware 2.0](docs/hardware_2.0_banner.png)
+
+<sub>Исторический баннер Hardware 1.0: [посмотреть](docs/hardware_1.0_banner.png).</sub>
 
 # LEGO Technic ESP32
 
