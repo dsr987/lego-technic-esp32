@@ -254,7 +254,7 @@ void appendJsonString(String &json, const char *value) {
     switch (*p) {
       case '"': json += "\\\""; break;
       case '\\': json += "\\\\"; break;
-      case '\n': json += "\\n"; break;
+      case '\n': json += "\n"; break;
       case '\r': json += "\\r"; break;
       case '\t': json += "\\t"; break;
       default: if (*p >= 0x20) json += static_cast<char>(*p); break;
@@ -367,7 +367,7 @@ static bool recoverI2cBusBeforeBegin() {
   pinMode(OLED_SDA, INPUT_PULLUP);
   pinMode(OLED_SCL, INPUT_PULLUP);
   const bool recovered = sclReleased && digitalRead(OLED_SDA) == HIGH;
-  serialLogPrintf("[I2C][RECOVERY] bus clear %s; SDA=%d SCL=%d\\n",
+  serialLogPrintf("[I2C][RECOVERY] bus clear %s; SDA=%d SCL=%d\n",
                   recovered ? "succeeded" : "failed",
                   digitalRead(OLED_SDA), digitalRead(OLED_SCL));
   return recovered;
@@ -547,7 +547,7 @@ void loop() {
     if (!i2cMotorBackendIsReady()) {
       serialLogPrintln("[FW][MOTOR SHIELD] Backend not ready; retrying initialization");
       const bool restored = i2cMotorBackendBegin(Wire);
-      serialLogPrintf("[FW][MOTOR SHIELD] Recovery attempt: %s\\n",
+      serialLogPrintf("[FW][MOTOR SHIELD] Recovery attempt: %s\n",
                       restored ? "READY" : "NOT READY");
     }
   }
