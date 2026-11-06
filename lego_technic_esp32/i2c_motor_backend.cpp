@@ -5,12 +5,12 @@
 #include <freertos/semphr.h>
 
 #include "i2c_motor_backend.h"
-#include "hardware_config.h"
 #include "serial_log.h"
 
 namespace {
 
 constexpr uint8_t I2C_MOTOR_WING_ADDRESS = 0x60;
+constexpr uint16_t MOTOR_PWM_FREQUENCY_HZ = 1600;
 constexpr uint8_t MOTOR_COUNT = 4;
 constexpr unsigned long MOTOR_COMMAND_REFRESH_MS = 500;
 

@@ -361,10 +361,10 @@ void setup() {
   digitalWrite(TB_BIN2, LOW);
 
   // Каналы C/D используют прямой PWM ESP32. A/B/E/F идут через PCA9685.
-  // Частота общая для всех моторных каналов: MOTOR_PWM_FREQUENCY_HZ.
-  ledcSetup(LEDC_CH_C, MOTOR_PWM_FREQUENCY_HZ, 8);
+  // Частота 1600 Гц применяется только к отдельному TB6612FNG.
+  ledcSetup(LEDC_CH_C, TB6612FNG_PWM_FREQUENCY_HZ, 8);
   ledcAttachPin(TB_PWMA, LEDC_CH_C);
-  ledcSetup(LEDC_CH_D, MOTOR_PWM_FREQUENCY_HZ, 8);
+  ledcSetup(LEDC_CH_D, TB6612FNG_PWM_FREQUENCY_HZ, 8);
   ledcAttachPin(TB_PWMB, LEDC_CH_D);
 
   // 4. Инициализация рулевого сервопривода.
