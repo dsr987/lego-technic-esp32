@@ -80,7 +80,7 @@ class FirstRunBootstrapTests(unittest.TestCase):
         build_workflow = (root / ".github" / "workflows" / "ci-build-deploy.yml").read_text(encoding="utf-8")
         self.assertIn("'tools/**'", build_workflow)
         self.assertIn("Компиляция прошивки ESP32", build_workflow)
-        self.assertIn("actions/deploy-pages@v4", build_workflow)
+        self.assertIn("actions/deploy-pages@v5", build_workflow)
 
     def test_prepare_push_exports_metadata_for_initial_install_pr(self):
         with tempfile.TemporaryDirectory() as directory:
