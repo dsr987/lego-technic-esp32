@@ -69,7 +69,8 @@
     150,
     152,
     154,
-    156
+    156,
+    159
   ],
   "release_prs": [
     10,
@@ -100,9 +101,10 @@
     142,
     148,
     152,
-    154
+    154,
+    159
   ],
-  "last_processed_pr": 156,
-  "last_release_type": "none",
-  "last_version": "0.14.6"
+  "last_processed_pr": 159,
+  "last_release_type": "patch",
+  "last_version": "0.14.7"
 }
