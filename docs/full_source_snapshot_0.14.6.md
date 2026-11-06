@@ -1553,3 +1553,1031 @@ void i2cMotorBackendStopAll() {
 }
 
 ```
+
+---
+
+## `lego_technic_esp32/i2c_motor_backend.h`
+
+```h
+#pragma once
+
+#include <Arduino.h>
+#include <Wire.h>
+
+// Логические каналы FeatherWing не зависят от физических выходов M1–M4.
+// Hardware pre2.0 использует FeatherWing для A, B, E и F.
+enum class I2CMotorChannel : uint8_t {
+  A = 0, // M1
+  B = 1, // M2
+  E = 2, // M3
+  F = 3  // M4
+};
+
+// Вызывать после Wire.begin(...). Функция использует существующую I2C-шину
+// и не запускает вторую шину самостоятельно.
+bool i2cMotorBackendBegin(TwoWire &wire = Wire);
+
+// Это состояние инициализации ПО, а не гарантия постоянной доступности I2C.
+bool i2cMotorBackendIsReady();
+
+// Общая блокировка Wire для дисплея и моторного backend.
+// Обычный lock нужен только для инициализации; OLED в рабочем цикле использует try-lock,
+// чтобы сразу уступить шину ожидающей команде моторного шилда.
+bool i2cMotorBackendLockSharedI2c(uint32_t timeoutMs = 250);
+bool i2cMotorBackendTryLockSharedI2c();
+void i2cMotorBackendUnlockSharedI2c();
+
+// Задаёт подписанную скорость в диапазоне -100..100.
+// Возвращает false, если backend не инициализирован или канал некорректен.
+// Arduino-библиотека не отдаёт статус каждой I2C-записи, поэтому true не
+// является подтверждением, что последняя транзакция была физически доставлена.
+bool i2cMotorBackendSetMotor(I2CMotorChannel channel, int speedPercent);
+
+// Переводит четыре канала FeatherWing (A, B, E, F) в RELEASE и скорость 0.
+void i2cMotorBackendStopAll();
+
+```
+
+---
+
+## `lego_technic_esp32/motor_control.cpp`
+
+```cpp
+
+#include <Arduino.h>
+
+#include "hardware_config.h"
+#include "motor_control.h"
+#include "steering_control.h"
+#include "positional_servo.h"
+#include "i2c_motor_backend.h"
+#include "serial_log.h"
+
+// Состояние объявлено и определяется в lego_technic_esp32.ino
+extern uint8_t motorModeC;
+extern Mode currentMode;
+
+extern int motorAVal;
+extern int motorBVal;
+extern int motorCVal;
+extern int motorDVal;
+extern int motorEVal;
+extern int motorFVal;
+extern int servoVal;
+
+extern bool reverseA;
+extern bool reverseB;
+extern bool reverseC;
+extern bool reverseD;
+extern bool reverseE;
+extern bool reverseF;
+extern bool engineSimOn;
+
+
+// ---------- Базовое управление мостом TB6612FNG ----------
+
+static void setDCBridge(int in1, int in2, int pwmChannel, int val) {
+  val = constrain(val, -100, 100);
+  // ESP32 LEDC can behave unexpectedly at the exact 100% duty endpoint (255 at 8-bit resolution).
+  // Cap PWM at 254: this is effectively full power but avoids the timer overflow edge case.
+  int duty = map(abs(val), 0, 100, 0, 254);
+
+  if (val > 0) {
+    digitalWrite(in1, HIGH);
+    digitalWrite(in2, LOW);
+  } else if (val < 0) {
+    digitalWrite(in1, LOW);
+    digitalWrite(in2, HIGH);
+  } else {
+    digitalWrite(in1, LOW);
+    digitalWrite(in2, LOW);
+  }
+
+  ledcWrite(pwmChannel, duty);
+}
+
+
+// ---------- Мотор A ----------
+
+void applyMotorA(int val) {
+  motorAVal = constrain(val, -100, 100);
+
+  i2cMotorBackendSetMotor(
+    I2CMotorChannel::A,
+    reverseA ? -motorAVal : motorAVal
+  );
+
+  if (engineSimOn && currentMode == MODE_CAR) {
+    int aux = (int)(
+      33.0 + 67.0 * abs(motorAVal) / 100.0 + 0.5
+    );
+
+    int actualB = reverseB ? -aux : aux;
+    const int previousB = motorBVal;
+    motorBVal = actualB;
+    if (previousB != actualB) {
+      serialLogPrintf("[ENG][OUTPUT] throttleA=%d motorB=%d reverseB=%d\n",
+          motorAVal, actualB, reverseB ? 1 : 0);
+    }
+
+    i2cMotorBackendSetMotor(I2CMotorChannel::B, actualB);
+  }
+}
+
+
+// ---------- Мотор B ----------
+
+void applyMotorB(int val) {
+  const int previousB = motorBVal;
+  motorBVal = constrain(val, -100, 100);
+  if (!engineSimOn && previousB != motorBVal) {
+    serialLogPrintf("[MOTOR B][MANUAL] command=%d reverse=%d\n",
+        motorBVal, reverseB ? 1 : 0);
+  }
+
+  i2cMotorBackendSetMotor(
+    I2CMotorChannel::B,
+    reverseB ? -motorBVal : motorBVal
+  );
+}
+
+
+// ---------- Мотор C ----------
+
+void applyMotorC(int val) {
+  motorCVal = constrain(val, -100, 100);
+
+  setDCBridge(
+    TB_AIN1,
+    TB_AIN2,
+    LEDC_CH_C,
+    (motorModeC == 2) ? motorCVal : (reverseC ? -motorCVal : motorCVal)
+  );
+}
+
+
+// ---------- Мотор D ----------
+
+void applyMotorD(int val) {
+  motorDVal = constrain(val, -100, 100);
+
+  setDCBridge(
+    TB_BIN1,
+    TB_BIN2,
+    LEDC_CH_D,
+    reverseD ? -motorDVal : motorDVal
+  );
+}
+
+
+// ---------- Моторы E/F на FeatherWing ----------
+
+void applyMotorE(int val) {
+  motorEVal = constrain(val, -100, 100);
+  i2cMotorBackendSetMotor(
+    I2CMotorChannel::E,
+    reverseE ? -motorEVal : motorEVal
+  );
+}
+
+void applyMotorF(int val) {
+  motorFVal = constrain(val, -100, 100);
+  i2cMotorBackendSetMotor(
+    I2CMotorChannel::F,
+    reverseF ? -motorFVal : motorFVal
+  );
+}
+
+
+// ---------- Общее включение драйверов ----------
+
+void updateDriverStandby() {
+  // STBY относится только к прямому TB6612 каналов C/D.
+  // FeatherWing A/B/E/F управляется независимо через PCA9685.
+  const bool directDriverActive = motorCVal != 0 || motorDVal != 0;
+  digitalWrite(TB_STBY, directDriverActive ? HIGH : LOW);
+}
+
+
+// ---------- Аварийная остановка ----------
+
+void stopAll(const char *reason) {
+  serialLogPrintf("[FW][STOP] reason=%s\n", reason ? reason : "unspecified");
+  // Отменяем автоматическое позиционирование C перед общей остановкой.
+  positionalServoCancel();
+
+  // Отключаем имитацию двигателя.
+  engineSimOn = false;
+
+  motorAVal = 0;
+  motorBVal = 0;
+  motorCVal = 0;
+  motorDVal = 0;
+  motorEVal = 0;
+  motorFVal = 0;
+
+  // Останавливаем FeatherWing-каналы A/B/E/F и прямые C/D.
+  i2cMotorBackendStopAll();
+  setDCBridge(TB_AIN1, TB_AIN2, LEDC_CH_C, 0);
+  setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_D, 0);
+
+  applySteer(0);
+  updateDriverStandby();
+}
+
+```
+
+---
+
+## `lego_technic_esp32/motor_control.h`
+
+```h
+
+#pragma once
+
+// Режимы работы модели
+enum Mode {
+  MODE_TANK = 0,
+  MODE_CAR = 1
+};
+
+// Управление отдельными каналами моторов
+void applyMotorA(int val);
+void applyMotorB(int val);
+void applyMotorC(int val);
+void applyMotorD(int val);
+void applyMotorE(int val);
+void applyMotorF(int val);
+
+// Общее управление драйверами
+void updateDriverStandby();
+void stopAll(const char *reason);
+
+```
+
+---
+
+## `lego_technic_esp32/positional_servo.cpp`
+
+```cpp
+#include <Arduino.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
+
+#include "hardware_config.h"
+#include "motor_control.h"
+#include "positional_servo.h"
+#include "serial_log.h"
+
+// Значения напряжения получены измерением существующего механизма.
+// Это стартовая калибровка; перед эксплуатацией требуется сверка по ADC ESP32.
+static constexpr int FEEDBACK_LEFT_MV   = 1635;
+static constexpr int FEEDBACK_CENTER_MV = 816;
+static constexpr int FEEDBACK_RIGHT_MV  = 545;
+
+static constexpr int FEEDBACK_TOLERANCE_MV = 45;
+static constexpr int FEEDBACK_VALID_MIN_MV = 250;
+static constexpr int FEEDBACK_VALID_MAX_MV = 2200;
+static constexpr int FEEDBACK_ZONE_MIN_MV = 500;
+static constexpr int FEEDBACK_ZONE_MAX_MV = 1850;
+static constexpr int FEEDBACK_ZONE_HYSTERESIS_MV = 25;
+static constexpr int FEEDBACK_ZONE_BOUNDARIES_MV[] = {635, 780, 990, 1375};
+
+static constexpr int POSITION_MOTOR_SPEED = 70; // 100% пользовательской настройки
+// Левый ход по журналам проходит последние ~500 мВ слишком быстро для
+// штатного окна 150 мВ. Используем две ступени замедления только влево.
+static constexpr int LEFT_APPROACH_WINDOW_MV = 600;
+static constexpr int LEFT_APPROACH_SPEED_PERCENT = 75;
+static constexpr int FINAL_APPROACH_WINDOW_MV = 150;
+static constexpr int FINAL_APPROACH_SPEED_PERCENT = 50;
+static constexpr unsigned long FEEDBACK_SAMPLE_INTERVAL_MS = 10;
+static constexpr int POSITION_MOTOR_RAMP_STEP = 5;
+static constexpr unsigned long POSITION_MOTOR_RAMP_INTERVAL_MS = 20;
+static constexpr unsigned long UPDATE_INTERVAL_MS = 10;
+static constexpr unsigned long POSITION_TIMEOUT_MS = 3000;
+static constexpr unsigned long STALL_TIMEOUT_MS = 1200;
+static constexpr unsigned long DIRECTION_DEADTIME_MS = 30;
+static constexpr int MIN_PROGRESS_MV = 30;
+
+static PositionalServoState state = PositionalServoState::Idle;
+static bool targetValid = false;
+static int targetVoltageMv = FEEDBACK_CENTER_MV;
+static int movementDirection = 0;
+static int filteredVoltageMv = 0;
+static int rawFeedbackMv = 0;
+static unsigned long lastDiagnosticLogMs = 0;
+static int progressReferenceMv = 0;
+static unsigned long lastUpdateMs = 0;
+static unsigned long movementStartMs = 0;
+static unsigned long lastProgressMs = 0;
+static unsigned long directionChangeStartMs = 0;
+static unsigned long lastMotorRampMs = 0;
+static int appliedMotorSpeed = 0;
+static uint8_t approachPhase = 0; // 0 — рабочая, 1 — раннее замедление, 2 — финальное
+static bool filterReady = false;
+static uint8_t invalidReadCount = 0;
+static int feedbackZone = (int)PositionalServoFeedbackZone::Unknown;
+static unsigned long lastFeedbackSampleMs = 0;
+static int speedPercent = 50;
+
+// WebSocket callbacks run in the AsyncTCP task while positionalServoUpdate()
+// runs in loop(). A mutex protects controller state and all C-channel writes.
+static SemaphoreHandle_t controllerMutex = nullptr;
+static portMUX_TYPE cancelRequestMux = portMUX_INITIALIZER_UNLOCKED;
+static bool cancelRequested = false;
+
+// Never let a WebSocket callback or the main loop wait forever for controller state.
+// WebSocket calls wait at most 10 ms; the control loop uses a zero-wait try-lock.
+static bool lockController(uint32_t timeoutMs = 10) {
+  return controllerMutex != nullptr &&
+      xSemaphoreTake(controllerMutex, pdMS_TO_TICKS(timeoutMs)) == pdTRUE;
+}
+
+static void unlockController() {
+  if (controllerMutex != nullptr) {
+    xSemaphoreGive(controllerMutex);
+  }
+}
+
+static void requestControllerCancel() {
+  portENTER_CRITICAL(&cancelRequestMux);
+  cancelRequested = true;
+  portEXIT_CRITICAL(&cancelRequestMux);
+}
+
+static bool consumeControllerCancel() {
+  portENTER_CRITICAL(&cancelRequestMux);
+  const bool requested = cancelRequested;
+  cancelRequested = false;
+  portEXIT_CRITICAL(&cancelRequestMux);
+  return requested;
+}
+
+static void clearControllerCancel() {
+  portENTER_CRITICAL(&cancelRequestMux);
+  cancelRequested = false;
+  portEXIT_CRITICAL(&cancelRequestMux);
+}
+
+static void updateFeedbackZone(int voltageMv) {
+  if (voltageMv < FEEDBACK_ZONE_MIN_MV || voltageMv > FEEDBACK_ZONE_MAX_MV) {
+    feedbackZone = (int)PositionalServoFeedbackZone::Unknown;
+    return;
+  }
+
+  int candidateZone = 0;
+  while (candidateZone < 4 &&
+         voltageMv >= FEEDBACK_ZONE_BOUNDARIES_MV[candidateZone]) {
+    ++candidateZone;
+  }
+
+  if (feedbackZone < 0 || feedbackZone > 4 ||
+      feedbackZone == (int)PositionalServoFeedbackZone::Unknown) {
+    feedbackZone = candidateZone;
+    return;
+  }
+
+  while (feedbackZone < candidateZone && feedbackZone < 4 &&
+         voltageMv >= FEEDBACK_ZONE_BOUNDARIES_MV[feedbackZone] +
+                          FEEDBACK_ZONE_HYSTERESIS_MV) {
+    ++feedbackZone;
+  }
+  while (feedbackZone > candidateZone && feedbackZone > 0 &&
+         voltageMv < FEEDBACK_ZONE_BOUNDARIES_MV[feedbackZone - 1] -
+                         FEEDBACK_ZONE_HYSTERESIS_MV) {
+    --feedbackZone;
+  }
+}
+
+static int readFeedbackMillivolts() {
+  const int rawMv = (int)analogReadMilliVolts(SERVO_FEEDBACK_PIN);
+  rawFeedbackMv = rawMv;
+  if (!filterReady) {
+    filteredVoltageMv = rawMv;
+    filterReady = true;
+  } else {
+    // Небольшой IIR-фильтр подавляет шум ADC, не добавляя заметной задержки.
+    filteredVoltageMv = (filteredVoltageMv * 3 + rawMv) / 4;
+  }
+  updateFeedbackZone(filteredVoltageMv);
+  return filteredVoltageMv;
+}
+
+static bool feedbackIsValid(int voltageMv) {
+  // Обрыв при внешней подтяжке вниз даёт уровень около 0 В;
+  // короткое замыкание на питание даёт уровень выше рабочего диапазона.
+  return voltageMv >= FEEDBACK_VALID_MIN_MV &&
+         voltageMv <= FEEDBACK_VALID_MAX_MV;
+}
+
+static void stopPositionMotor() {
+  const bool wasMoving = state == PositionalServoState::Moving ||
+      state == PositionalServoState::WaitingForDirectionChange;
+  if (wasMoving) {
+    serialLogPrintf("[PF][STOP] target=%dmV feedback=%dmV raw=%dmV elapsed=%lums\n",
+        targetVoltageMv, filteredVoltageMv, rawFeedbackMv,
+        (unsigned long)(millis() - movementStartMs));
+  }
+  applyMotorC(0);
+  updateDriverStandby();
+  movementDirection = 0;
+  appliedMotorSpeed = 0;
+  state = PositionalServoState::Idle;
+}
+
+static void setPositionFault(const char *reason) {
+  serialLogPrintf("[PF][FAULT] reason=%s state=%d feedback=%dmV raw=%dmV target=%dmV elapsed=%lums noProgress=%lums pwm=%d\n",
+      reason ? reason : "unknown", (int)state, filteredVoltageMv, rawFeedbackMv,
+      targetVoltageMv, (unsigned long)(millis() - movementStartMs),
+      (unsigned long)(millis() - lastProgressMs), appliedMotorSpeed);
+  applyMotorC(0);
+  updateDriverStandby();
+  movementDirection = 0;
+  appliedMotorSpeed = 0;
+  state = PositionalServoState::Fault;
+}
+
+static int targetVoltage(PositionalServoTarget target) {
+  switch (target) {
+    case PositionalServoTarget::Left:  return FEEDBACK_LEFT_MV;
+    case PositionalServoTarget::Right: return FEEDBACK_RIGHT_MV;
+    case PositionalServoTarget::Center:
+    default:                           return FEEDBACK_CENTER_MV;
+  }
+}
+
+static void startPositionMotor(unsigned long now) {
+  progressReferenceMv = filteredVoltageMv;
+  movementStartMs = now;
+  lastProgressMs = now;
+  lastUpdateMs = now;
+  state = PositionalServoState::Moving;
+  appliedMotorSpeed = 0;
+  approachPhase = 0;
+  lastMotorRampMs = now;
+
+  // Запускаем привод с нулевой мощностью; дальнейший набор скорости выполняется в loop().
+  applyMotorC(0);
+  updateDriverStandby();
+}
+
+void positionalServoBegin() {
+  if (controllerMutex == nullptr) {
+    controllerMutex = xSemaphoreCreateMutex();
+  }
+  if (controllerMutex == nullptr) {
+    state = PositionalServoState::Fault;
+    return;
+  }
+
+  if (!lockController(100)) {
+    state = PositionalServoState::Fault;
+    serialLogPrintln("[PF][FAULT] reason=controller mutex unavailable during initialization");
+    return;
+  }
+  pinMode(SERVO_FEEDBACK_PIN, INPUT);
+  analogSetPinAttenuation(SERVO_FEEDBACK_PIN, ADC_11db);
+
+  filterReady = false;
+  invalidReadCount = 0;
+  lastFeedbackSampleMs = 0;
+  speedPercent = 50;
+  state = PositionalServoState::Idle;
+  movementDirection = 0;
+  targetValid = false;
+
+  // Первичное заполнение фильтра до приёма команд из WebSocket.
+  for (uint8_t i = 0; i < 8; ++i) {
+    readFeedbackMillivolts();
+    delay(2);
+  }
+  unlockController();
+}
+
+bool positionalServoRequest(PositionalServoTarget target) {
+  if (!lockController()) {
+    serialLogPrintln("[PF][WARN] request rejected: controller busy");
+    return false;
+  }
+  clearControllerCancel();
+
+  const int currentMv = filteredVoltageMv;
+  if (!feedbackIsValid(currentMv)) {
+    setPositionFault("invalid feedback before request");
+    unlockController();
+    return false;
+  }
+
+  targetVoltageMv = targetVoltage(target);
+  targetValid = true;
+  serialLogPrintf("[PF][REQUEST] target=%d targetMv=%d feedback=%dmV raw=%dmV speed=%d%% state=%d\n",
+      (int)target, targetVoltageMv, filteredVoltageMv, rawFeedbackMv,
+      speedPercent, (int)state);
+  invalidReadCount = 0;
+
+  const int difference = targetVoltageMv - currentMv;
+  if (abs(difference) <= FEEDBACK_TOLERANCE_MV) {
+    stopPositionMotor();
+    unlockController();
+    return true;
+  }
+
+  const int requestedDirection = difference > 0 ? 1 : -1;
+  const unsigned long now = millis();
+
+  // Не меняем полярность H-моста на ходу. При реверсе сначала снимаем PWM
+  // и отключаем TB6612 через STBY, затем выдерживаем паузу перед новым ходом.
+  if ((state == PositionalServoState::Moving ||
+       state == PositionalServoState::WaitingForDirectionChange) &&
+      requestedDirection != movementDirection) {
+    applyMotorC(0);
+    updateDriverStandby();
+    movementDirection = requestedDirection;
+    directionChangeStartMs = now;
+    state = PositionalServoState::WaitingForDirectionChange;
+    unlockController();
+    return true;
+  }
+
+  movementDirection = requestedDirection;
+  if (state == PositionalServoState::Moving) {
+    // Новая цель в том же направлении: продолжаем движение без остановки.
+    unlockController();
+    return true;
+  }
+
+  if (state == PositionalServoState::WaitingForDirectionChange) {
+    // Цель изменилась, но направление осталось прежним: сохраняем deadtime.
+    unlockController();
+    return true;
+  }
+
+  startPositionMotor(now);
+  lastDiagnosticLogMs = now;
+  serialLogPrintf("[PF][START] direction=%s feedback=%dmV raw=%dmV target=%dmV\n",
+      movementDirection > 0 ? "LEFT" : "RIGHT", filteredVoltageMv,
+      rawFeedbackMv, targetVoltageMv);
+  unlockController();
+  return true;
+}
+
+void positionalServoUpdate() {
+  if (!lockController(0)) return;
+
+  if (consumeControllerCancel()) {
+    stopPositionMotor();
+    movementDirection = 0;
+    appliedMotorSpeed = 0;
+    state = PositionalServoState::Idle;
+    unlockController();
+    return;
+  }
+
+  const unsigned long now = millis();
+  if ((unsigned long)(now - lastFeedbackSampleMs) >= FEEDBACK_SAMPLE_INTERVAL_MS) {
+    lastFeedbackSampleMs = now;
+    readFeedbackMillivolts();
+  }
+
+  if (state != PositionalServoState::Moving &&
+      state != PositionalServoState::WaitingForDirectionChange) {
+    unlockController();
+    return;
+  }
+  if (state == PositionalServoState::Moving &&
+      (unsigned long)(now - lastDiagnosticLogMs) >= 100) {
+    lastDiagnosticLogMs = now;
+    serialLogPrintf("[PF][MOVE] direction=%s feedback=%dmV raw=%dmV target=%dmV pwm=%d remaining=%dmV elapsed=%lums noProgress=%lums heap=%lu\n",
+        movementDirection > 0 ? "LEFT" : "RIGHT", filteredVoltageMv,
+        rawFeedbackMv, targetVoltageMv, appliedMotorSpeed,
+        abs(targetVoltageMv - filteredVoltageMv),
+        (unsigned long)(now - movementStartMs),
+        (unsigned long)(now - lastProgressMs), (unsigned long)ESP.getFreeHeap());
+  }
+
+  if (state == PositionalServoState::WaitingForDirectionChange) {
+    if ((unsigned long)(now - directionChangeStartMs) < DIRECTION_DEADTIME_MS) {
+      unlockController();
+      return;
+    }
+
+    const int currentMv = filteredVoltageMv;
+    if (!feedbackIsValid(currentMv)) {
+      if (++invalidReadCount >= 3) setPositionFault("invalid feedback while reversing");
+      unlockController();
+      return;
+    }
+    invalidReadCount = 0;
+
+    const bool targetReached = movementDirection > 0
+        ? currentMv >= targetVoltageMv - FEEDBACK_TOLERANCE_MV
+        : currentMv <= targetVoltageMv + FEEDBACK_TOLERANCE_MV;
+    if (targetReached) {
+      stopPositionMotor();
+    } else {
+      startPositionMotor(now);
+    }
+    unlockController();
+    return;
+  }
+
+  if ((unsigned long)(now - lastUpdateMs) < UPDATE_INTERVAL_MS) {
+    unlockController();
+    return;
+  }
+  lastUpdateMs = now;
+
+  // Плавно увеличиваем PWM от 0 до рабочего значения за ~280 мс.
+  if ((unsigned long)(now - lastMotorRampMs) >= POSITION_MOTOR_RAMP_INTERVAL_MS) {
+    lastMotorRampMs = now;
+    const int configuredSpeed = max(1, (POSITION_MOTOR_SPEED * speedPercent + 50) / 100);
+    const int remainingMv = abs(targetVoltageMv - filteredVoltageMv);
+
+    const bool movingToLeft = movementDirection > 0 &&
+        targetVoltageMv == FEEDBACK_LEFT_MV;
+    uint8_t requestedPhase = 0;
+    if (movingToLeft && remainingMv <= FINAL_APPROACH_WINDOW_MV) {
+      requestedPhase = 2;
+    } else if (movingToLeft && remainingMv <= LEFT_APPROACH_WINDOW_MV) {
+      requestedPhase = 1;
+    } else if (remainingMv <= FINAL_APPROACH_WINDOW_MV) {
+      requestedPhase = 1;
+    }
+
+    // Фазу замедления фиксируем до завершения текущего движения: шум ADC
+    // не должен случайно вернуть привод на полную скорость.
+    if (requestedPhase > approachPhase) {
+      approachPhase = requestedPhase;
+      const int phasePercent = movingToLeft && approachPhase == 1
+          ? LEFT_APPROACH_SPEED_PERCENT
+          : FINAL_APPROACH_SPEED_PERCENT;
+      const int phaseSpeed = max(1, (configuredSpeed * phasePercent + 50) / 100);
+      const int phaseTargetSpeed = movementDirection > 0 ? -phaseSpeed : phaseSpeed;
+      serialLogPrintf("[PF][DECEL] direction=%s phase=%u remaining=%dmV pwm=%d targetPwm=%d\n",
+          movementDirection > 0 ? "LEFT" : "RIGHT",
+          (unsigned int)approachPhase, remainingMv, appliedMotorSpeed, phaseTargetSpeed);
+    }
+
+    const int phasePercent = approachPhase == 0 ? 100
+        : (movingToLeft && approachPhase == 1
+            ? LEFT_APPROACH_SPEED_PERCENT : FINAL_APPROACH_SPEED_PERCENT);
+    const int phaseSpeed = max(1, (configuredSpeed * phasePercent + 50) / 100);
+    const int targetSpeed = movementDirection > 0 ? -phaseSpeed : phaseSpeed;
+
+    if (abs(targetSpeed) < abs(appliedMotorSpeed)) {
+      // Замедление применяем сразу, а не растягиваем снижение PWM на 80 мс.
+      appliedMotorSpeed = targetSpeed;
+    } else if (appliedMotorSpeed < targetSpeed) {
+      appliedMotorSpeed = min(appliedMotorSpeed + POSITION_MOTOR_RAMP_STEP, targetSpeed);
+    } else if (appliedMotorSpeed > targetSpeed) {
+      appliedMotorSpeed = max(appliedMotorSpeed - POSITION_MOTOR_RAMP_STEP, targetSpeed);
+    }
+    applyMotorC(appliedMotorSpeed);
+    updateDriverStandby();
+  }
+
+  const int currentMv = filteredVoltageMv;
+  if (!feedbackIsValid(currentMv)) {
+    if (++invalidReadCount >= 3) setPositionFault("invalid feedback while moving");
+    unlockController();
+    return;
+  }
+  invalidReadCount = 0;
+
+  // Проверяем достижение цели именно по направлению движения.
+  // Промежуточный контакт не является целью и не может остановить привод.
+  const bool targetReached = movementDirection > 0
+      ? currentMv >= targetVoltageMv - FEEDBACK_TOLERANCE_MV
+      : currentMv <= targetVoltageMv + FEEDBACK_TOLERANCE_MV;
+
+  if (targetReached) {
+    stopPositionMotor();
+    unlockController();
+    return;
+  }
+
+  if (abs(currentMv - progressReferenceMv) >= MIN_PROGRESS_MV) {
+    progressReferenceMv = currentMv;
+    lastProgressMs = now;
+  }
+
+  if ((unsigned long)(now - movementStartMs) >= POSITION_TIMEOUT_MS ||
+      (unsigned long)(now - lastProgressMs) >= STALL_TIMEOUT_MS) {
+    setPositionFault((unsigned long)(now - movementStartMs) >= POSITION_TIMEOUT_MS
+        ? "movement timeout" : "no progress timeout");
+  }
+
+  unlockController();
+}
+
+void positionalServoCancel() {
+  if (controllerMutex == nullptr) {
+    state = PositionalServoState::Idle;
+    return;
+  }
+  if (!lockController()) {
+    requestControllerCancel();
+    return;
+  }
+  clearControllerCancel();
+  if (state == PositionalServoState::Moving ||
+      state == PositionalServoState::WaitingForDirectionChange) {
+    serialLogPrintf("[PF][CANCEL] feedback=%dmV raw=%dmV target=%dmV elapsed=%lums\n",
+        filteredVoltageMv, rawFeedbackMv, targetVoltageMv,
+        (unsigned long)(millis() - movementStartMs));
+    applyMotorC(0);
+    updateDriverStandby();
+  }
+  movementDirection = 0;
+  state = PositionalServoState::Idle;
+  unlockController();
+}
+
+bool positionalServoIsMoving() {
+  if (!lockController(1)) return false;
+  const bool moving = state == PositionalServoState::Moving ||
+      state == PositionalServoState::WaitingForDirectionChange;
+  unlockController();
+  return moving;
+}
+
+void positionalServoSetSpeedPercent(int percent) {
+  if (!lockController()) return;
+  speedPercent = constrain(percent, 10, 100);
+
+  // При уменьшении ограничения немедленно снижаем уже применённую скорость.
+  // Это не позволяет старому PWM временно превышать новое значение настройки.
+  const int maxSpeed = max(1, (POSITION_MOTOR_SPEED * speedPercent + 50) / 100);
+  if (state == PositionalServoState::Moving && abs(appliedMotorSpeed) > maxSpeed) {
+    appliedMotorSpeed = movementDirection > 0 ? -maxSpeed : maxSpeed;
+    applyMotorC(appliedMotorSpeed);
+    updateDriverStandby();
+  }
+  unlockController();
+}
+
+int positionalServoGetSpeedPercent() {
+  if (!lockController(1)) return 50;
+  const int value = speedPercent;
+  unlockController();
+  return value;
+}
+
+void positionalServoGetStatus(PositionalServoStatus &status) {
+  status.state = PositionalServoState::Fault;
+  status.target = PositionalServoTarget::Center;
+  status.feedbackMv = 0;
+  status.targetMv = FEEDBACK_CENTER_MV;
+  status.targetValid = false;
+  status.feedbackValid = false;
+  status.targetReached = false;
+  status.feedbackZone = PositionalServoFeedbackZone::Unknown;
+
+  if (!lockController(1)) return;
+
+  const int currentMv = filteredVoltageMv;
+  status.state = state;
+  status.target = targetValid
+      ? (targetVoltageMv == FEEDBACK_LEFT_MV ? PositionalServoTarget::Left
+        : targetVoltageMv == FEEDBACK_RIGHT_MV ? PositionalServoTarget::Right
+        : PositionalServoTarget::Center)
+      : PositionalServoTarget::Center;
+  status.feedbackMv = currentMv;
+  status.feedbackZone = (PositionalServoFeedbackZone)feedbackZone;
+  status.targetMv = targetVoltageMv;
+  status.targetValid = targetValid;
+  status.feedbackValid = feedbackIsValid(currentMv);
+  status.targetReached = state == PositionalServoState::Idle &&
+      targetValid && status.feedbackValid &&
+      abs(currentMv - targetVoltageMv) <= FEEDBACK_TOLERANCE_MV;
+  unlockController();
+}
+
+```
+
+---
+
+## `lego_technic_esp32/positional_servo.h`
+
+```h
+#pragma once
+
+#include <Arduino.h>
+
+// Автоматическое позиционирование мотора C по аналоговой обратной связи.
+enum class PositionalServoTarget : uint8_t {
+  Left,
+  Center,
+  Right
+};
+
+enum class PositionalServoState : uint8_t {
+  Idle,
+  Moving,
+  WaitingForDirectionChange,
+  Fault
+};
+
+enum class PositionalServoFeedbackZone : uint8_t {
+  Right = 0,
+  RightToCenter = 1,
+  Center = 2,
+  CenterToLeft = 3,
+  Left = 4,
+  Unknown = 5
+};
+
+struct PositionalServoStatus {
+  PositionalServoState state;
+  PositionalServoTarget target;
+  int feedbackMv;
+  int targetMv;
+  bool targetValid;
+  bool feedbackValid;
+  bool targetReached;
+  PositionalServoFeedbackZone feedbackZone;
+};
+
+void positionalServoBegin();
+bool positionalServoRequest(PositionalServoTarget target);
+void positionalServoUpdate();
+void positionalServoCancel();
+bool positionalServoIsMoving();
+void positionalServoSetSpeedPercent(int percent);
+int positionalServoGetSpeedPercent();
+void positionalServoGetStatus(PositionalServoStatus &status);
+
+```
+
+---
+
+## `lego_technic_esp32/preferences_manager.cpp`
+
+```cpp
+
+#include <Arduino.h>
+#include <Preferences.h>
+
+#include "preferences_manager.h"
+
+// Объект и состояние определяются в lego_technic_esp32.ino
+extern Preferences prefs;
+
+extern bool reverseA;
+extern bool reverseB;
+extern bool reverseC;
+extern bool reverseD;
+extern bool reverseE;
+extern bool reverseF;
+
+extern uint8_t motorModeA;
+extern uint8_t motorModeB;
+extern uint8_t motorModeC;
+extern uint8_t motorModeD;
+extern uint8_t motorModeE;
+extern uint8_t motorModeF;
+
+extern bool ledFrontOn;
+extern bool ledRearOn;
+
+extern int steerCenterUs;
+extern int steerMaxAngleDeg;
+extern int pfServoSpeedPercent;
+
+
+// ---------- Загрузка настроек ----------
+
+void loadPreferences() {
+  reverseA = prefs.getUChar("revA", 0) != 0;
+  reverseB = prefs.getUChar("revB", 0) != 0;
+  reverseC = prefs.getUChar("revC", 0) != 0;
+  reverseD = prefs.getUChar("revD", 0) != 0;
+  reverseE = prefs.getUChar("revE", 0) != 0;
+  reverseF = prefs.getUChar("revF", 0) != 0;
+
+  motorModeA = prefs.getUChar("modeA", 0);
+  if (motorModeA > 1) motorModeA = 0;
+  motorModeB = prefs.getUChar("modeB", 0);
+  if (motorModeB > 1) motorModeB = 0;
+  // Канал C жёстко закреплён за позиционным PF-сервоприводом.
+  // Старое значение modeC в NVS намеренно игнорируется.
+  motorModeC = 2;
+  motorModeD = prefs.getUChar("modeD", 0);
+  if (motorModeD > 1) motorModeD = 0;
+  motorModeE = prefs.getUChar("modeE", 0);
+  if (motorModeE > 1) motorModeE = 0;
+  motorModeF = prefs.getUChar("modeF", 0);
+  if (motorModeF > 1) motorModeF = 0;
+
+  ledFrontOn = prefs.getUChar("ledF", 0) != 0;
+  ledRearOn  = prefs.getUChar("ledR", 0) != 0;
+
+  // Center calibration is limited to +/-90 degrees around the default 1500 us.
+  // Keep persisted values inside the full 500..2500 us command range.
+  steerCenterUs = constrain(prefs.getInt("steer_c", 1500), 1000, 2000);
+  steerMaxAngleDeg = constrain(prefs.getInt("steer_a", 45), 45, 90);
+  pfServoSpeedPercent = constrain((int)prefs.getUChar("pfspd", 50), 10, 100);
+}
+
+
+// ---------- Сохранение калибровки руля ----------
+
+void saveSteeringCenter(int value) {
+  prefs.putInt("steer_c", value);
+}
+
+void saveSteeringMaxAngle(int value) {
+  prefs.putInt("steer_a", value);
+}
+
+void savePfServoSpeedPercent(int value) {
+  prefs.putUChar("pfspd", (uint8_t)constrain(value, 10, 100));
+}
+
+
+// ---------- Сохранение реверса моторов ----------
+
+void saveReverseA(bool value) {
+  prefs.putUChar("revA", value ? 1 : 0);
+}
+
+void saveReverseB(bool value) {
+  prefs.putUChar("revB", value ? 1 : 0);
+}
+
+void saveReverseC(bool value) {
+  prefs.putUChar("revC", value ? 1 : 0);
+}
+
+void saveReverseD(bool value) {
+  prefs.putUChar("revD", value ? 1 : 0);
+}
+
+void saveReverseE(bool value) {
+  prefs.putUChar("revE", value ? 1 : 0);
+}
+
+void saveReverseF(bool value) {
+  prefs.putUChar("revF", value ? 1 : 0);
+}
+
+
+// ---------- Сохранение света ----------
+
+void saveLedFront(bool value) {
+  prefs.putUChar("ledF", value ? 1 : 0);
+}
+
+void saveLedRear(bool value) {
+  prefs.putUChar("ledR", value ? 1 : 0);
+}
+
+
+// ---------- Сохранение режимов управления моторами ----------
+
+void saveMotorModeA(uint8_t value) { prefs.putUChar("modeA", value); }
+void saveMotorModeB(uint8_t value) { prefs.putUChar("modeB", value); }
+void saveMotorModeD(uint8_t value) { prefs.putUChar("modeD", value); }
+void saveMotorModeE(uint8_t value) { prefs.putUChar("modeE", value); }
+void saveMotorModeF(uint8_t value) { prefs.putUChar("modeF", value); }
+
+```
+
+---
+
+## `lego_technic_esp32/preferences_manager.h`
+
+```h
+
+#pragma once
+
+#include <Arduino.h>
+
+// Загрузка сохранённых настроек
+void loadPreferences();
+
+// Режимы управления моторами: 0 — слайдер, 1 — кнопки, 2 — позиционный (только C).
+void saveMotorModeA(uint8_t value);
+void saveMotorModeB(uint8_t value);
+void saveMotorModeD(uint8_t value);
+void saveMotorModeE(uint8_t value);
+void saveMotorModeF(uint8_t value);
+
+// Настройки рулевого управления
+void saveSteeringCenter(int value);
+void saveSteeringMaxAngle(int value);
+void savePfServoSpeedPercent(int value);
+
+// Реверс моторов
+void saveReverseA(bool value);
+void saveReverseB(bool value);
+void saveReverseC(bool value);
+void saveReverseD(bool value);
+void saveReverseE(bool value);
+void saveReverseF(bool value);
+
+// Передний и задний свет
+void saveLedFront(bool value);
+void saveLedRear(bool value);
+
+```
