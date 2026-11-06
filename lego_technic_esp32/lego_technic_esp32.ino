@@ -2,7 +2,7 @@
  * LEGO Technic ESP32
  * Main Arduino sketch: filename and containing directory must match.
  * Shared module implementations remain in their dedicated .cpp/.h files.
- * Версия разработки: 0.14.5
+ * Версия разработки: 0.14.6
  *
  * Текущий выпуск: калибровка измерения напряжения батареи и управление PF-сервоприводом.
  * В проекте также доступны обновлённый Web GUI и OLED Update 2.0.
@@ -25,9 +25,9 @@
  * - Рабочая панель OLED показывает режим, процент заряда и напряжение батареи, количество подключённых клиентов Wi-Fi и предупреждение о низком заряде.
  * - Если инициализация OLED не удалась, прошивка продолжает запуск без попыток выводить данные на недоступный дисплей.
  *
- * CHANGELOG_VERSION: 0.14.5
+ * CHANGELOG_VERSION: 0.14.6
  * CHANGELOG_START
- * - Разделены настройки PWM FeatherWing и отдельного TB6612FNG; частота FeatherWing больше не зависит от конфигурации прямых каналов. ([PR #152](https://github.com/dsr987/lego-technic-esp32/pull/152))
+ * - PF Servo заранее снижает скорость при подходе к крайнему левому положению, чтобы уменьшить удар о механический ограничитель. ([PR #154](https://github.com/dsr987/lego-technic-esp32/pull/154))
  * CHANGELOG_END
  *
  * тестовый запуск сборки
