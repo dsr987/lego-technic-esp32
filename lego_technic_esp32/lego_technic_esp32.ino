@@ -2,7 +2,7 @@
  * LEGO Technic ESP32
  * Main Arduino sketch: filename and containing directory must match.
  * Shared module implementations remain in their dedicated .cpp/.h files.
- * Версия разработки: 0.14.6
+ * Версия разработки: 0.14.7
  *
  * Текущий выпуск: калибровка измерения напряжения батареи и управление PF-сервоприводом.
  * В проекте также доступны обновлённый Web GUI и OLED Update 2.0.
@@ -25,9 +25,10 @@
  * - Рабочая панель OLED показывает режим, процент заряда и напряжение батареи, количество подключённых клиентов Wi-Fi и предупреждение о низком заряде.
  * - Если инициализация OLED не удалась, прошивка продолжает запуск без попыток выводить данные на недоступный дисплей.
  *
- * CHANGELOG_VERSION: 0.14.6
+ * CHANGELOG_VERSION: 0.14.7
  * CHANGELOG_START
- * - PF Servo заранее снижает скорость при подходе к крайнему левому положению, чтобы уменьшить удар о механический ограничитель. ([PR #154](https://github.com/dsr987/lego-technic-esp32/pull/154))
+ * - Обновлена версия action публикации Pages до v5. ([PR #159](https://github.com/dsr987/lego-technic-esp32/pull/159))
+ * - Документирована настройка Pages с источником GitHub Actions, чтобы избежать параллельной публикации из ветки.
  * CHANGELOG_END
  *
  * тестовый запуск сборки
