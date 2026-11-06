@@ -371,13 +371,13 @@ void positionalServoUpdate() {
     const int configuredSpeed = max(1, (POSITION_MOTOR_SPEED * speedPercent + 50) / 100);
     const int remainingMv = abs(targetVoltageMv - filteredVoltageMv);
 
+    const bool movingToLeft = movementDirection > 0 &&
+        targetVoltageMv == FEEDBACK_LEFT_MV;
     uint8_t requestedPhase = 0;
-    if (movementDirection > 0) {
-      if (remainingMv <= FINAL_APPROACH_WINDOW_MV) {
-        requestedPhase = 2;
-      } else if (remainingMv <= LEFT_APPROACH_WINDOW_MV) {
-        requestedPhase = 1;
-      }
+    if (movingToLeft && remainingMv <= FINAL_APPROACH_WINDOW_MV) {
+      requestedPhase = 2;
+    } else if (movingToLeft && remainingMv <= LEFT_APPROACH_WINDOW_MV) {
+      requestedPhase = 1;
     } else if (remainingMv <= FINAL_APPROACH_WINDOW_MV) {
       requestedPhase = 1;
     }
@@ -386,7 +386,7 @@ void positionalServoUpdate() {
     // не должен случайно вернуть привод на полную скорость.
     if (requestedPhase > approachPhase) {
       approachPhase = requestedPhase;
-      const int phasePercent = movementDirection > 0 && approachPhase == 1
+      const int phasePercent = movingToLeft && approachPhase == 1
           ? LEFT_APPROACH_SPEED_PERCENT
           : FINAL_APPROACH_SPEED_PERCENT;
       const int phaseSpeed = max(1, (configuredSpeed * phasePercent + 50) / 100);
@@ -397,7 +397,7 @@ void positionalServoUpdate() {
     }
 
     const int phasePercent = approachPhase == 0 ? 100
-        : (movementDirection > 0 && approachPhase == 1
+        : (movingToLeft && approachPhase == 1
             ? LEFT_APPROACH_SPEED_PERCENT : FINAL_APPROACH_SPEED_PERCENT);
     const int phaseSpeed = max(1, (configuredSpeed * phasePercent + 50) / 100);
     const int targetSpeed = movementDirection > 0 ? -phaseSpeed : phaseSpeed;
