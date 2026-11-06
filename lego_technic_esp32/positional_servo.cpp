@@ -391,7 +391,7 @@ void positionalServoUpdate() {
           : FINAL_APPROACH_SPEED_PERCENT;
       const int phaseSpeed = max(1, (configuredSpeed * phasePercent + 50) / 100);
       const int phaseTargetSpeed = movementDirection > 0 ? -phaseSpeed : phaseSpeed;
-      serialLogPrintf("[PF][DECEL] direction=%s phase=%u remaining=%dmV pwm=%d targetPwm=%d\\n",
+      serialLogPrintf("[PF][DECEL] direction=%s phase=%u remaining=%dmV pwm=%d targetPwm=%d\n",
           movementDirection > 0 ? "LEFT" : "RIGHT",
           (unsigned int)approachPhase, remainingMv, appliedMotorSpeed, phaseTargetSpeed);
     }
