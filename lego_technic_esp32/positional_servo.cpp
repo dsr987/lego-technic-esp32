@@ -22,8 +22,12 @@ static constexpr int FEEDBACK_ZONE_HYSTERESIS_MV = 25;
 static constexpr int FEEDBACK_ZONE_BOUNDARIES_MV[] = {635, 780, 990, 1375};
 
 static constexpr int POSITION_MOTOR_SPEED = 70; // 100% пользовательской настройки
-static constexpr int SLOW_APPROACH_SPEED_PERCENT = 50;
-static constexpr int SLOW_APPROACH_WINDOW_MV = 150;
+// Левый ход по журналам проходит последние ~500 мВ слишком быстро для
+// штатного окна 150 мВ. Используем две ступени замедления только влево.
+static constexpr int LEFT_APPROACH_WINDOW_MV = 600;
+static constexpr int LEFT_APPROACH_SPEED_PERCENT = 75;
+static constexpr int FINAL_APPROACH_WINDOW_MV = 150;
+static constexpr int FINAL_APPROACH_SPEED_PERCENT = 50;
 static constexpr unsigned long FEEDBACK_SAMPLE_INTERVAL_MS = 10;
 static constexpr int POSITION_MOTOR_RAMP_STEP = 5;
 static constexpr unsigned long POSITION_MOTOR_RAMP_INTERVAL_MS = 20;
@@ -47,6 +51,7 @@ static unsigned long lastProgressMs = 0;
 static unsigned long directionChangeStartMs = 0;
 static unsigned long lastMotorRampMs = 0;
 static int appliedMotorSpeed = 0;
+static uint8_t approachPhase = 0; // 0 — рабочая, 1 — раннее замедление, 2 — финальное
 static bool filterReady = false;
 static uint8_t invalidReadCount = 0;
 static int feedbackZone = (int)PositionalServoFeedbackZone::Unknown;
@@ -186,6 +191,7 @@ static void startPositionMotor(unsigned long now) {
   lastUpdateMs = now;
   state = PositionalServoState::Moving;
   appliedMotorSpeed = 0;
+  approachPhase = 0;
   lastMotorRampMs = now;
 
   // Запускаем привод с нулевой мощностью; дальнейший набор скорости выполняется в loop().
@@ -364,11 +370,42 @@ void positionalServoUpdate() {
     lastMotorRampMs = now;
     const int configuredSpeed = max(1, (POSITION_MOTOR_SPEED * speedPercent + 50) / 100);
     const int remainingMv = abs(targetVoltageMv - filteredVoltageMv);
-    const int phaseSpeed = remainingMv <= SLOW_APPROACH_WINDOW_MV
-        ? max(1, (configuredSpeed * SLOW_APPROACH_SPEED_PERCENT + 50) / 100)
-        : configuredSpeed;
+
+    uint8_t requestedPhase = 0;
+    if (movementDirection > 0) {
+      if (remainingMv <= FINAL_APPROACH_WINDOW_MV) {
+        requestedPhase = 2;
+      } else if (remainingMv <= LEFT_APPROACH_WINDOW_MV) {
+        requestedPhase = 1;
+      }
+    } else if (remainingMv <= FINAL_APPROACH_WINDOW_MV) {
+      requestedPhase = 1;
+    }
+
+    // Фазу замедления фиксируем до завершения текущего движения: шум ADC
+    // не должен случайно вернуть привод на полную скорость.
+    if (requestedPhase > approachPhase) {
+      approachPhase = requestedPhase;
+      const int phasePercent = movementDirection > 0 && approachPhase == 1
+          ? LEFT_APPROACH_SPEED_PERCENT
+          : FINAL_APPROACH_SPEED_PERCENT;
+      const int phaseSpeed = max(1, (configuredSpeed * phasePercent + 50) / 100);
+      const int phaseTargetSpeed = movementDirection > 0 ? -phaseSpeed : phaseSpeed;
+      serialLogPrintf("[PF][DECEL] direction=%s phase=%u remaining=%dmV pwm=%d targetPwm=%d\\n",
+          movementDirection > 0 ? "LEFT" : "RIGHT",
+          (unsigned int)approachPhase, remainingMv, appliedMotorSpeed, phaseTargetSpeed);
+    }
+
+    const int phasePercent = approachPhase == 0 ? 100
+        : (movementDirection > 0 && approachPhase == 1
+            ? LEFT_APPROACH_SPEED_PERCENT : FINAL_APPROACH_SPEED_PERCENT);
+    const int phaseSpeed = max(1, (configuredSpeed * phasePercent + 50) / 100);
     const int targetSpeed = movementDirection > 0 ? -phaseSpeed : phaseSpeed;
-    if (appliedMotorSpeed < targetSpeed) {
+
+    if (abs(targetSpeed) < abs(appliedMotorSpeed)) {
+      // Замедление применяем сразу, а не растягиваем снижение PWM на 80 мс.
+      appliedMotorSpeed = targetSpeed;
+    } else if (appliedMotorSpeed < targetSpeed) {
       appliedMotorSpeed = min(appliedMotorSpeed + POSITION_MOTOR_RAMP_STEP, targetSpeed);
     } else if (appliedMotorSpeed > targetSpeed) {
       appliedMotorSpeed = max(appliedMotorSpeed - POSITION_MOTOR_RAMP_STEP, targetSpeed);
