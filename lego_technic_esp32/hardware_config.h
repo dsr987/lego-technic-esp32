@@ -24,9 +24,8 @@
 #define I2C_SDA   21
 #define I2C_SCL   22
 
-// Общая частота PWM для FeatherWing (PCA9685) и прямого TB6612FNG (LEDC).
-// Сохраняем одинаковую частоту управления моторами на всех каналах.
-constexpr uint16_t MOTOR_PWM_FREQUENCY_HZ = 1600;
+// Частота PWM отдельного TB6612FNG (каналы C/D).
+constexpr uint16_t TB6612FNG_PWM_FREQUENCY_HZ = 1600;
 
 // ---------- Каналы LEDC для TB6612FNG C/D ----------
 #define LEDC_CH_C 6
