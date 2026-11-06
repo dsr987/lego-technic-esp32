@@ -317,6 +317,62 @@ String serialLogReadJson(uint32_t afterId) {
   return json;
 }
 
+// ---------- Восстановление I2C перед запуском Wire ----------
+
+// Освобождает зависшую I2C-шину по процедуре bus clear (до 9 тактов SCL).
+// Вызывать только до Wire.begin(), когда периферия ещё не использует GPIO.
+static bool recoverI2cBusBeforeBegin() {
+  pinMode(OLED_SDA, INPUT_PULLUP);
+  pinMode(OLED_SCL, INPUT_PULLUP);
+  delayMicroseconds(5);
+
+  if (digitalRead(OLED_SDA) == HIGH) {
+    serialLogPrintln("[I2C][RECOVERY] SDA is HIGH; bus clear not required");
+    return true;
+  }
+
+  serialLogPrintln("[I2C][RECOVERY] SDA is LOW; attempting bus clear");
+  pinMode(OLED_SDA, OUTPUT_OPEN_DRAIN);
+  pinMode(OLED_SCL, OUTPUT_OPEN_DRAIN);
+  digitalWrite(OLED_SDA, HIGH); // отпустить SDA
+  digitalWrite(OLED_SCL, HIGH); // отпустить SCL
+  delayMicroseconds(5);
+
+  bool sclReleased = digitalRead(OLED_SCL) == HIGH;
+  for (uint8_t pulse = 0; pulse < 9 && digitalRead(OLED_SDA) == LOW; ++pulse) {
+    digitalWrite(OLED_SCL, LOW);
+    delayMicroseconds(5);
+    digitalWrite(OLED_SCL, HIGH); // open-drain: отпустить линию
+
+    const unsigned long waitStartedUs = micros();
+    while (digitalRead(OLED_SCL) == LOW &&
+           static_cast<unsigned long>(micros() - waitStartedUs) < 1000UL) {
+      delayMicroseconds(5);
+    }
+    sclReleased = digitalRead(OLED_SCL) == HIGH;
+    if (!sclReleased) break; // ведомое устройство удерживает SCL (clock stretching/fault)
+    delayMicroseconds(5);
+  }
+
+  // Сформировать STOP: SDA LOW -> SCL HIGH -> SDA HIGH.
+  if (sclReleased) {
+    digitalWrite(OLED_SDA, LOW);
+    delayMicroseconds(5);
+    digitalWrite(OLED_SCL, HIGH);
+    delayMicroseconds(5);
+    digitalWrite(OLED_SDA, HIGH);
+    delayMicroseconds(5);
+  }
+
+  pinMode(OLED_SDA, INPUT_PULLUP);
+  pinMode(OLED_SCL, INPUT_PULLUP);
+  const bool recovered = sclReleased && digitalRead(OLED_SDA) == HIGH;
+  serialLogPrintf("[I2C][RECOVERY] bus clear %s; SDA=%d SCL=%d\\n",
+                  recovered ? "succeeded" : "failed",
+                  digitalRead(OLED_SDA), digitalRead(OLED_SCL));
+  return recovered;
+}
+
 // ---------- Инициализация ----------
 
 static const char *resetReasonName(esp_reset_reason_t reason) {
@@ -372,7 +428,11 @@ void setup() {
   // Keep the full 500..2500 us command range for +/-90-degree center trim and steering.
   steerServo.attach(SERVO_PIN, 500, 2500);
 
-  // 5. Запуск общей I2C-шины для OLED и PCA9685 FeatherWing.
+  // 5. Перед Wire.begin() пытаемся освободить шину, если ведомое устройство
+  // удерживает SDA в LOW после предыдущего сбоя питания или I2C-транзакции.
+  recoverI2cBusBeforeBegin();
+
+  // Запуск общей I2C-шины для OLED и PCA9685 FeatherWing.
   Wire.begin(OLED_SDA, OLED_SCL);
   Wire.setTimeOut(50);
 
@@ -476,6 +536,21 @@ void loop() {
 
   // I²C-команда включения OLED обрабатывается только из loop(), не из AsyncTCP.
   processDisplayControl();
+
+  // Если первоначальная инициализация FeatherWing не удалась, периодически
+  // повторяем её. Это восстанавливает backend после временно недоступного PCA9685.
+  static constexpr unsigned long FEATHERWING_RETRY_INTERVAL_MS = 3000;
+  static unsigned long lastFeatherWingRetryMs = 0;
+  const unsigned long featherWingNow = millis();
+  if ((unsigned long)(featherWingNow - lastFeatherWingRetryMs) >= FEATHERWING_RETRY_INTERVAL_MS) {
+    lastFeatherWingRetryMs = featherWingNow;
+    if (!i2cMotorBackendIsReady()) {
+      serialLogPrintln("[FW][MOTOR SHIELD] Backend not ready; retrying initialization");
+      const bool restored = i2cMotorBackendBegin(Wire);
+      serialLogPrintf("[FW][MOTOR SHIELD] Recovery attempt: %s\\n",
+                      restored ? "READY" : "NOT READY");
+    }
+  }
 
   // Автопозиционирование C выполняется независимо от частоты WebSocket heartbeat.
   positionalServoUpdate();
