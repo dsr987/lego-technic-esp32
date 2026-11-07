@@ -50,6 +50,7 @@
 - [Иллюстрации распиновки и схем подключения](docs/assets/connection-guide/README.md)
 - [Руководство по подключению и сборке](docs/connection_guide.md)
 - [Планирование Hardware 2.0: распиновка, разъёмы и ревизионный список](docs/hardware_2.0/README.md)
+- [Hardware 3.0: инвентаризация оборудования, компонентов и проводов](docs/hardware_3.0/assembly_inventory.md)
 
 ## Первоначальная прошивка ESP32
 
