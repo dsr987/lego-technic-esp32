@@ -9,8 +9,10 @@
 1. Прочитай `AGENTS.md`.
 2. Прочитай [`docs/PROJECT_HANDOFF.md`](docs/PROJECT_HANDOFF.md) — это краткий актуальный срез задач, аппаратуры и последних диагностик.
 3. Прочитай [`docs/project_logic.md`](docs/project_logic.md) — полная техническая документация.
+4. Если задача связана с аппаратной сборкой, закупкой, KiCad или Hardware 3.0, обязательно прочитай [`docs/hardware_3.0/assembly_inventory.md`](docs/hardware_3.0/assembly_inventory.md) — актуальная инвентаризация инструмента, компонентов и проводов.
+5. Проверь живое состояние GitHub: SHA `main`, открытые PR, ветки и последние коммиты.
 4. Проверь живое состояние GitHub: SHA `main`, открытые PR, ветки и последние коммиты.
-5. Для конкретной задачи открой исходники, указанные в handoff. Не полагайся на старые чаты, сохранённые выжимки или номера PR без проверки.
+6. Для конкретной задачи открой исходники, указанные в handoff. Не полагайся на старые чаты, сохранённые выжимки или номера PR без проверки.
 
 Документы являются стартовой картой, а не заменой проверки текущего кода.
 
@@ -37,6 +39,7 @@ LEGO Technic ESP32 — прошивка ESP32-WROOM-32 с собственной
 | Срез контекста и текущая задача | `docs/PROJECT_HANDOFF.md` |
 | Полная логика и аппаратная карта | `docs/project_logic.md` |
 | История аппаратных подключений | `docs/connection_guide.md` |
+| Инвентаризация Hardware 3.0 | `docs/hardware_3.0/assembly_inventory.md` |
 | GPIO и LEDC | `lego_technic_esp32/hardware_config.h` |
 | Главный скетч, версия, HTTP/WS, setup/loop | `lego_technic_esp32/lego_technic_esp32.ino` |
 | Управление моторами | `lego_technic_esp32/motor_control.cpp` |
