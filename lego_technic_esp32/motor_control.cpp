@@ -164,15 +164,19 @@ void stopAll(const char *reason) {
   // Отключаем имитацию двигателя.
   engineSimOn = false;
 
-  motorAVal = 0;
-  motorBVal = 0;
+  // Сначала запрашиваем STOP на FeatherWing. При занятом I2C запрос остаётся
+  // pending, а ненулевые значения сохраняются для повторной попытки watchdog.
+  const bool featherWingStopIssued = i2cMotorBackendStopAll();
+  if (featherWingStopIssued) {
+    motorAVal = 0;
+    motorBVal = 0;
+    motorEVal = 0;
+    motorFVal = 0;
+  }
+
+  // Прямые каналы C/D останавливаются независимо от состояния I2C.
   motorCVal = 0;
   motorDVal = 0;
-  motorEVal = 0;
-  motorFVal = 0;
-
-  // Останавливаем FeatherWing-каналы A/B/E/F и прямые C/D.
-  i2cMotorBackendStopAll();
   setDCBridge(TB_AIN1, TB_AIN2, LEDC_CH_C, 0);
   setDCBridge(TB_BIN1, TB_BIN2, LEDC_CH_D, 0);
 
