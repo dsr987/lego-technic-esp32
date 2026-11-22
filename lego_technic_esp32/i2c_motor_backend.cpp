@@ -32,14 +32,17 @@ portMUX_TYPE motorPriorityMux = portMUX_INITIALIZER_UNLOCKED;
 uint32_t waitingMotorCommands = 0;
 
 // STOP может поступить из другого контекста, пока I2C занят.
-// Запрос сохраняется до фактичесной отправки RELEASE по всем каналам.
+// Запрос сохраняется до отправки RELEASE по всем каналам.
 portMUX_TYPE stopRequestMux = portMUX_INITIALIZER_UNLOCKED;
 bool stopAllPending = false;
+bool stopAllFailureLogged = false;
 
-void requestStopAll() {
+bool requestStopAll() {
   portENTER_CRITICAL(&stopRequestMux);
+  const bool newlyQueued = !stopAllPending;
   stopAllPending = true;
   portEXIT_CRITICAL(&stopRequestMux);
+  return newlyQueued;
 }
 
 bool isStopAllPending() {
@@ -53,6 +56,7 @@ void clearStopAllPending() {
   portENTER_CRITICAL(&stopRequestMux);
   stopAllPending = false;
   portEXIT_CRITICAL(&stopRequestMux);
+  stopAllFailureLogged = false;
 }
 
 void registerMotorWaiter() {
@@ -84,8 +88,11 @@ bool releaseAllMotorsLocked() {
     if (motors[i] == nullptr) {
       allReleased = false;
       backendReady = false;
-      serialLogPrintf("[FW][MOTOR SHIELD][ERROR] Motor object M%u is unavailable during STOP ALL\n",
-                      static_cast<unsigned>(i + 1));
+      if (!stopAllFailureLogged) {
+        serialLogPrintf("[FW][MOTOR SHIELD][ERROR] Motor object M%u is unavailable during STOP ALL\n",
+                        static_cast<unsigned>(i + 1));
+        stopAllFailureLogged = true;
+      }
       continue;
     }
 
@@ -302,19 +309,19 @@ bool i2cMotorBackendSetMotor(I2CMotorChannel channel, int speedPercent) {
 
 bool i2cMotorBackendStopAll() {
   // Фиксируем запрос до захвата mutex: при timeout он не теряется.
-  requestStopAll();
+  const bool newlyQueued = requestStopAll();
 
   BackendLock lock(pdMS_TO_TICKS(250), true);
   if (!lock.acquired()) {
-    serialLogPrintln("[FW][MOTOR SHIELD][WARN] STOP ALL queued: I2C mutex is busy");
+    if (newlyQueued) {
+      serialLogPrintln("[FW][MOTOR SHIELD][WARN] STOP ALL queued: I2C mutex is busy");
+    }
     return false;
   }
 
   const bool released = releaseAllMotorsLocked();
   if (released) {
     clearStopAllPending();
-  } else {
-    serialLogPrintln("[FW][MOTOR SHIELD][WARN] STOP ALL incomplete; retry remains pending");
   }
   return released;
 }
