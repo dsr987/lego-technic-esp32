@@ -172,8 +172,6 @@ void stopAll(const char *reason) {
     motorBVal = 0;
     motorEVal = 0;
     motorFVal = 0;
-  } else {
-    serialLogPrintln("[FW][STOP][WARN] FeatherWing STOP pending; motor state retained");
   }
 
   // Прямые каналы C/D останавливаются независимо от состояния I2C.
