@@ -31,6 +31,30 @@ SemaphoreHandle_t backendMutex = nullptr;
 portMUX_TYPE motorPriorityMux = portMUX_INITIALIZER_UNLOCKED;
 uint32_t waitingMotorCommands = 0;
 
+// STOP может поступить из другого контекста, пока I2C занят.
+// Запрос сохраняется до фактичесной отправки RELEASE по всем каналам.
+portMUX_TYPE stopRequestMux = portMUX_INITIALIZER_UNLOCKED;
+bool stopAllPending = false;
+
+void requestStopAll() {
+  portENTER_CRITICAL(&stopRequestMux);
+  stopAllPending = true;
+  portEXIT_CRITICAL(&stopRequestMux);
+}
+
+bool isStopAllPending() {
+  portENTER_CRITICAL(&stopRequestMux);
+  const bool pending = stopAllPending;
+  portEXIT_CRITICAL(&stopRequestMux);
+  return pending;
+}
+
+void clearStopAllPending() {
+  portENTER_CRITICAL(&stopRequestMux);
+  stopAllPending = false;
+  portEXIT_CRITICAL(&stopRequestMux);
+}
+
 void registerMotorWaiter() {
   portENTER_CRITICAL(&motorPriorityMux);
   ++waitingMotorCommands;
@@ -48,6 +72,33 @@ bool hasWaitingMotorCommands() {
   const bool waiting = waitingMotorCommands > 0;
   portEXIT_CRITICAL(&motorPriorityMux);
   return waiting;
+}
+
+// Вызывать только при удерживаемом backendMutex.
+// Arduino-библиотека не сообщает ACK каждой I2C-записи: true означает,
+// что RELEASE вызван для всех четырёх объектов, а не подтверждение шины.
+bool releaseAllMotorsLocked() {
+  bool allReleased = true;
+
+  for (uint8_t i = 0; i < MOTOR_COUNT; ++i) {
+    if (motors[i] == nullptr) {
+      allReleased = false;
+      backendReady = false;
+      serialLogPrintf("[FW][MOTOR SHIELD][ERROR] Motor object M%u is unavailable during STOP ALL\n",
+                      static_cast<unsigned>(i + 1));
+      continue;
+    }
+
+    motors[i]->run(RELEASE);
+    lastDirection[i] = 0;
+    lastReportedSpeed[i] = 0;
+    lastMotorWriteMs[i] = millis();
+  }
+
+  if (allReleased) {
+    serialLogPrintln("[FW][MOTOR SHIELD] STOP ALL RELEASE commands issued");
+  }
+  return allReleased;
 }
 
 const char *motorName(uint8_t index) {
@@ -146,6 +197,8 @@ bool i2cMotorBackendBegin(TwoWire &wire) {
   }
 
   backendReady = true;
+  // initializeMotorShield() уже отправил RELEASE каждому каналу.
+  clearStopAllPending();
   return true;
 }
 
@@ -181,6 +234,15 @@ bool i2cMotorBackendSetMotor(I2CMotorChannel channel, int speedPercent) {
   // Motor operations have priority over OLED traffic on the shared Wire bus.
   BackendLock lock(pdMS_TO_TICKS(250), true);
   if (!lock.acquired()) {
+    return false;
+  }
+
+  // Отложенный аварийный STOP всегда выполняется раньше новой команды.
+  // Саму команду, заставшую pending STOP, отклоняем.
+  if (isStopAllPending()) {
+    if (releaseAllMotorsLocked()) {
+      clearStopAllPending();
+    }
     return false;
   }
 
@@ -238,24 +300,21 @@ bool i2cMotorBackendSetMotor(I2CMotorChannel channel, int speedPercent) {
   return true;
 }
 
-void i2cMotorBackendStopAll() {
+bool i2cMotorBackendStopAll() {
+  // Фиксируем запрос до захвата mutex: при timeout он не теряется.
+  requestStopAll();
+
   BackendLock lock(pdMS_TO_TICKS(250), true);
-  if (!lock.acquired() || !backendReady) {
-    return;
+  if (!lock.acquired()) {
+    serialLogPrintln("[FW][MOTOR SHIELD][WARN] STOP ALL queued: I2C mutex is busy");
+    return false;
   }
 
-  for (uint8_t i = 0; i < MOTOR_COUNT; ++i) {
-    if (motors[i] == nullptr) {
-      backendReady = false;
-      serialLogPrintf("[FW][MOTOR SHIELD][ERROR] Motor object M%u is unavailable during STOP ALL\n",
-                      static_cast<unsigned>(i + 1));
-      return;
-    }
-
-    motors[i]->run(RELEASE);
-    lastDirection[i] = 0;
-    lastReportedSpeed[i] = 0;
-    lastMotorWriteMs[i] = millis();
+  const bool released = releaseAllMotorsLocked();
+  if (released) {
+    clearStopAllPending();
+  } else {
+    serialLogPrintln("[FW][MOTOR SHIELD][WARN] STOP ALL incomplete; retry remains pending");
   }
-  serialLogPrintln("[FW][MOTOR SHIELD] STOP ALL completed");
+  return released;
 }
