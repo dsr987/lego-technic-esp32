@@ -32,5 +32,7 @@ void i2cMotorBackendUnlockSharedI2c();
 // является подтверждением, что последняя транзакция была физически доставлена.
 bool i2cMotorBackendSetMotor(I2CMotorChannel channel, int speedPercent);
 
-// Переводит четыре канала FeatherWing (A, B, E, F) в RELEASE и скорость 0.
-void i2cMotorBackendStopAll();
+// Запрашивает RELEASE для A/B/E/F. Если mutex занят, запрос остаётся в очереди
+// и будет обработан раньше следующей команды мотора.
+// true означает, что RELEASE вызван для всех четырёх объектов; это не I2C ACK.
+bool i2cMotorBackendStopAll();
